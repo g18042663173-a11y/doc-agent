@@ -57,3 +57,8 @@
   - 预览超限记录 warning 并标记 truncated。
   - `python3 -m pytest backend/tests -q`: 35 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S2-4:
+  - 增加 PPTX parser,输出每页标题、文本框正文、表格、备注与 shape_warnings。
+  - 从 slide XML 检测 transition / timing 并记录 warning。
+  - `python3 -m pytest backend/tests -q`: 37 passed.
+  - `python3 scripts/verify.py`: 通过。
