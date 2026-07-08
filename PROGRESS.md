@@ -52,3 +52,8 @@
   - 对批注、修订、文本框、SmartArt 等不支持内容扫描 XML 并记录 warning。
   - `python3 -m pytest backend/tests -q`: 33 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S2-3:
+  - 增加 XLSX parser,输出每个 sheet 的尺寸、header_guess、20x15 预览、列画像、公式数、合并单元格数。
+  - 预览超限记录 warning 并标记 truncated。
+  - `python3 -m pytest backend/tests -q`: 35 passed.
+  - `python3 scripts/verify.py`: 通过。
