@@ -46,3 +46,9 @@
   - 增加 `samples/input/quarterly_report.md` 主演示输入。
   - `python3 -m pytest backend/tests -q`: 31 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S2-2:
+  - 增加 DOCX parser,按文档顺序输出标题、段落、列表与表格 DocumentIR blocks。
+  - 标题支持 Heading/标题 样式双语识别;表格预览截断到 20 行并记录 warning。
+  - 对批注、修订、文本框、SmartArt 等不支持内容扫描 XML 并记录 warning。
+  - `python3 -m pytest backend/tests -q`: 33 passed.
+  - `python3 scripts/verify.py`: 通过。
