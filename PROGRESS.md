@@ -108,3 +108,7 @@
   - 增加 `scripts/make_wheelhouse.py` 作为 Windows wheelhouse 下载薄封装。
   - `python3 -m pytest backend/tests -q`: 52 passed.
   - `python3 scripts/verify.py`: 通过。
+- 最终验收补充:
+  - 增加 `pytest-cov` 依赖与 placeholder lint 覆盖测试。
+  - `PYTHONPATH=backend python3 -m pytest backend/tests -q --cov=app --cov-report=term-missing`: 53 passed, overall coverage 84%。
+  - 核心三包覆盖率: parsers 单文件均 >= 81%, ir 聚合超过 80%, lint 聚合超过 80%。
