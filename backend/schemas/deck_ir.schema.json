@@ -1,0 +1,671 @@
+{
+  "$defs": {
+    "AgendaSlide": {
+      "properties": {
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Items",
+          "type": "array"
+        },
+        "layout": {
+          "const": "agenda",
+          "title": "Layout",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "items"
+      ],
+      "title": "AgendaSlide",
+      "type": "object"
+    },
+    "Card": {
+      "properties": {
+        "desc": {
+          "minLength": 1,
+          "title": "Desc",
+          "type": "string"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "desc"
+      ],
+      "title": "Card",
+      "type": "object"
+    },
+    "CardsSlide": {
+      "properties": {
+        "cards": {
+          "items": {
+            "$ref": "#/$defs/Card"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Cards",
+          "type": "array"
+        },
+        "layout": {
+          "const": "cards",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "cards"
+      ],
+      "title": "CardsSlide",
+      "type": "object"
+    },
+    "ChartSeries": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "values"
+      ],
+      "title": "ChartSeries",
+      "type": "object"
+    },
+    "ChartSlide": {
+      "properties": {
+        "chart": {
+          "$ref": "#/$defs/ChartSpec"
+        },
+        "layout": {
+          "const": "chart",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "chart"
+      ],
+      "title": "ChartSlide",
+      "type": "object"
+    },
+    "ChartSpec": {
+      "properties": {
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Categories",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "bar",
+            "line",
+            "pie"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/ChartSeries"
+          },
+          "minItems": 1,
+          "title": "Series",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "categories",
+        "series"
+      ],
+      "title": "ChartSpec",
+      "type": "object"
+    },
+    "ColumnContent": {
+      "properties": {
+        "bullets": {
+          "items": {
+            "$ref": "#/$defs/ListItem"
+          },
+          "maxItems": 7,
+          "title": "Bullets",
+          "type": "array"
+        },
+        "heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heading"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "ColumnContent",
+      "type": "object"
+    },
+    "ConclusionSlide": {
+      "properties": {
+        "bullets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Bullets",
+          "type": "array"
+        },
+        "cta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cta"
+        },
+        "layout": {
+          "const": "conclusion",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title"
+      ],
+      "title": "ConclusionSlide",
+      "type": "object"
+    },
+    "CoverSlide": {
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "layout": {
+          "const": "cover",
+          "title": "Layout",
+          "type": "string"
+        },
+        "presenter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presenter"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtitle"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title"
+      ],
+      "title": "CoverSlide",
+      "type": "object"
+    },
+    "DeckMeta": {
+      "properties": {
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        },
+        "classification": {
+          "default": "HUAWEI CONFIDENTIAL",
+          "title": "Classification",
+          "type": "string"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtitle"
+        },
+        "theme": {
+          "default": "hw_v1",
+          "title": "Theme",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "DeckMeta",
+      "type": "object"
+    },
+    "DeckTable": {
+      "properties": {
+        "header": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Header",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 12,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "header"
+      ],
+      "title": "DeckTable",
+      "type": "object"
+    },
+    "ImageSlide": {
+      "properties": {
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "image_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Ref"
+        },
+        "layout": {
+          "const": "image",
+          "title": "Layout",
+          "type": "string"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title"
+      ],
+      "title": "ImageSlide",
+      "type": "object"
+    },
+    "ListItem": {
+      "properties": {
+        "level": {
+          "default": 1,
+          "enum": [
+            1,
+            2
+          ],
+          "title": "Level",
+          "type": "integer"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ListItem",
+      "type": "object"
+    },
+    "SectionSlide": {
+      "properties": {
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "layout": {
+          "const": "section",
+          "title": "Layout",
+          "type": "string"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtitle"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "index",
+        "title"
+      ],
+      "title": "SectionSlide",
+      "type": "object"
+    },
+    "TableSlide": {
+      "properties": {
+        "layout": {
+          "const": "table",
+          "title": "Layout",
+          "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/DeckTable"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "table"
+      ],
+      "title": "TableSlide",
+      "type": "object"
+    },
+    "TitleBulletsSlide": {
+      "properties": {
+        "bullets": {
+          "items": {
+            "$ref": "#/$defs/ListItem"
+          },
+          "maxItems": 7,
+          "minItems": 1,
+          "title": "Bullets",
+          "type": "array"
+        },
+        "layout": {
+          "const": "title_bullets",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "bullets"
+      ],
+      "title": "TitleBulletsSlide",
+      "type": "object"
+    },
+    "TwoColumnSlide": {
+      "properties": {
+        "layout": {
+          "const": "two_column",
+          "title": "Layout",
+          "type": "string"
+        },
+        "left": {
+          "$ref": "#/$defs/ColumnContent"
+        },
+        "right": {
+          "$ref": "#/$defs/ColumnContent"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "left",
+        "right"
+      ],
+      "title": "TwoColumnSlide",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "ir_type": {
+      "const": "deck",
+      "title": "Ir Type",
+      "type": "string"
+    },
+    "ir_version": {
+      "const": "1.1",
+      "title": "Ir Version",
+      "type": "string"
+    },
+    "meta": {
+      "$ref": "#/$defs/DeckMeta"
+    },
+    "slides": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "agenda": "#/$defs/AgendaSlide",
+            "cards": "#/$defs/CardsSlide",
+            "chart": "#/$defs/ChartSlide",
+            "conclusion": "#/$defs/ConclusionSlide",
+            "cover": "#/$defs/CoverSlide",
+            "image": "#/$defs/ImageSlide",
+            "section": "#/$defs/SectionSlide",
+            "table": "#/$defs/TableSlide",
+            "title_bullets": "#/$defs/TitleBulletsSlide",
+            "two_column": "#/$defs/TwoColumnSlide"
+          },
+          "propertyName": "layout"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/CoverSlide"
+          },
+          {
+            "$ref": "#/$defs/AgendaSlide"
+          },
+          {
+            "$ref": "#/$defs/SectionSlide"
+          },
+          {
+            "$ref": "#/$defs/TitleBulletsSlide"
+          },
+          {
+            "$ref": "#/$defs/TwoColumnSlide"
+          },
+          {
+            "$ref": "#/$defs/TableSlide"
+          },
+          {
+            "$ref": "#/$defs/CardsSlide"
+          },
+          {
+            "$ref": "#/$defs/ChartSlide"
+          },
+          {
+            "$ref": "#/$defs/ImageSlide"
+          },
+          {
+            "$ref": "#/$defs/ConclusionSlide"
+          }
+        ]
+      },
+      "maxItems": 30,
+      "minItems": 1,
+      "title": "Slides",
+      "type": "array"
+    }
+  },
+  "required": [
+    "ir_type",
+    "ir_version",
+    "meta",
+    "slides"
+  ],
+  "title": "DeckIR",
+  "type": "object"
+}

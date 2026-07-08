@@ -1,0 +1,622 @@
+{
+  "$defs": {
+    "BulletListBlock": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ListItem"
+          },
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        },
+        "type": {
+          "const": "bullet_list",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "items"
+      ],
+      "title": "BulletListBlock",
+      "type": "object"
+    },
+    "ColumnStat": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "non_empty_ratio": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Non Empty Ratio"
+        },
+        "samples": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Samples",
+          "type": "array"
+        },
+        "type_guess": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type Guess"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ColumnStat",
+      "type": "object"
+    },
+    "DocumentContent": {
+      "properties": {
+        "blocks": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "bullet_list": "#/$defs/BulletListBlock",
+                "heading": "#/$defs/HeadingBlock",
+                "image_placeholder": "#/$defs/ImagePlaceholderBlock",
+                "numbered_list": "#/$defs/NumberedListBlock",
+                "page_break": "#/$defs/PageBreakBlock",
+                "paragraph": "#/$defs/ParagraphBlock",
+                "table": "#/$defs/TableBlock"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/HeadingBlock"
+              },
+              {
+                "$ref": "#/$defs/ParagraphBlock"
+              },
+              {
+                "$ref": "#/$defs/BulletListBlock"
+              },
+              {
+                "$ref": "#/$defs/NumberedListBlock"
+              },
+              {
+                "$ref": "#/$defs/TableBlock"
+              },
+              {
+                "$ref": "#/$defs/ImagePlaceholderBlock"
+              },
+              {
+                "$ref": "#/$defs/PageBreakBlock"
+              }
+            ]
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "outline": {
+          "items": {
+            "$ref": "#/$defs/OutlineItem"
+          },
+          "title": "Outline",
+          "type": "array"
+        },
+        "sheets": {
+          "items": {
+            "$ref": "#/$defs/SheetSummary"
+          },
+          "title": "Sheets",
+          "type": "array"
+        },
+        "slides": {
+          "items": {
+            "$ref": "#/$defs/SlideSummary"
+          },
+          "title": "Slides",
+          "type": "array"
+        }
+      },
+      "title": "DocumentContent",
+      "type": "object"
+    },
+    "DocumentSource": {
+      "properties": {
+        "filename": {
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "md",
+            "docx",
+            "xlsx",
+            "pptx"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "parsed_at": {
+          "minLength": 1,
+          "title": "Parsed At",
+          "type": "string"
+        },
+        "size_kb": {
+          "minimum": 0,
+          "title": "Size Kb",
+          "type": "number"
+        }
+      },
+      "required": [
+        "filename",
+        "format",
+        "size_kb",
+        "parsed_at"
+      ],
+      "title": "DocumentSource",
+      "type": "object"
+    },
+    "DocumentStats": {
+      "properties": {
+        "headings": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Headings",
+          "type": "integer"
+        },
+        "images": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Images",
+          "type": "integer"
+        },
+        "paragraphs": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Paragraphs",
+          "type": "integer"
+        },
+        "tables": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Tables",
+          "type": "integer"
+        }
+      },
+      "title": "DocumentStats",
+      "type": "object"
+    },
+    "HeadingBlock": {
+      "properties": {
+        "level": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Level",
+          "type": "integer"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "heading",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "level",
+        "text"
+      ],
+      "title": "HeadingBlock",
+      "type": "object"
+    },
+    "ImagePlaceholderBlock": {
+      "properties": {
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "type": {
+          "const": "image_placeholder",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ImagePlaceholderBlock",
+      "type": "object"
+    },
+    "ListItem": {
+      "properties": {
+        "level": {
+          "default": 1,
+          "enum": [
+            1,
+            2
+          ],
+          "title": "Level",
+          "type": "integer"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ListItem",
+      "type": "object"
+    },
+    "NumberedListBlock": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ListItem"
+          },
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        },
+        "type": {
+          "const": "numbered_list",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "items"
+      ],
+      "title": "NumberedListBlock",
+      "type": "object"
+    },
+    "OutlineItem": {
+      "properties": {
+        "level": {
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Level",
+          "type": "integer"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "text"
+      ],
+      "title": "OutlineItem",
+      "type": "object"
+    },
+    "PageBreakBlock": {
+      "properties": {
+        "type": {
+          "const": "page_break",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PageBreakBlock",
+      "type": "object"
+    },
+    "ParagraphBlock": {
+      "properties": {
+        "style": {
+          "default": "normal",
+          "enum": [
+            "normal",
+            "quote",
+            "note"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "paragraph",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "ParagraphBlock",
+      "type": "object"
+    },
+    "SheetSummary": {
+      "properties": {
+        "col_stats": {
+          "items": {
+            "$ref": "#/$defs/ColumnStat"
+          },
+          "title": "Col Stats",
+          "type": "array"
+        },
+        "formula_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Formula Count",
+          "type": "integer"
+        },
+        "header_guess": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Header Guess",
+          "type": "array"
+        },
+        "merged_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Merged Count",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ncols": {
+          "minimum": 0,
+          "title": "Ncols",
+          "type": "integer"
+        },
+        "nrows": {
+          "minimum": 0,
+          "title": "Nrows",
+          "type": "integer"
+        },
+        "preview_rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Preview Rows",
+          "type": "array"
+        },
+        "truncated": {
+          "default": false,
+          "title": "Truncated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "nrows",
+        "ncols"
+      ],
+      "title": "SheetSummary",
+      "type": "object"
+    },
+    "SlideSummary": {
+      "properties": {
+        "bodies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Bodies",
+          "type": "array"
+        },
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "layout_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layout Name"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "shape_warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Shape Warnings",
+          "type": "array"
+        },
+        "tables": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Tables",
+          "type": "array"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "SlideSummary",
+      "type": "object"
+    },
+    "TableBlock": {
+      "properties": {
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "col_widths": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Col Widths"
+        },
+        "header": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Header",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 100,
+          "title": "Rows",
+          "type": "array"
+        },
+        "type": {
+          "const": "table",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "header",
+        "rows"
+      ],
+      "title": "TableBlock",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "content": {
+      "$ref": "#/$defs/DocumentContent"
+    },
+    "ir_type": {
+      "const": "document",
+      "title": "Ir Type",
+      "type": "string"
+    },
+    "ir_version": {
+      "const": "1.0",
+      "title": "Ir Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/DocumentSource"
+    },
+    "stats": {
+      "$ref": "#/$defs/DocumentStats"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "ir_type",
+    "ir_version",
+    "source",
+    "stats",
+    "content"
+  ],
+  "title": "DocumentIR",
+  "type": "object"
+}
