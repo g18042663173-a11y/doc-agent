@@ -86,3 +86,8 @@
   - `scripts/verify.py` 的 deck 分支切换为真实 `output/c0_deck.pptx`。
   - `python3 -m pytest backend/tests -q`: 45 passed.
   - `python3 scripts/verify.py`: 生成 `output/c0_word.docx` 与 `output/c0_deck.pptx` 并通过。
+- 主目标 S3-3:
+  - 增加 PPTX renderer P1 版式: two_column / cards / conclusion。
+  - chart 降级为说明文本 + 迷你数据表; image 降级为灰底图片占位框 + 题注。
+  - `python3 -m pytest backend/tests -q`: 46 passed.
+  - `python3 scripts/verify.py`: 通过。

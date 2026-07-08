@@ -68,3 +68,51 @@ def test_render_deck_ir_uses_16_by_9_page_size(tmp_path: Path) -> None:
 
     assert round(prs.slide_width / 914400, 3) == 13.333
     assert round(prs.slide_height / 914400, 1) == 7.5
+
+
+def test_render_deck_ir_p1_layouts_and_downgrades(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.1",
+            "meta": {"title": "P1 版式"},
+            "slides": [
+                {
+                    "layout": "two_column",
+                    "title": "双栏对比",
+                    "left": {"heading": "优势", "bullets": [{"text": "离线可测", "level": 1}]},
+                    "right": {"heading": "风险", "text": "视觉终审仍需人工"},
+                },
+                {
+                    "layout": "cards",
+                    "title": "三大能力",
+                    "cards": [
+                        {"title": "解析", "desc": "多格式输入"},
+                        {"title": "渲染", "desc": "可编辑产物"},
+                    ],
+                },
+                {"layout": "conclusion", "title": "结论", "bullets": ["主链路继续推进"], "cta": "进入内网校准"},
+                {
+                    "layout": "chart",
+                    "title": "趋势",
+                    "chart": {"kind": "bar", "categories": ["W1"], "series": [{"name": "完成数", "values": [3]}]},
+                },
+                {"layout": "image", "title": "架构图", "placeholder": "黄区替换真图", "caption": "工具链架构"},
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "p1.pptx")
+    prs = Presentation(str(output))
+    all_text = "\n".join(shape.text for slide in prs.slides for shape in slide.shapes if getattr(shape, "has_text_frame", False))
+
+    assert "双栏对比" in all_text
+    assert "离线可测" in all_text
+    assert "三大能力" in all_text
+    assert "多格式输入" in all_text
+    assert "主链路继续推进" in all_text
+    assert "图表待内网 Skill / 后续版本生成" in all_text
+    assert "图片占位" in all_text
