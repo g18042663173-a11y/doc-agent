@@ -35,3 +35,8 @@
   - 增加校验报告格式化器,输出错误码、定位与中文建议。
   - `python3 -m pytest backend/tests -q`: 27 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S1-6:
+  - 增加 `app.cli.render` Word 渲染命令,渲染前统一剥壳 + Schema 校验。
+  - README 增加 Word 输出章节、合法样例命令、失败提示命令与验证命令。
+  - `python3 -m pytest backend/tests -q`: 29 passed.
+  - `python3 scripts/verify.py`: 通过。
