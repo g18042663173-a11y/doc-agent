@@ -68,3 +68,10 @@
   - 超长 DocumentIR 按确定性字符上限截断并写入截断说明。
   - `python3 -m pytest backend/tests -q`: 39 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S2-6:
+  - 增加 `app.cli.parse`,按扩展名分发 md / docx / xlsx / pptx parser 并输出 DocumentIR JSON。
+  - 增加 `app.cli.prompt`,从可选 DocumentIR 生成确定性 Prompt。
+  - 增加 `scripts/demo_e2e.py`,支持 md 输入经 stub 生成 Word DOCX。
+  - `python3 -m pytest backend/tests -q`: 42 passed.
+  - `python3 scripts/demo_e2e.py samples/input/quarterly_report.md --target word --generator stub --output-dir output/demo-word`: 通过。
+  - `python3 scripts/verify.py`: 通过。
