@@ -40,3 +40,9 @@
   - README 增加 Word 输出章节、合法样例命令、失败提示命令与验证命令。
   - `python3 -m pytest backend/tests -q`: 29 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S2-1:
+  - 增加 Markdown parser,输出 DocumentIR blocks + outline。
+  - 覆盖标题、段落、两级列表、表格解析。
+  - 增加 `samples/input/quarterly_report.md` 主演示输入。
+  - `python3 -m pytest backend/tests -q`: 31 passed.
+  - `python3 scripts/verify.py`: 通过。
