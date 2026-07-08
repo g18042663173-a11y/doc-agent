@@ -103,3 +103,8 @@
   - `python3 -m pytest backend/tests -q`: 51 passed.
   - `python3 scripts/demo_e2e.py samples/input/quarterly_report.md --target deck --generator stub --lint --output-dir output/demo-deck`: 通过。
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S3-6:
+  - 增加 `docs/内网接入.md`,说明 generator 与华为官方渲染 Skill 两个替换点、环境变量、不动清单、离线安装与内网自测顺序。
+  - 增加 `scripts/make_wheelhouse.py` 作为 Windows wheelhouse 下载薄封装。
+  - `python3 -m pytest backend/tests -q`: 52 passed.
+  - `python3 scripts/verify.py`: 通过。
