@@ -75,3 +75,8 @@
   - `python3 -m pytest backend/tests -q`: 42 passed.
   - `python3 scripts/demo_e2e.py samples/input/quarterly_report.md --target word --generator stub --output-dir output/demo-word`: 通过。
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S3-1:
+  - 增加 `backend/app/rendering/themes/hw_theme.json`,集中华为风格 tokens。
+  - 增加 theme loader 与 `docs/风格规范.md`。
+  - `python3 -m pytest backend/tests -q`: 43 passed.
+  - `python3 scripts/verify.py`: 通过。

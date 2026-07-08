@@ -1,0 +1,67 @@
+{
+  "name": "hw_v1",
+  "colors": {
+    "hw_red": "#C7000B",
+    "title": "#1F1F1F",
+    "body": "#333333",
+    "secondary": "#595959",
+    "muted": "#8C8C8C",
+    "background": "#FFFFFF",
+    "surface": "#F5F5F5"
+  },
+  "fonts": {
+    "east_asia": [
+      "微软雅黑",
+      "HarmonyOS Sans SC",
+      "Noto Sans CJK SC"
+    ],
+    "latin": [
+      "Arial"
+    ],
+    "whitelist": [
+      "微软雅黑",
+      "HarmonyOS Sans SC",
+      "Noto Sans CJK SC",
+      "Arial"
+    ]
+  },
+  "font_sizes_pt": {
+    "cover_title": 40,
+    "cover_subtitle": 20,
+    "slide_title": 28,
+    "body": 16,
+    "note": 12,
+    "footer": 9,
+    "minimum": 10.5
+  },
+  "slide": {
+    "width_in": 13.333,
+    "height_in": 7.5,
+    "margin_in": 0.6,
+    "title_top_in": 0.5,
+    "title_height_in": 1.0,
+    "body_top_in": 1.7,
+    "footer_top_in": 7.0
+  },
+  "grid": {
+    "columns": 12,
+    "baseline_pt": 8,
+    "snap_tolerance_in": 0.04,
+    "min_edge_margin_in": 0.4,
+    "min_gap_in": 0.3
+  },
+  "footer": {
+    "left": "classification",
+    "center": "",
+    "right": "page_number",
+    "default_classification": "HUAWEI CONFIDENTIAL"
+  },
+  "constraints": {
+    "contrast_ratio_min": 4.5,
+    "max_slides": 30,
+    "max_bullets_per_slide": 7,
+    "max_bullet_chars": 60,
+    "max_table_rows": 12,
+    "max_table_cols": 8
+  }
+}
