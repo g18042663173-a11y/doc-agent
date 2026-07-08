@@ -26,6 +26,24 @@ class StubGenerator:
                 "slides": [
                     {"layout": "cover", "title": "Stub 演示", "subtitle": "C0 空链路"},
                     {"layout": "agenda", "items": ["IR", "Schema", "Verify"]},
+                    {"layout": "section", "index": 1, "title": "主链路"},
+                    {
+                        "layout": "title_bullets",
+                        "title": "关键能力",
+                        "bullets": [
+                            {"text": "解析输入文件为 DocumentIR", "level": 1},
+                            {"text": "stub 通道支持离线验收", "level": 1}
+                        ]
+                    },
+                    {
+                        "layout": "table",
+                        "title": "验收信号",
+                        "table": {
+                            "header": ["环节", "状态"],
+                            "rows": [["Schema", "冻结"], ["DOCX", "可渲染"], ["PPTX", "可渲染"]]
+                        }
+                    },
+                    {"layout": "conclusion", "title": "结论", "bullets": ["主链路保持确定性"], "cta": "继续接入真实 generator"}
                 ],
             }
         else:

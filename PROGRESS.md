@@ -97,3 +97,9 @@
   - `scripts/verify.py` 接入真实 PPTX lint。
   - `python3 -m pytest backend/tests -q`: 50 passed.
   - `python3 scripts/verify.py`: 生成真实 lint 报告并通过。
+- 主目标 S3-5:
+  - StubGenerator 的 DeckIR 扩展为 6 页演示,满足 5-12 页目标。
+  - `scripts/demo_e2e.py --target deck --lint` 生成真实 `deck.pptx` 与真实 lint 报告。
+  - `python3 -m pytest backend/tests -q`: 51 passed.
+  - `python3 scripts/demo_e2e.py samples/input/quarterly_report.md --target deck --generator stub --lint --output-dir output/demo-deck`: 通过。
+  - `python3 scripts/verify.py`: 通过。

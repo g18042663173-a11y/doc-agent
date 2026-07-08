@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from pptx import Presentation
+
 ROOT = Path(__file__).resolve().parents[2]
 PY_ENV = {**os.environ, "PYTHONPATH": str(ROOT / "backend")}
 
@@ -93,3 +95,32 @@ def test_demo_e2e_stub_word_generates_docx(tmp_path: Path) -> None:
     assert (output_dir / "document_ir.json").exists()
     assert (output_dir / "prompt.txt").exists()
     assert (output_dir / "word.docx").exists()
+
+
+def test_demo_e2e_stub_deck_generates_linted_pptx(tmp_path: Path) -> None:
+    output_dir = tmp_path / "deck-out"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/demo_e2e.py",
+            "samples/input/quarterly_report.md",
+            "--target",
+            "deck",
+            "--generator",
+            "stub",
+            "--lint",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    pptx = output_dir / "deck.pptx"
+    report = json.loads((output_dir / "report.json").read_text(encoding="utf-8"))
+    assert pptx.exists()
+    assert 5 <= len(Presentation(str(pptx)).slides) <= 12
+    assert report["summary"]["pass"] is True
