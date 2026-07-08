@@ -14,6 +14,7 @@ from app.ir.schema_export import export_schemas
 from app.ir.word_ir import WordIR
 from app.lint.placeholder import write_placeholder_report
 from app.rendering.placeholder import render_placeholder
+from app.rendering.docx_renderer import render_word_ir
 
 
 def main() -> int:
@@ -25,7 +26,7 @@ def main() -> int:
 
     output_dir = ROOT / "output"
     rendered = [
-        render_placeholder(word, output_dir),
+        render_word_ir(word, output_dir / "c0_word.docx"),
         render_placeholder(deck, output_dir),
     ]
     report = write_placeholder_report(rendered, output_dir)

@@ -18,3 +18,9 @@
   - 增加可注入 generator 的 IR 修复回路,最多重试 2 次。
   - `python3 -m pytest backend/tests -q`: 20 passed.
   - `python3 scripts/verify.py`: C0 verify passed.
+- 主目标 S1-3:
+  - 增加 `python-docx` DOCX renderer,输出可编辑 DOCX。
+  - 覆盖标题 1-4 级、普通段落、quote / note、两级项目符号与编号列表、分页。
+  - 页眉默认写入文档标题,页脚写入密级与 PAGE 页码域。
+  - `python3 -m pytest backend/tests -q`: 23 passed.
+  - `python3 scripts/verify.py`: 生成 `output/c0_word.docx` 并通过。
