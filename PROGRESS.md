@@ -91,3 +91,9 @@
   - chart 降级为说明文本 + 迷你数据表; image 降级为灰底图片占位框 + 题注。
   - `python3 -m pytest backend/tests -q`: 46 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S3-4:
+  - 增加 PPTX lint 结构化报告,覆盖页脚密级、字体白名单、动画/切换、字号、颜色、要点、表格、页数与基础布局规则。
+  - 增加 `app.cli.check`,输出 `report.json` 与 `report.md`,支持外部 PPTX 复检。
+  - `scripts/verify.py` 接入真实 PPTX lint。
+  - `python3 -m pytest backend/tests -q`: 50 passed.
+  - `python3 scripts/verify.py`: 生成真实 lint 报告并通过。

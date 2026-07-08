@@ -139,3 +139,5 @@ def test_verify_script_runs_empty_stub_chain() -> None:
     assert "C0 verify passed" in result.stdout
     assert (ROOT / "output" / "c0_word.docx").exists()
     assert (ROOT / "output" / "c0_deck.pptx").exists()
+    report = json.loads((ROOT / "output" / "report.json").read_text(encoding="utf-8"))
+    assert report["summary"]["pass"] is True
