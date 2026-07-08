@@ -12,3 +12,9 @@
   - `blocks` 改为必填且至少 1 条。
   - 增加用户面向校验结果,将 pydantic 校验失败映射为 E/W/D 错误码。
   - 表格行列规整、未知字段 warning、Schema 快照测试已覆盖。
+- 主目标 S1-2:
+  - 增加模型输出剥壳器,覆盖裸 JSON、json 代码块、混杂解释三种形态。
+  - 增加 WordIR / DeckIR 文本校验入口,剥壳失败映射 E001 / D001。
+  - 增加可注入 generator 的 IR 修复回路,最多重试 2 次。
+  - `python3 -m pytest backend/tests -q`: 20 passed.
+  - `python3 scripts/verify.py`: C0 verify passed.
