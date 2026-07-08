@@ -171,12 +171,59 @@ def _render_basic_table(document: Document, block: TableBlock) -> None:
         document.add_paragraph(block.caption)
     table = document.add_table(rows=1, cols=len(block.header))
     table.style = "Table Grid"
+    table.autofit = False
+    _set_table_widths(table, block.col_widths or [1] * len(block.header))
     for index, cell in enumerate(table.rows[0].cells):
         cell.text = block.header[index]
+        _format_cell_header(cell)
+    _repeat_table_header(table.rows[0])
     for row in block.rows:
         cells = table.add_row().cells
         for index, value in enumerate(row):
             cells[index].text = value
+        _set_row_widths(cells, block.col_widths or [1] * len(block.header))
+
+
+def _set_table_widths(table, ratios: list[float]) -> None:
+    total = sum(ratios)
+    total_twips = 9360
+    widths = [max(1, int(total_twips * ratio / total)) for ratio in ratios]
+
+    table_grid = table._tbl.tblGrid
+    for index, grid_col in enumerate(table_grid.gridCol_lst):
+        grid_col.set(qn("w:w"), str(widths[index]))
+
+    _set_row_widths(table.rows[0].cells, ratios)
+
+
+def _set_row_widths(cells, ratios: list[float]) -> None:
+    total = sum(ratios)
+    total_width = Inches(6.5)
+    for index, cell in enumerate(cells):
+        width = int(total_width * ratios[index] / total)
+        cell.width = width
+        tc_width = cell._tc.get_or_add_tcPr().tcW
+        tc_width.set(qn("w:w"), str(int(9360 * ratios[index] / total)))
+        tc_width.set(qn("w:type"), "dxa")
+
+
+def _format_cell_header(cell) -> None:
+    for paragraph in cell.paragraphs:
+        for run in paragraph.runs:
+            run.bold = True
+            run.font.name = STYLES["font"]
+            run._element.rPr.rFonts.set(qn("w:eastAsia"), STYLES["font"])
+    tc_properties = cell._tc.get_or_add_tcPr()
+    shading = OxmlElement("w:shd")
+    shading.set(qn("w:fill"), "F5F5F5")
+    tc_properties.append(shading)
+
+
+def _repeat_table_header(row) -> None:
+    row_properties = row._tr.get_or_add_trPr()
+    table_header = OxmlElement("w:tblHeader")
+    table_header.set(qn("w:val"), "true")
+    row_properties.append(table_header)
 
 
 def _render_image_placeholder(document: Document, block: ImagePlaceholderBlock) -> None:

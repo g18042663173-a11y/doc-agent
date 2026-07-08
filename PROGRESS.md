@@ -24,3 +24,8 @@
   - 页眉默认写入文档标题,页脚写入密级与 PAGE 页码域。
   - `python3 -m pytest backend/tests -q`: 23 passed.
   - `python3 scripts/verify.py`: 生成 `output/c0_word.docx` 并通过。
+- 主目标 S1-4:
+  - 表格渲染增加表头加粗、灰底、重复表头标记与比例列宽。
+  - 增加 100 行 x 12 列极限表 golden 回读测试。
+  - `python3 -m pytest backend/tests -q`: 25 passed.
+  - `python3 scripts/verify.py`: 通过。

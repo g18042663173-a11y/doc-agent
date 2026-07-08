@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import zipfile
+import re
 from pathlib import Path
 
 from docx import Document
@@ -105,3 +106,64 @@ def test_render_word_ir_includes_page_break_xml(tmp_path: Path) -> None:
     with zipfile.ZipFile(output) as package:
         document_xml = package.read("word/document.xml").decode("utf-8")
     assert 'w:type="page"' in document_xml or "w:type='page'" in document_xml
+
+
+def test_render_word_ir_formats_table_header_and_widths(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "表格"},
+            "blocks": [
+                {
+                    "type": "table",
+                    "caption": "风险清单",
+                    "header": ["风险", "等级"],
+                    "rows": [["模型 JSON 不稳定", "中"]],
+                    "col_widths": [3, 1],
+                }
+            ],
+        }
+    )
+
+    output = render_word_ir(ir, tmp_path / "table.docx")
+    doc = Document(str(output))
+
+    assert doc.tables[0].cell(0, 0).text == "风险"
+    assert doc.tables[0].cell(1, 0).text == "模型 JSON 不稳定"
+    assert doc.tables[0].cell(0, 0).paragraphs[0].runs[0].bold is True
+    with zipfile.ZipFile(output) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+    assert "w:tblHeader" in document_xml
+    assert 'w:fill="F5F5F5"' in document_xml
+    widths = [int(value) for value in re.findall(r'<w:gridCol w:w="(\d+)"', document_xml)]
+    assert widths[:2][0] > widths[:2][1]
+
+
+def test_render_word_ir_handles_100_by_12_table(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "极限表"},
+            "blocks": [
+                {
+                    "type": "table",
+                    "header": [f"H{i}" for i in range(12)],
+                    "rows": [[f"R{row}C{col}" for col in range(12)] for row in range(100)],
+                }
+            ],
+        }
+    )
+
+    output = render_word_ir(ir, tmp_path / "large-table.docx")
+    doc = Document(str(output))
+
+    assert len(doc.tables[0].rows) == 101
+    assert len(doc.tables[0].columns) == 12
