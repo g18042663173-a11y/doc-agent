@@ -347,6 +347,7 @@
           }
         ]
       },
+      "minItems": 1,
       "title": "Blocks",
       "type": "array"
     },
@@ -367,7 +368,8 @@
   "required": [
     "ir_type",
     "ir_version",
-    "meta"
+    "meta",
+    "blocks"
   ],
   "title": "WordIR",
   "type": "object"

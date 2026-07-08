@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 if str(BACKEND) not in sys.path:
@@ -32,6 +34,22 @@ def test_word_ir_validates_minimal_report() -> None:
 
     assert ir.meta.title == "周报"
     assert ir.blocks[0].type == "heading"
+
+
+def test_word_ir_rejects_empty_blocks() -> None:
+    from pydantic import ValidationError
+
+    from app.ir.word_ir import WordIR
+
+    with pytest.raises(ValidationError):
+        WordIR.model_validate(
+            {
+                "ir_type": "word",
+                "ir_version": "1.0",
+                "meta": {"title": "空文档", "classification": "内部公开"},
+                "blocks": [],
+            }
+        )
 
 
 def test_document_ir_validates_empty_input_summary() -> None:
@@ -85,6 +103,13 @@ def test_schema_files_match_current_models() -> None:
     assert load_schema("word_ir") == normalized_schema(WordIR)
     assert load_schema("document_ir") == normalized_schema(DocumentIR)
     assert load_schema("deck_ir") == normalized_schema(DeckIR)
+
+
+def test_word_schema_requires_non_empty_blocks() -> None:
+    schema = load_schema("word_ir")
+
+    assert "blocks" in schema["required"]
+    assert schema["properties"]["blocks"]["minItems"] == 1
 
 
 def test_stub_generator_outputs_valid_target_ir() -> None:

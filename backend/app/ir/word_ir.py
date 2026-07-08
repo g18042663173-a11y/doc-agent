@@ -46,7 +46,7 @@ class WordIR(ContractModel):
     ir_type: Literal["word"]
     ir_version: Literal["1.0"]
     meta: WordMeta
-    blocks: list[WordBlock] = Field(default_factory=list)
+    blocks: list[WordBlock] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_tables(self) -> "WordIR":
