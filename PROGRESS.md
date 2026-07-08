@@ -29,3 +29,9 @@
   - 增加 100 行 x 12 列极限表 golden 回读测试。
   - `python3 -m pytest backend/tests -q`: 25 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S1-5:
+  - 增加 3 个 WordIR 正样例:纯文本报告、带列表方案、带表格业务说明。
+  - 增加 5 个 WordIR 失败样例并回归错误码 E002-E006。
+  - 增加校验报告格式化器,输出错误码、定位与中文建议。
+  - `python3 -m pytest backend/tests -q`: 27 passed.
+  - `python3 scripts/verify.py`: 通过。

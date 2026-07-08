@@ -1,0 +1,30 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "项目周报",
+    "subtitle": "2026 年第 27 周",
+    "author": "张三",
+    "classification": "内部公开"
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "本周进展"
+    },
+    {
+      "type": "paragraph",
+      "text": "完成 WordIR 校验器、剥壳器与 DOCX 渲染核心。"
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "下周计划"
+    },
+    {
+      "type": "paragraph",
+      "text": "继续推进输入解析与 Prompt 组装。"
+    }
+  ]
+}
