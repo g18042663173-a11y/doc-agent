@@ -138,3 +138,4 @@ def test_verify_script_runs_empty_stub_chain() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert "C0 verify passed" in result.stdout
     assert (ROOT / "output" / "c0_word.docx").exists()
+    assert (ROOT / "output" / "c0_deck.pptx").exists()

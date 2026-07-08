@@ -80,3 +80,9 @@
   - 增加 theme loader 与 `docs/风格规范.md`。
   - `python3 -m pytest backend/tests -q`: 43 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S3-2:
+  - 增加 PPTX renderer P0 五版式: cover / agenda / section / title_bullets / table。
+  - PPTX 全部自绘为可编辑文本框、形状和真实表格,每页固定页脚。
+  - `scripts/verify.py` 的 deck 分支切换为真实 `output/c0_deck.pptx`。
+  - `python3 -m pytest backend/tests -q`: 45 passed.
+  - `python3 scripts/verify.py`: 生成 `output/c0_word.docx` 与 `output/c0_deck.pptx` 并通过。
