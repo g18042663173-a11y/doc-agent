@@ -62,3 +62,9 @@
   - 从 slide XML 检测 transition / timing 并记录 warning。
   - `python3 -m pytest backend/tests -q`: 37 passed.
   - `python3 scripts/verify.py`: 通过。
+- 主目标 S2-5:
+  - 增加 Prompt builder 与模板,按 word / deck 目标自动注入 pydantic JSON Schema。
+  - 同一 DocumentIR 输入生成逐字节一致 Prompt。
+  - 超长 DocumentIR 按确定性字符上限截断并写入截断说明。
+  - `python3 -m pytest backend/tests -q`: 39 passed.
+  - `python3 scripts/verify.py`: 通过。
