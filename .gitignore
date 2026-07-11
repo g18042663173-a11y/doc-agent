@@ -6,3 +6,9 @@ htmlcov/
 output/
 wheelhouse/
 .venv/
+.DS_Store
+.coverage*
+task_plan*.md
+findings.md
+GENERATION_NOTES.md
+docs/临时*.md

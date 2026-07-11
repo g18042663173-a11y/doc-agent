@@ -1,0 +1,91 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.4",
+  "meta": {
+    "title": "技术架构骨架",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "architecture_diagram",
+      "title": "技术平台分层架构",
+      "nodes": [
+        {
+          "id": "portal",
+          "text": "业务门户",
+          "type": "primary",
+          "group": "access"
+        },
+        {
+          "id": "gateway",
+          "text": "接口网关",
+          "type": "secondary",
+          "group": "service"
+        },
+        {
+          "id": "engine",
+          "text": "计算引擎",
+          "type": "emphasis",
+          "group": "service"
+        },
+        {
+          "id": "store",
+          "text": "数据存储",
+          "type": "data",
+          "group": "data"
+        }
+      ],
+      "edges": [
+        {
+          "from": "portal",
+          "to": "gateway",
+          "label": "请求",
+          "style": "solid",
+          "direction": "forward"
+        },
+        {
+          "from": "gateway",
+          "to": "engine",
+          "style": "dashed",
+          "direction": "both"
+        },
+        {
+          "from": "engine",
+          "to": "store",
+          "label": "读写",
+          "style": "solid",
+          "direction": "forward"
+        }
+      ],
+      "groups": [
+        {
+          "id": "access",
+          "label": "接入层",
+          "node_ids": [
+            "portal"
+          ]
+        },
+        {
+          "id": "service",
+          "label": "服务层",
+          "node_ids": [
+            "gateway",
+            "engine"
+          ]
+        },
+        {
+          "id": "data",
+          "label": "数据层",
+          "node_ids": [
+            "store"
+          ]
+        }
+      ],
+      "manual_hints": {
+        "node_positions": {},
+        "node_sizes": {}
+      }
+    }
+  ]
+}

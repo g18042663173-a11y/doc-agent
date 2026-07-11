@@ -1,0 +1,11 @@
+CASE: success_word
+COMMAND: <PYTHON> scripts/demo_e2e.py samples/input/需求说明.docx --target word --generator stub --output-dir output/demo-recording/word
+RETURN CODE: 0
+STDOUT:
+document_ir: output/demo-recording/word/document_ir.json
+prompt: output/demo-recording/word/prompt.txt
+generated_ir: output/demo-recording/word/word_ir.json
+artifact: output/demo-recording/word/word.docx
+report: output/demo-recording/word/report.json
+STDERR:
+<empty>

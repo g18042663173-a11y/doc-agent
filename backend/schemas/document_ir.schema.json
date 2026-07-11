@@ -82,7 +82,7 @@
                 "numbered_list": "#/$defs/NumberedListBlock",
                 "page_break": "#/$defs/PageBreakBlock",
                 "paragraph": "#/$defs/ParagraphBlock",
-                "table": "#/$defs/TableBlock"
+                "table": "#/$defs/DocumentTableBlock"
               },
               "propertyName": "type"
             },
@@ -100,7 +100,7 @@
                 "$ref": "#/$defs/NumberedListBlock"
               },
               {
-                "$ref": "#/$defs/TableBlock"
+                "$ref": "#/$defs/DocumentTableBlock"
               },
               {
                 "$ref": "#/$defs/ImagePlaceholderBlock"
@@ -203,6 +203,70 @@
         }
       },
       "title": "DocumentStats",
+      "type": "object"
+    },
+    "DocumentTableBlock": {
+      "properties": {
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "col_widths": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "各列的正数相对宽度权重；渲染时归一化到可用表宽，不是英寸或其它绝对单位。",
+          "title": "Col Widths"
+        },
+        "header": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Header",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 20,
+          "title": "Rows",
+          "type": "array"
+        },
+        "type": {
+          "const": "table",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "header",
+        "rows"
+      ],
+      "title": "DocumentTableBlock",
       "type": "object"
     },
     "HeadingBlock": {
@@ -427,8 +491,10 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 15,
             "type": "array"
           },
+          "maxItems": 20,
           "title": "Preview Rows",
           "type": "array"
         },
@@ -517,71 +583,118 @@
       ],
       "title": "SlideSummary",
       "type": "object"
-    },
-    "TableBlock": {
-      "properties": {
-        "caption": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Caption"
-        },
-        "col_widths": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "number"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Col Widths"
-        },
-        "header": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 12,
-          "minItems": 1,
-          "title": "Header",
-          "type": "array"
-        },
-        "rows": {
-          "items": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "maxItems": 100,
-          "title": "Rows",
-          "type": "array"
-        },
-        "type": {
-          "const": "table",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "type",
-        "header",
-        "rows"
-      ],
-      "title": "TableBlock",
-      "type": "object"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": {
+              "format": {
+                "enum": [
+                  "md",
+                  "docx"
+                ]
+              }
+            },
+            "required": [
+              "format"
+            ]
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "properties": {
+          "content": {
+            "properties": {
+              "sheets": {
+                "maxItems": 0
+              },
+              "slides": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": {
+              "format": {
+                "const": "xlsx"
+              }
+            },
+            "required": [
+              "format"
+            ]
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "properties": {
+          "content": {
+            "properties": {
+              "blocks": {
+                "maxItems": 0
+              },
+              "outline": {
+                "maxItems": 0
+              },
+              "slides": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": {
+              "format": {
+                "const": "pptx"
+              }
+            },
+            "required": [
+              "format"
+            ]
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "properties": {
+          "content": {
+            "properties": {
+              "blocks": {
+                "maxItems": 0
+              },
+              "outline": {
+                "maxItems": 0
+              },
+              "sheets": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "content": {
       "$ref": "#/$defs/DocumentContent"
@@ -592,7 +705,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "1.0",
+      "const": "1.1",
       "title": "Ir Version",
       "type": "string"
     },

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
 from app.ir.document_ir import DocumentIR
+from app.parsers.errors import encoding_failure, parser_error_boundary
+from app.parsers.source_metadata import deterministic_parsed_at
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -13,12 +14,13 @@ ORDERED_RE = re.compile(r"^(\s*)\d+[.)]\s+(.+?)\s*$")
 TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$")
 
 
+@parser_error_boundary
 def parse_markdown(path: Path) -> DocumentIR:
-    text = path.read_text(encoding="utf-8")
+    text, encoding_warning = _read_markdown_text(path)
     lines = text.splitlines()
     blocks: list[dict] = []
     outline: list[dict] = []
-    warnings: list[str] = []
+    warnings: list[str] = [encoding_warning] if encoding_warning else []
     paragraph_buffer: list[str] = []
     index = 0
 
@@ -50,10 +52,12 @@ def parse_markdown(path: Path) -> DocumentIR:
 
         if _is_table_start(lines, index):
             flush_paragraph()
-            table, consumed, truncated = _parse_table(lines[index:])
+            table, consumed, truncated, malformed_rows = _parse_table(lines[index:])
             blocks.append(table)
             if truncated:
-                warnings.append("markdown table preview truncated to 20 rows")
+                warnings.append("W103: markdown table preview truncated to 20 rows")
+            if malformed_rows:
+                warnings.append(f"markdown malformed table rows skipped: {malformed_rows}")
             index += consumed
             continue
 
@@ -76,12 +80,12 @@ def parse_markdown(path: Path) -> DocumentIR:
     return DocumentIR.model_validate(
         {
             "ir_type": "document",
-            "ir_version": "1.0",
+            "ir_version": "1.1",
             "source": {
                 "filename": path.name,
                 "format": "md",
                 "size_kb": round(path.stat().st_size / 1024, 2),
-                "parsed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "parsed_at": deterministic_parsed_at(path),
             },
             "stats": {
                 "headings": len(outline),
@@ -99,11 +103,23 @@ def _is_table_start(lines: list[str], index: int) -> bool:
     return index + 1 < len(lines) and "|" in lines[index] and TABLE_SEPARATOR_RE.match(lines[index + 1]) is not None
 
 
-def _parse_table(lines: list[str]) -> tuple[dict, int, bool]:
+def _read_markdown_text(path: Path) -> tuple[str, str | None]:
+    data = path.read_bytes()
+    try:
+        return data.decode("utf-8-sig"), None
+    except UnicodeDecodeError:
+        try:
+            return data.decode("gb18030"), "markdown decoded using gb18030 fallback"
+        except UnicodeDecodeError as exc:
+            raise encoding_failure(path) from exc
+
+
+def _parse_table(lines: list[str]) -> tuple[dict, int, bool, int]:
     header = _split_table_row(lines[0])
     rows: list[list[str]] = []
     consumed = 2
     truncated = False
+    malformed_rows = 0
     while consumed < len(lines) and "|" in lines[consumed] and lines[consumed].strip():
         row = _split_table_row(lines[consumed])
         if len(row) == len(header):
@@ -111,8 +127,10 @@ def _parse_table(lines: list[str]) -> tuple[dict, int, bool]:
                 rows.append(row)
             else:
                 truncated = True
+        else:
+            malformed_rows += 1
         consumed += 1
-    return {"type": "table", "header": header, "rows": rows}, consumed, truncated
+    return {"type": "table", "header": header, "rows": rows}, consumed, truncated, malformed_rows
 
 
 def _split_table_row(line: str) -> list[str]:

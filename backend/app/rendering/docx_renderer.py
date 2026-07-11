@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import zipfile
 
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
-from docx.enum.text import WD_BREAK
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
@@ -19,78 +20,84 @@ from app.ir.common import (
     TableBlock,
 )
 from app.ir.word_ir import WordIR
-
-
-STYLES = {
-    "font": "微软雅黑",
-    "western_font": "Arial",
-    "normal_size": 11,
-    "heading_sizes": {1: 18, 2: 15, 3: 13, 4: 12},
-    "classification_size": 9,
-    "table_border_pt": 0.5,
-}
+from app.rendering.theme import load_theme
 
 
 def render_word_ir(ir: WordIR, output_path: Path) -> Path:
+    theme = load_theme("hw_v1")
     document = Document()
-    _configure_styles(document)
-    _configure_header_footer(document, ir)
+    _configure_styles(document, theme)
+    _configure_header_footer(document, ir, theme)
 
     for block in ir.blocks:
         if isinstance(block, HeadingBlock):
             _render_heading(document, block)
         elif isinstance(block, ParagraphBlock):
-            _render_paragraph(document, block)
+            _render_paragraph(document, block, theme)
         elif isinstance(block, BulletListBlock):
             _render_list(document, block, numbered=False)
         elif isinstance(block, NumberedListBlock):
             _render_list(document, block, numbered=True)
         elif isinstance(block, TableBlock):
-            _render_basic_table(document, block)
+            _render_basic_table(document, block, theme)
         elif isinstance(block, ImagePlaceholderBlock):
-            _render_image_placeholder(document, block)
+            _render_image_placeholder(document, block, theme)
         elif isinstance(block, PageBreakBlock):
             document.add_page_break()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     document.save(str(output_path))
+    _replace_legacy_word_blue(output_path, theme)
     return output_path
 
 
-def _configure_styles(document: Document) -> None:
+def _configure_styles(document: Document, theme: dict) -> None:
     styles = document.styles
     normal = styles["Normal"]
-    _set_style_font(normal, STYLES["normal_size"])
+    _set_style_font(normal, theme, theme["font_sizes_pt"]["body"], color_key="body")
+    normal.paragraph_format.line_spacing = theme["typography"]["line_spacing"]
 
-    for level, size in STYLES["heading_sizes"].items():
+    heading_sizes = {
+        1: theme["font_sizes_pt"]["level1"],
+        2: theme["font_sizes_pt"]["level2"],
+        3: theme["font_sizes_pt"]["level3"],
+        4: theme["font_sizes_pt"]["body"],
+    }
+    for level, size in heading_sizes.items():
         style = styles[f"Heading {level}"]
-        _set_style_font(style, size, bold=True)
+        _set_style_font(style, theme, size, bold=True, color_key="hw_red")
+        style.paragraph_format.line_spacing = theme["typography"]["line_spacing"]
+        style.paragraph_format.space_before = Pt(8 if level == 1 else 6)
+        style.paragraph_format.space_after = Pt(4)
+
+    for style_name in ("List Bullet", "List Bullet 2", "List Number", "List Number 2"):
+        if style_name in styles:
+            _set_style_font(styles[style_name], theme, theme["font_sizes_pt"]["body"], color_key="body")
 
     quote = _get_or_add_paragraph_style(document, "IR Quote")
-    _set_style_font(quote, STYLES["normal_size"], italic=True, color=RGBColor(89, 89, 89))
+    _set_style_font(quote, theme, theme["font_sizes_pt"]["body"], italic=True, color_key="secondary")
     quote.paragraph_format.left_indent = Inches(0.25)
     quote.paragraph_format.space_before = Pt(6)
     quote.paragraph_format.space_after = Pt(6)
+    quote.paragraph_format.line_spacing = theme["typography"]["line_spacing"]
 
     note = _get_or_add_paragraph_style(document, "IR Note")
-    _set_style_font(note, STYLES["normal_size"], color=RGBColor(51, 51, 51))
+    _set_style_font(note, theme, theme["font_sizes_pt"]["body"], color_key="body")
     note.paragraph_format.left_indent = Inches(0.15)
     note.paragraph_format.right_indent = Inches(0.15)
     note.paragraph_format.space_before = Pt(6)
     note.paragraph_format.space_after = Pt(6)
+    note.paragraph_format.line_spacing = theme["typography"]["line_spacing"]
 
 
-def _set_style_font(style, size_pt: int, *, bold: bool = False, italic: bool = False, color: RGBColor | None = None) -> None:
+def _set_style_font(style, theme: dict, size_pt: int, *, bold: bool = False, italic: bool = False, color_key: str = "body") -> None:
     font = style.font
-    font.name = STYLES["font"]
+    font.name = theme["fonts"]["east_asia"][0]
     font.size = Pt(size_pt)
     font.bold = bold
     font.italic = italic
-    if color is not None:
-        font.color.rgb = color
-    style.element.rPr.rFonts.set(qn("w:eastAsia"), STYLES["font"])
-    style.element.rPr.rFonts.set(qn("w:ascii"), STYLES["western_font"])
-    style.element.rPr.rFonts.set(qn("w:hAnsi"), STYLES["western_font"])
+    font.color.rgb = _theme_rgb(theme, color_key)
+    _set_rfonts(style.element.get_or_add_rPr(), theme)
 
 
 def _get_or_add_paragraph_style(document: Document, name: str):
@@ -100,26 +107,29 @@ def _get_or_add_paragraph_style(document: Document, name: str):
     return styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
 
 
-def _configure_header_footer(document: Document, ir: WordIR) -> None:
+def _configure_header_footer(document: Document, ir: WordIR, theme: dict) -> None:
     section = document.sections[0]
     header_text = ir.meta.header_text or ir.meta.title
     footer_text = ir.meta.footer_text or ir.meta.classification
 
     header = section.header.paragraphs[0]
     header.text = header_text
-    _format_runs(header.runs, size=STYLES["classification_size"])
+    _format_runs(header.runs, theme, size=theme["font_sizes_pt"]["footer"], color_key="body")
 
     footer = section.footer.paragraphs[0]
     footer.text = f"{footer_text} | "
-    _format_runs(footer.runs, size=STYLES["classification_size"])
+    _format_runs(footer.runs, theme, size=theme["font_sizes_pt"]["footer"], color_key="secondary")
     _append_page_number_field(footer)
+    _format_runs(footer.runs, theme, size=theme["font_sizes_pt"]["footer"], color_key="secondary")
 
 
-def _format_runs(runs, *, size: int) -> None:
+def _format_runs(runs, theme: dict, *, size: int, color_key: str = "body", bold: bool = False) -> None:
     for run in runs:
-        run.font.name = STYLES["font"]
+        run.font.name = theme["fonts"]["east_asia"][0]
         run.font.size = Pt(size)
-        run._element.rPr.rFonts.set(qn("w:eastAsia"), STYLES["font"])
+        run.font.bold = bold
+        run.font.color.rgb = _theme_rgb(theme, color_key)
+        _set_rfonts(run._element.get_or_add_rPr(), theme)
 
 
 def _append_page_number_field(paragraph) -> None:
@@ -140,12 +150,13 @@ def _render_heading(document: Document, block: HeadingBlock) -> None:
     document.add_heading(block.text, level=block.level)
 
 
-def _render_paragraph(document: Document, block: ParagraphBlock) -> None:
+def _render_paragraph(document: Document, block: ParagraphBlock, theme: dict) -> None:
     if block.style == "quote":
-        document.add_paragraph(block.text, style="IR Quote")
+        paragraph = document.add_paragraph(block.text, style="IR Quote")
+        _set_paragraph_left_border(paragraph, theme["colors"]["secondary"], width_pt=1.5)
     elif block.style == "note":
         paragraph = document.add_paragraph(block.text, style="IR Note")
-        _shade_paragraph(paragraph, fill="F5F5F5")
+        _shade_paragraph(paragraph, fill=_theme_hex(theme, "table_stripe"))
     elif block.text.strip():
         document.add_paragraph(block.text)
 
@@ -166,21 +177,26 @@ def _render_list(document: Document, block: BulletListBlock | NumberedListBlock,
         document.add_paragraph(item.text, style=style)
 
 
-def _render_basic_table(document: Document, block: TableBlock) -> None:
+def _render_basic_table(document: Document, block: TableBlock, theme: dict) -> None:
     if block.caption:
-        document.add_paragraph(block.caption)
+        caption = document.add_paragraph(block.caption)
+        _format_runs(caption.runs, theme, size=theme["font_sizes_pt"]["body_small"], color_key="secondary")
     table = document.add_table(rows=1, cols=len(block.header))
     table.style = "Table Grid"
     table.autofit = False
     _set_table_widths(table, block.col_widths or [1] * len(block.header))
     for index, cell in enumerate(table.rows[0].cells):
-        cell.text = block.header[index]
-        _format_cell_header(cell)
+        _write_cell(cell, block.header[index], theme, bold=True, color_key="background")
+        _shade_cell(cell, _theme_hex(theme, "hw_red"))
+        _set_cell_borders(cell, theme)
     _repeat_table_header(table.rows[0])
-    for row in block.rows:
+    for row_index, row in enumerate(block.rows):
         cells = table.add_row().cells
+        fill_key = "background" if row_index % 2 == 0 else "table_stripe"
         for index, value in enumerate(row):
-            cells[index].text = value
+            _write_cell(cells[index], value, theme, bold=False, color_key="body")
+            _shade_cell(cells[index], _theme_hex(theme, fill_key))
+            _set_cell_borders(cells[index], theme)
         _set_row_widths(cells, block.col_widths or [1] * len(block.header))
 
 
@@ -207,16 +223,37 @@ def _set_row_widths(cells, ratios: list[float]) -> None:
         tc_width.set(qn("w:type"), "dxa")
 
 
-def _format_cell_header(cell) -> None:
+def _write_cell(cell, text: str, theme: dict, *, bold: bool, color_key: str) -> None:
+    cell.text = text
+    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
     for paragraph in cell.paragraphs:
+        paragraph.paragraph_format.line_spacing = theme["typography"]["line_spacing"]
         for run in paragraph.runs:
-            run.bold = True
-            run.font.name = STYLES["font"]
-            run._element.rPr.rFonts.set(qn("w:eastAsia"), STYLES["font"])
+            _format_runs([run], theme, size=theme["font_sizes_pt"]["body"], color_key=color_key, bold=bold)
+
+
+def _shade_cell(cell, fill: str) -> None:
     tc_properties = cell._tc.get_or_add_tcPr()
     shading = OxmlElement("w:shd")
-    shading.set(qn("w:fill"), "F5F5F5")
+    shading.set(qn("w:fill"), fill)
     tc_properties.append(shading)
+
+
+def _set_cell_borders(cell, theme: dict) -> None:
+    tc_properties = cell._tc.get_or_add_tcPr()
+    borders = tc_properties.find(qn("w:tcBorders"))
+    if borders is None:
+        borders = OxmlElement("w:tcBorders")
+        tc_properties.append(borders)
+    for edge in ("top", "left", "bottom", "right"):
+        border = borders.find(qn(f"w:{edge}"))
+        if border is None:
+            border = OxmlElement(f"w:{edge}")
+            borders.append(border)
+        border.set(qn("w:val"), "single")
+        border.set(qn("w:sz"), str(int(theme["strokes"]["card_border_pt"] * 8)))
+        border.set(qn("w:space"), "0")
+        border.set(qn("w:color"), _theme_hex(theme, "border"))
 
 
 def _repeat_table_header(row) -> None:
@@ -226,6 +263,67 @@ def _repeat_table_header(row) -> None:
     row_properties.append(table_header)
 
 
-def _render_image_placeholder(document: Document, block: ImagePlaceholderBlock) -> None:
-    text = block.caption or block.ref or "图片占位"
-    document.add_paragraph(f"[图片占位] {text}", style="IR Note")
+def _render_image_placeholder(document: Document, block: ImagePlaceholderBlock, theme: dict) -> None:
+    table = document.add_table(rows=1, cols=1)
+    table.autofit = False
+    table.rows[0].height = Inches(1.35)
+    table.rows[0].height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
+    _set_table_widths(table, [1])
+    cell = table.cell(0, 0)
+    placeholder = "图片占位"
+    if block.ref:
+        placeholder = f"{placeholder}\n{block.ref}"
+    _write_cell(cell, placeholder, theme, bold=True, color_key="body")
+    _shade_cell(cell, _theme_hex(theme, "surface"))
+    _set_cell_borders(cell, theme)
+    if block.caption:
+        caption = document.add_paragraph(block.caption)
+        _format_runs(caption.runs, theme, size=theme["font_sizes_pt"]["body_small"], color_key="secondary")
+
+
+def _set_rfonts(rpr, theme: dict) -> None:
+    rfonts = rpr.rFonts
+    if rfonts is None:
+        rfonts = OxmlElement("w:rFonts")
+        rpr.append(rfonts)
+    rfonts.set(qn("w:eastAsia"), theme["fonts"]["east_asia"][0])
+    rfonts.set(qn("w:ascii"), theme["fonts"]["latin"][0])
+    rfonts.set(qn("w:hAnsi"), theme["fonts"]["latin"][0])
+
+
+def _set_paragraph_left_border(paragraph, color: str, *, width_pt: float) -> None:
+    paragraph_properties = paragraph._p.get_or_add_pPr()
+    borders = paragraph_properties.find(qn("w:pBdr"))
+    if borders is None:
+        borders = OxmlElement("w:pBdr")
+        paragraph_properties.append(borders)
+    left = borders.find(qn("w:left"))
+    if left is None:
+        left = OxmlElement("w:left")
+        borders.append(left)
+    left.set(qn("w:val"), "single")
+    left.set(qn("w:sz"), str(int(width_pt * 8)))
+    left.set(qn("w:space"), "8")
+    left.set(qn("w:color"), color.lstrip("#"))
+
+
+def _theme_rgb(theme: dict, color_key: str) -> RGBColor:
+    return RGBColor.from_string(_theme_hex(theme, color_key))
+
+
+def _theme_hex(theme: dict, color_key: str) -> str:
+    return theme["colors"][color_key].lstrip("#").upper()
+
+
+def _replace_legacy_word_blue(output_path: Path, theme: dict) -> None:
+    replacement = _theme_hex(theme, "hw_red")
+    temp_path = output_path.with_suffix(".tmp.docx")
+    with zipfile.ZipFile(output_path, "r") as source, zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED) as target:
+        for info in source.infolist():
+            data = source.read(info.filename)
+            if info.filename.startswith("word/") and info.filename.endswith(".xml"):
+                text = data.decode("utf-8")
+                text = text.replace("4F81BD", replacement).replace("4f81bd", replacement)
+                data = text.encode("utf-8")
+            target.writestr(info, data)
+    temp_path.replace(output_path)

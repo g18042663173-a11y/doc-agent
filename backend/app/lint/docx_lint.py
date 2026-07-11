@@ -1,0 +1,268 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+from pathlib import Path
+import zipfile
+from typing import Any
+
+from docx import Document
+
+from app.rendering.theme import load_theme
+
+
+@dataclass(frozen=True)
+class DocxLintItem:
+    code: str
+    level: str
+    message: str
+    suggestion: str
+
+
+@dataclass(frozen=True)
+class DocxLintReport:
+    items: list[DocxLintItem]
+
+    @property
+    def summary(self) -> dict[str, Any]:
+        errors = sum(1 for item in self.items if item.level == "Error")
+        warnings = sum(1 for item in self.items if item.level == "Warning")
+        infos = sum(1 for item in self.items if item.level == "Info")
+        return {"errors": errors, "warnings": warnings, "infos": infos, "pass": errors == 0}
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "summary": self.summary,
+            "items": [
+                {
+                    "code": item.code,
+                    "level": item.level,
+                    "message": item.message,
+                    "suggestion": item.suggestion,
+                }
+                for item in self.items
+            ],
+        }
+
+
+def check_docx(path: Path, *, classification: str | None = None, theme_name: str = "hw_v1") -> DocxLintReport:
+    items: list[DocxLintItem] = []
+    try:
+        document = Document(str(path))
+        package_xml = _read_word_xml(path)
+    except Exception as exc:
+        return DocxLintReport(
+            [
+                DocxLintItem(
+                    code="E001",
+                    level="Error",
+                    message=f"DOCX 无法打开: {exc}",
+                    suggestion="确认文件是有效 .docx,并重新导出后复检。",
+                )
+            ]
+        )
+
+    paragraph_texts = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
+    table_count = len(document.tables)
+    if not paragraph_texts and table_count == 0:
+        items.append(
+            DocxLintItem(
+                code="E006",
+                level="Error",
+                message="DOCX 没有可读正文段落或表格。",
+                suggestion="确认渲染输入至少包含一个内容块。",
+            )
+        )
+        return DocxLintReport(items)
+
+    if classification:
+        footer_text = "\n".join(
+            paragraph.text
+            for section in document.sections
+            for paragraph in section.footer.paragraphs
+        )
+        if classification not in footer_text:
+            items.append(
+                DocxLintItem(
+                    code="E002",
+                    level="Error",
+                    message="DOCX 页脚缺少期望密级文案。",
+                    suggestion="使用 WordIR meta.classification 重新渲染页脚。",
+                )
+            )
+
+    theme = load_theme(theme_name)
+    items.extend(_theme_items(document, package_xml, theme))
+    items.extend(_font_items(document, theme))
+    items.extend(_table_items(document, theme))
+    items.extend(_placeholder_items(document))
+    items.extend(_quote_note_items(document, theme))
+    items.extend(_footer_format_items(document, package_xml, classification))
+    return DocxLintReport(items)
+
+
+def _read_word_xml(path: Path) -> str:
+    with zipfile.ZipFile(path) as package:
+        return "\n".join(
+            package.read(name).decode("utf-8")
+            for name in package.namelist()
+            if name.startswith("word/") and name.endswith(".xml")
+        )
+
+
+def _theme_items(document: Document, package_xml: str, theme: dict) -> list[DocxLintItem]:
+    items: list[DocxLintItem] = []
+    xml_upper = package_xml.upper()
+    hw_red = theme["colors"]["hw_red"].lstrip("#").upper()
+    if "4F81BD" in xml_upper:
+        items.append(_item("E004", "旧版 Word 蓝色 4F81BD 仍存在。", "标题与强调色应使用 hw_theme.json 的华为红。"))
+    requires_accent = any(_is_heading(paragraph) for paragraph in document.paragraphs) or bool(document.tables)
+    if requires_accent and hw_red not in xml_upper:
+        items.append(_item("E004", f"文档未使用主题红 {theme['colors']['hw_red']}。", "从 hw_theme.json 读取颜色 token 后重新渲染。"))
+    return _dedupe(items)
+
+
+def _font_items(document: Document, theme: dict) -> list[DocxLintItem]:
+    whitelist = set(theme["fonts"]["whitelist"])
+    allowed_sizes = {float(value) for value in theme["font_sizes_pt"].values() if isinstance(value, (int, float))}
+    for paragraph in _iter_all_paragraphs(document):
+        if not paragraph.text.strip():
+            continue
+        visible_runs = [run for run in paragraph.runs if run.text.strip()]
+        for run in visible_runs or [None]:
+            font_name = _effective_font_name(paragraph, run)
+            if font_name is None:
+                return [_item("HW-E02", "文本未显式设置可验证字体。", "使用主题字体白名单: 微软雅黑 / Arial。")]
+            if font_name not in whitelist:
+                return [_item("HW-E02", f"字体不在白名单: {font_name}", "使用主题字体白名单: 微软雅黑 / Arial。")]
+            size = _effective_font_size(paragraph, run)
+            if size is None or float(size) not in allowed_sizes:
+                shown = "未设置" if size is None else f"{float(size):g}pt"
+                return [_item("E004", f"字号 {shown} 不在主题字号体系。", "使用 hw_theme.json 的 14/12/11/10/9/8pt 体系。")]
+    return []
+
+
+def _table_items(document: Document, theme: dict) -> list[DocxLintItem]:
+    header_fill = theme["colors"]["hw_red"].lstrip("#").upper()
+    border = theme["colors"]["border"].lstrip("#").upper()
+    for table in document.tables:
+        if _is_image_placeholder_table(table):
+            continue
+        if not table.rows:
+            continue
+        header_xml = "\n".join(cell._tc.xml for cell in table.rows[0].cells)
+        table_xml = table._tbl.xml
+        if f'w:fill="{header_fill}"' not in header_xml:
+            return [_item("E004", "表格表头未使用主题红底。", "表头使用 #C7000B 红底和白字。")]
+        if "FFFFFF" not in header_xml:
+            return [_item("E004", "表格表头未使用白色文字。", "表头文字使用白色并加粗。")]
+        if border not in table_xml:
+            return [_item("E004", f"表格边框未使用主题边框色 {theme['colors']['border']}。", "表格边框使用主题灰色。")]
+    return []
+
+
+def _placeholder_items(document: Document) -> list[DocxLintItem]:
+    body_placeholder = any("[图片占位]" in paragraph.text for paragraph in document.paragraphs)
+    table_placeholder = any("图片占位" in cell.text for table in document.tables for row in table.rows for cell in row.cells)
+    if body_placeholder or (_contains_text(document, "图片占位") and not table_placeholder):
+        return [_item("E004", "图片占位未渲染为带边框占位框。", "使用可编辑表格/文本框绘制边框占位区,题注独立成段。")]
+    return []
+
+
+def _quote_note_items(document: Document, theme: dict) -> list[DocxLintItem]:
+    items: list[DocxLintItem] = []
+    note_fill = theme["colors"]["table_stripe"].lstrip("#").upper()
+    for paragraph in document.paragraphs:
+        style_name = paragraph.style.name
+        xml = paragraph._p.xml
+        if style_name == "IR Quote" and "<w:left" not in xml:
+            items.append(_item("E004", "quote 段落缺少左竖线。", "为 quote 段落添加左边框。"))
+        if style_name == "IR Note" and f'w:fill="{note_fill}"' not in xml:
+            items.append(_item("E004", "note 段落缺少主题浅底。", "为 note 段落添加主题浅底提示框。"))
+    return _dedupe(items)
+
+
+def _footer_format_items(document: Document, package_xml: str, classification: str | None) -> list[DocxLintItem]:
+    if not classification:
+        return []
+    footer_text = "\n".join(paragraph.text for section in document.sections for paragraph in section.footer.paragraphs)
+    if classification in footer_text and "PAGE" not in package_xml:
+        return [_item("HW-E01", "页脚缺少页码字段。", "页脚应包含密级文案和 PAGE 页码字段。")]
+    return []
+
+
+def _iter_all_paragraphs(document: Document):
+    yield from document.paragraphs
+    for section in document.sections:
+        yield from section.header.paragraphs
+        yield from section.footer.paragraphs
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                yield from cell.paragraphs
+
+
+def _effective_font_name(paragraph, run) -> str | None:
+    if run is not None and run.font.name:
+        return run.font.name
+    return paragraph.style.font.name
+
+
+def _effective_font_size(paragraph, run) -> float | None:
+    if run is not None and run.font.size is not None:
+        return run.font.size.pt
+    if paragraph.style.font.size is not None:
+        return paragraph.style.font.size.pt
+    return None
+
+
+def _is_heading(paragraph) -> bool:
+    return paragraph.text.strip() and paragraph.style.name.startswith("Heading")
+
+
+def _contains_text(document: Document, needle: str) -> bool:
+    return any(needle in paragraph.text for paragraph in _iter_all_paragraphs(document))
+
+
+def _is_image_placeholder_table(table) -> bool:
+    cells = [cell for row in table.rows for cell in row.cells]
+    return len(cells) == 1 and "图片占位" in cells[0].text
+
+
+def _dedupe(items: list[DocxLintItem]) -> list[DocxLintItem]:
+    seen: set[str] = set()
+    deduped: list[DocxLintItem] = []
+    for item in items:
+        if item.code in seen:
+            continue
+        seen.add(item.code)
+        deduped.append(item)
+    return deduped
+
+
+def _item(code: str, message: str, suggestion: str) -> DocxLintItem:
+    return DocxLintItem(code=code, level="Error", message=message, suggestion=suggestion)
+
+
+def write_docx_reports(report: DocxLintReport, output_dir: Path) -> tuple[Path, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / "report.json"
+    md_path = output_dir / "report.md"
+    payload = report.to_dict()
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    md_lines = [
+        "# DOCX 复检报告",
+        "",
+        f"- Errors: {payload['summary']['errors']}",
+        f"- Warnings: {payload['summary']['warnings']}",
+        f"- Infos: {payload['summary']['infos']}",
+        f"- Pass: {payload['summary']['pass']}",
+        "",
+    ]
+    for item in report.items:
+        md_lines.append(f"## {item.code} ({item.level})")
+        md_lines.append(f"- Message: {item.message}")
+        md_lines.append(f"- Suggestion: {item.suggestion}")
+        md_lines.append("")
+    md_path.write_text("\n".join(md_lines), encoding="utf-8")
+    return json_path, md_path

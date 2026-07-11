@@ -1,0 +1,31 @@
+{
+  "assets": [
+    {
+      "bytes": 3400,
+      "path": "samples/expected/appendix_b_document_ir.expected.json",
+      "sha256": "1db4b649e65899a1bcaf38c7ecf667619aa64d19f408bfb2cf30efb3c90efd5c"
+    },
+    {
+      "bytes": 167,
+      "path": "samples/expected/deck_lint_violation.expected.json",
+      "sha256": "fe45b40336b38f21dda47c36d92a43e1bdd67acdc1f97ebba85b926b7cc6398a"
+    },
+    {
+      "bytes": 622,
+      "path": "samples/expected/deck_valid_full.expected.json",
+      "sha256": "02bbd307b9bc9b1a91959507465cbdb78ab5d13f2f056ab09abb278ecec703c7"
+    },
+    {
+      "bytes": 1653,
+      "path": "samples/expected/word_official_outputs.expected.json",
+      "sha256": "00c60babf5b4b540dd10f411baaf6d13c273fffb5b386fe92298d44566406c5a"
+    },
+    {
+      "bytes": 1499,
+      "path": "samples/expected/项目汇报.pptx.expected.json",
+      "sha256": "698d04bf9bff912f13e8a481dbe06d1478375c54f516b510375629f5890615d2"
+    }
+  ],
+  "hash_algorithm": "sha256",
+  "schema_version": 1
+}

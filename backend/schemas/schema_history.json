@@ -1,0 +1,15 @@
+{
+  "schema_format": 1,
+  "schemas": {
+    "deck_ir": {
+      "1.4": "e65f63e44f948f33a6a7309dddf87e34351fe373addb380acd586320d78cd104"
+    },
+    "document_ir": {
+      "1.0": "915a9807d3da05931fc00bb43b6f02c06b544edf154f11da5ed285dc3ef99604",
+      "1.1": "b21d00368dc72aefe2fecd6385cbaaf90d8513362fdbe0c08738e0d66a482bfb"
+    },
+    "word_ir": {
+      "1.0": "c37e65b7188a7f8fd02c6288ba892b534f6d42de01f80721e41494b050f578c9"
+    }
+  }
+}

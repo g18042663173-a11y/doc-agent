@@ -1,0 +1,36 @@
+{
+  "ir_type": "document",
+  "ir_version": "1.1",
+  "source": {
+    "filename": "sample.md",
+    "format": "md",
+    "size_kb": 1.0,
+    "parsed_at": "2026-07-08T00:00:00Z"
+  },
+  "stats": {
+    "headings": 1,
+    "paragraphs": 1,
+    "tables": 0,
+    "images": 0
+  },
+  "warnings": [],
+  "content": {
+    "blocks": [
+      {
+        "type": "heading",
+        "level": 1,
+        "text": "摘要"
+      },
+      {
+        "type": "paragraph",
+        "text": "DocumentIR 正样例。"
+      }
+    ],
+    "outline": [
+      {
+        "level": 1,
+        "text": "摘要"
+      }
+    ]
+  }
+}

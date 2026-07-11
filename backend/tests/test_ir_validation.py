@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 if str(BACKEND) not in sys.path:
@@ -78,13 +80,129 @@ def test_validate_word_ir_ignores_unknown_fields_and_warns() -> None:
     assert not hasattr(result.value, "unknown_top")
 
 
+def test_validate_word_ir_warns_and_repairs_heading_level_jump() -> None:
+    from app.ir.validation import validate_word_ir
+
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "标题跳级"},
+            "blocks": [
+                {"type": "heading", "level": 1, "text": "一级"},
+                {"type": "heading", "level": 3, "text": "三级"},
+            ],
+        }
+    )
+
+    assert result.value is not None
+    assert [warning.code for warning in result.warnings] == ["W101"]
+    assert result.value.blocks[1].level == 2
+
+
+def test_validate_word_ir_does_not_warn_for_sequential_heading_levels() -> None:
+    from app.ir.validation import validate_word_ir
+
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "标题正常", "classification": "内部公开"},
+            "blocks": [
+                {"type": "heading", "level": 1, "text": "一级"},
+                {"type": "heading", "level": 2, "text": "二级"},
+            ],
+        }
+    )
+
+    assert result.value is not None
+    assert "W101" not in [warning.code for warning in result.warnings]
+
+
+def test_validate_word_ir_skips_blank_paragraph_and_warns() -> None:
+    from app.ir.validation import validate_word_ir
+
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "空段落"},
+            "blocks": [
+                {"type": "paragraph", "text": "   "},
+                {"type": "paragraph", "text": "保留"},
+            ],
+        }
+    )
+
+    assert result.value is not None
+    assert [warning.code for warning in result.warnings] == ["W102"]
+    assert [info.code for info in result.infos] == ["I201"]
+    assert len(result.value.blocks) == 1
+    assert result.value.blocks[0].text == "保留"
+
+
+def test_validate_word_ir_truncates_long_paragraph_and_table_cell() -> None:
+    from app.ir.validation import validate_word_ir
+
+    long_text = "长" * 2001
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "超长", "classification": "内部公开"},
+            "blocks": [
+                {"type": "paragraph", "text": long_text},
+                {"type": "table", "header": ["列"], "rows": [[long_text]]},
+            ],
+        }
+    )
+
+    assert result.value is not None
+    assert [warning.code for warning in result.warnings] == ["W103", "W103"]
+    assert len(result.value.blocks[0].text) == 2000
+    assert len(result.value.blocks[1].rows[0][0]) == 2000
+
+
+def test_validate_word_ir_infos_when_classification_defaulted() -> None:
+    from app.ir.validation import validate_word_ir
+
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "默认密级"},
+            "blocks": [{"type": "paragraph", "text": "正文"}],
+        }
+    )
+
+    assert result.value is not None
+    assert [info.code for info in result.infos] == ["I201"]
+    assert result.value.meta.classification == "内部公开"
+
+
+def test_validate_word_ir_does_not_info_when_classification_given() -> None:
+    from app.ir.validation import validate_word_ir
+
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "已有密级", "classification": "内部公开"},
+            "blocks": [{"type": "paragraph", "text": "正文"}],
+        }
+    )
+
+    assert result.value is not None
+    assert result.infos == []
+
+
 def test_validate_deck_ir_maps_unknown_layout_to_d003() -> None:
     from app.ir.validation import validate_deck_ir
 
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.1",
+            "ir_version": "1.4",
             "meta": {"title": "未知版式"},
             "slides": [{"layout": "mystery", "title": "无法渲染"}],
         }
@@ -92,3 +210,855 @@ def test_validate_deck_ir_maps_unknown_layout_to_d003() -> None:
 
     assert result.value is None
     assert result.errors[0].code == "D003"
+
+
+def test_validate_deck_ir_maps_missing_title_to_d002() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir({"ir_type": "deck", "ir_version": "1.4", "meta": {}, "slides": [{"layout": "cover", "title": "封面"}]})
+
+    assert result.value is None
+    assert result.errors[0].code == "D002"
+
+
+def test_validate_deck_ir_maps_missing_layout_field_to_d004() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir({"ir_type": "deck", "ir_version": "1.4", "meta": {"title": "缺字段"}, "slides": [{"layout": "cover"}]})
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+
+
+def test_validate_deck_ir_maps_ragged_or_oversized_table_to_d005() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "表格错误"},
+            "slides": [{"layout": "table", "title": "表格", "table": {"header": ["A", "B"], "rows": [["only one"]]}}],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D005"
+
+
+def test_validate_deck_ir_accepts_decision_matrix_table_v12() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "方案对比", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "方案对比表",
+                    "table": {
+                        "header": ["方案", "可靠性", "成本", "交付", "结论"],
+                        "column_groups": [{"label": "评估维度", "start_col": 1, "span": 3}],
+                        "row_groups": [{"label": "主推方案", "start_row": 0, "span": 2}],
+                        "cell_spans": [{"area": "body", "row": 0, "col": 2, "rowspan": 1, "colspan": 2}],
+                        "conclusion_col": 4,
+                        "rows": [
+                            [
+                                {"text": "方案A"},
+                                "高",
+                                {"items": ["周期短", "依赖少"]},
+                                "",
+                                {"text": "推荐", "emphasis": "yellow"},
+                            ],
+                            [
+                                {"text": "方案B"},
+                                "中",
+                                "成本可控",
+                                "交付较慢",
+                                {"text": "备选", "emphasis": "cyan"},
+                            ],
+                        ],
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.ok, result.errors
+    assert result.value is not None
+    table = result.value.slides[0].table
+    assert table.column_groups[0].label == "评估维度"
+    assert table.row_groups[0].label == "主推方案"
+    assert table.cell_spans[0].colspan == 2
+    assert table.rows[0][2].items == ["周期短", "依赖少"]
+    assert table.rows[1][4].emphasis == "cyan"
+
+
+def test_validate_deck_ir_normalizes_clear_one_based_conclusion_column() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "索引防呆"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "索引防呆",
+                    "table": {
+                        "header": ["方案", "指标", "结论"],
+                        "rows": [["方案A", "达标", "推荐"]],
+                        "conclusion_col": 3,
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.ok, result.errors
+    assert result.value.slides[0].table.conclusion_col == 2
+    assert any(item.code == "D005" and "1 起始索引" in item.message for item in result.warnings)
+
+
+def test_validate_deck_ir_normalizes_clear_one_based_span_indexes_only() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "合并索引防呆"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "合并索引防呆",
+                    "table": {
+                        "header": ["方案", "指标", "风险"],
+                        "rows": [["方案A", "达标", ""]],
+                        "column_groups": [{"label": "评估", "start_col": 2, "span": 2}],
+                        "cell_spans": [{"area": "body", "row": 1, "col": 2, "rowspan": 1, "colspan": 2}],
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.ok, result.errors
+    table = result.value.slides[0].table
+    assert table.column_groups[0].start_col == 1
+    assert (table.cell_spans[0].row, table.cell_spans[0].col) == (0, 1)
+    assert (table.cell_spans[0].rowspan, table.cell_spans[0].colspan) == (1, 2)
+    assert any(item.code == "D005" and item.level == "Warning" for item in result.warnings)
+
+
+def test_validate_deck_ir_keeps_valid_zero_based_table_indexes_without_warning() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "零起始索引"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "零起始索引",
+                    "table": {
+                        "header": ["方案", "指标", "结论"],
+                        "rows": [["方案A", "达标", "推荐"]],
+                        "column_groups": [{"label": "评估", "start_col": 0, "span": 2}],
+                        "conclusion_col": 2,
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.ok, result.errors
+    assert not any(item.code == "D005" for item in result.warnings)
+
+
+def test_validate_deck_ir_does_not_guess_when_table_indexes_are_mixed() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "混合索引"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "混合索引",
+                    "table": {
+                        "header": ["方案", "指标", "结论"],
+                        "rows": [["方案A", "达标", "推荐"]],
+                        "column_groups": [{"label": "评估", "start_col": 0, "span": 2}],
+                        "conclusion_col": 3,
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert any(item.code == "D005" and item.level == "Error" for item in result.errors)
+    assert any(item.code == "D005" and "混用" in item.message for item in result.warnings)
+
+
+def test_validate_deck_ir_maps_invalid_decision_matrix_span_to_d005() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "非法表格"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "非法表格",
+                    "table": {
+                        "header": ["方案", "可靠性", "成本"],
+                        "rows": [["方案A", "高", "中"]],
+                        "cell_spans": [{"area": "body", "row": 0, "col": 2, "rowspan": 1, "colspan": 2}],
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D005"
+
+
+@pytest.mark.parametrize(
+    "table_patch",
+    [
+        {"header": ["", "可靠性", "成本"]},
+        {"rows": [[{"items": [""]}, "高", "中"]]},
+        {"col_widths": [1.5, -1.0, 2.0]},
+        {"col_widths": [1.5, 2.0]},
+        {"conclusion_col": 4},
+        {"column_groups": [{"label": "越界", "start_col": 3, "span": 2}]},
+        {
+            "column_groups": [
+                {"label": "分组一", "start_col": 0, "span": 2},
+                {"label": "分组二", "start_col": 1, "span": 2},
+            ]
+        },
+        {"row_groups": [{"label": "越界", "start_row": 2, "span": 2}]},
+        {
+            "row_groups": [
+                {"label": "分组一", "start_row": 0, "span": 2},
+                {"label": "分组二", "start_row": 1, "span": 1},
+            ]
+        },
+        {"cell_spans": [{"area": "header", "row": 0, "col": 0, "rowspan": 2, "colspan": 1}]},
+        {
+            "cell_spans": [
+                {"area": "body", "row": 0, "col": 0, "rowspan": 1, "colspan": 2},
+                {"area": "body", "row": 0, "col": 1, "rowspan": 1, "colspan": 2},
+            ]
+        },
+    ],
+)
+def test_validate_deck_ir_maps_enhanced_table_contract_errors_to_d005(table_patch: dict) -> None:
+    from app.ir.validation import validate_deck_ir
+
+    table = {
+        "header": ["方案", "可靠性", "成本"],
+        "rows": [["方案A", "高", "中"], ["方案B", "中", "低"]],
+    }
+    table.update(table_patch)
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "非法增强表格"},
+            "slides": [{"layout": "table", "title": "非法增强表格", "table": table}],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D005"
+
+
+def test_validate_deck_ir_maps_too_many_bullets_to_d006() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "要点过多"},
+            "slides": [
+                {
+                    "layout": "title_bullets",
+                    "title": "要点",
+                    "bullets": [{"text": f"要点 {index}", "level": 1} for index in range(8)],
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D006"
+
+
+def test_validate_deck_ir_accepts_performance_chart_v13() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "性能图表", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "chart",
+                    "title": "性能趋势",
+                    "chart": {
+                        "kind": "bar",
+                        "unit": "ms",
+                        "categories": ["1月", "2月", "3月"],
+                        "series": [
+                            {"name": "方案A", "values": [62, 58, 55], "emphasis": True},
+                            {"name": "方案B", "values": [75, 69, 64]},
+                        ],
+                        "show_data_labels": True,
+                        "legend_position": "right",
+                        "thresholds": [{"value": 60, "label": "目标阈值"}],
+                        "side_conclusion": "方案A 2月起低于60ms目标阈值。",
+                        "side_table": {"header": ["指标", "结论"], "rows": [["时延", "2月起达标"], ["稳定性", "需关注"]]},
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.ok, result.errors
+    assert result.value is not None
+    chart = result.value.slides[0].chart
+    assert chart.unit == "ms"
+    assert chart.series[0].emphasis is True
+    assert chart.thresholds[0].label == "目标阈值"
+    assert chart.side_table is not None
+
+
+def test_validate_deck_ir_rejects_contradictory_chart_side_conclusion() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "矛盾结论", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "chart",
+                    "title": "性能趋势",
+                    "chart": {
+                        "kind": "bar",
+                        "unit": "ms",
+                        "categories": ["1月", "2月", "3月"],
+                        "series": [{"name": "方案A", "values": [62, 58, 55], "emphasis": True}],
+                        "thresholds": [{"value": 60, "label": "目标阈值"}],
+                        "side_conclusion": "方案A连续三个月低于目标阈值。",
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+
+
+def test_validate_deck_ir_maps_invalid_chart_threshold_to_d004() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "非法阈值线"},
+            "slides": [
+                {
+                    "layout": "chart",
+                    "title": "非法阈值线",
+                    "chart": {
+                        "kind": "line",
+                        "categories": ["1月"],
+                        "series": [{"name": "方案A", "values": [10]}],
+                        "thresholds": [{"value": 8, "label": "   "}],
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+
+
+@pytest.mark.parametrize(
+    ("chart_patch", "expected_code"),
+    [
+        ({"categories": [""]}, "D004"),
+        ({"series": [{"name": "方案A", "values": [10, 12]}]}, "D004"),
+        ({"kind": "pie", "series": [{"name": "A", "values": [10]}, {"name": "B", "values": [12]}]}, "D004"),
+        ({"kind": "pie", "thresholds": [{"value": 8, "label": "目标"}]}, "D004"),
+        ({"side_table": {"header": ["", "结论"], "rows": [["时延", "达标"]]}}, "D005"),
+        ({"side_table": {"header": ["指标", "结论"], "rows": [["时延"]]}}, "D005"),
+    ],
+)
+def test_validate_deck_ir_maps_chart_contract_errors(chart_patch: dict, expected_code: str) -> None:
+    from app.ir.validation import validate_deck_ir
+
+    chart = {
+        "kind": "line",
+        "categories": ["1月"],
+        "series": [{"name": "方案A", "values": [10]}],
+    }
+    chart.update(chart_patch)
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "非法图表"},
+            "slides": [{"layout": "chart", "title": "非法图表", "chart": chart}],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == expected_code
+
+
+def test_validate_deck_ir_ignores_unknown_fields_and_warns() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "unknown_top": "ignored",
+            "meta": {"title": "未知字段", "unknown_meta": "ignored"},
+            "slides": [{"layout": "cover", "title": "封面", "unknown_slide": "ignored"}],
+        }
+    )
+
+    assert result.value is not None
+    assert [warning.code for warning in result.warnings] == ["W104", "W104", "W104"]
+    assert [warning.loc for warning in result.warnings] == ["unknown_top", "meta.unknown_meta", "slides[0].unknown_slide"]
+
+
+def test_validate_deck_ir_accepts_architecture_diagram_v14() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "技术架构"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "系统架构骨架",
+                    "nodes": [
+                        {"id": "gateway", "text": "接入层", "type": "primary", "group": "access"},
+                        {"id": "service", "text": "服务层", "type": "secondary", "group": "core"},
+                        {"id": "data", "text": "数据层", "type": "data", "group": "core"},
+                    ],
+                    "edges": [
+                        {"from": "gateway", "to": "service", "label": "调用", "style": "solid", "direction": "forward"},
+                        {"from": "service", "to": "data", "style": "dashed", "direction": "both"},
+                    ],
+                    "groups": [
+                        {"id": "access", "label": "接入域", "node_ids": ["gateway"]},
+                        {"id": "core", "label": "核心域", "node_ids": ["service", "data"]},
+                    ],
+                    "manual_hints": {
+                        "node_positions": {"gateway": {"x": 0.1, "y": 0.1}},
+                        "node_sizes": {"gateway": {"width": 0.16, "height": 0.15}},
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.ok, result.errors
+    assert result.value is not None
+    slide = result.value.slides[0]
+    assert slide.layout == "architecture_diagram"
+    assert slide.edges[0].from_node == "gateway"
+    assert result.value.model_dump(mode="json")["slides"][0]["edges"][0]["from"] == "gateway"
+    assert result.warnings == []
+
+
+def test_validate_deck_ir_rejects_architecture_edge_to_unknown_node() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "非法架构"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "非法架构",
+                    "nodes": [{"id": "known", "text": "已知节点", "type": "primary"}],
+                    "edges": [{"from": "known", "to": "missing", "direction": "forward"}],
+                    "groups": [],
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+    assert "unknown node id: missing" in result.errors[0].message
+
+
+def test_validate_deck_ir_warns_for_nested_architecture_unknown_fields_only() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "架构未知字段"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "架构未知字段",
+                    "nodes": [
+                        {"id": "a", "text": "节点A", "type": "primary", "unknown_node": True},
+                        {"id": "b", "text": "节点B", "type": "secondary"},
+                    ],
+                    "edges": [{"from": "a", "to": "b", "unknown_edge": True}],
+                    "groups": [],
+                }
+            ],
+        }
+    )
+
+    assert result.value is not None
+    assert [warning.loc for warning in result.warnings] == [
+        "slides[0].nodes[0].unknown_node",
+        "slides[0].edges[0].unknown_edge",
+    ]
+
+
+def test_validate_document_ir_ignores_nested_unknown_fields_and_warns() -> None:
+    from app.ir.validation import validate_document_ir
+
+    result = validate_document_ir(
+        {
+            "ir_type": "document",
+            "ir_version": "1.1",
+            "source": {"filename": "a.md", "format": "md", "size_kb": 1, "parsed_at": "2026-07-08T00:00:00Z", "extra": "ignored"},
+            "stats": {"headings": 0, "paragraphs": 1, "tables": 0, "images": 0, "extra": "ignored"},
+            "warnings": [],
+            "content": {"blocks": [{"type": "paragraph", "text": "正文", "extra": "ignored"}], "outline": [], "extra": "ignored"},
+            "extra": "ignored",
+        }
+    )
+
+    assert result.value is not None
+    assert [warning.code for warning in result.warnings] == ["W104", "W104", "W104", "W104", "W104"]
+    assert [warning.loc for warning in result.warnings] == [
+        "extra",
+        "source.extra",
+        "stats.extra",
+        "content.extra",
+        "content.blocks[0].extra",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("slide", "expected_code"),
+    [
+        ({"layout": "agenda", "items": ["现状", "   "]}, "D004"),
+        (
+            {
+                "layout": "two_column",
+                "title": "空栏",
+                "left": {"heading": "左栏"},
+                "right": {"text": "右栏正文"},
+            },
+            "D004",
+        ),
+        (
+            {
+                "layout": "cards",
+                "title": "空卡片",
+                "cards": [
+                    {"title": "卡片A", "desc": "有效"},
+                    {"title": "卡片B", "desc": "   "},
+                ],
+            },
+            "D004",
+        ),
+        ({"layout": "image", "title": "缺少图片说明"}, "D004"),
+        ({"layout": "table", "title": "空表", "table": {"header": ["项", "值"], "rows": []}}, "D005"),
+        ({"layout": "conclusion", "title": "结论", "bullets": ["   "]}, "D006"),
+    ],
+)
+def test_validate_deck_ir_rejects_semantically_empty_layout_content(slide: dict, expected_code: str) -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "内容合理性"},
+            "slides": [slide],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == expected_code
+
+
+def test_validate_deck_ir_accepts_non_empty_content_for_guarded_layouts() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "内容合理性正例"},
+            "slides": [
+                {"layout": "agenda", "items": ["现状", "方案"]},
+                {
+                    "layout": "two_column",
+                    "title": "对比",
+                    "left": {"heading": "左栏", "text": "现状"},
+                    "right": {"heading": "右栏", "bullets": [{"text": "方案"}]},
+                },
+                {
+                    "layout": "cards",
+                    "title": "方案",
+                    "cards": [{"title": "A", "desc": "主方案"}, {"title": "B", "desc": "备选方案"}],
+                },
+                {"layout": "image", "title": "架构截图", "placeholder": "待替换源图"},
+                {"layout": "table", "title": "结论表", "table": {"header": ["项", "值"], "rows": [["状态", "通过"]]}},
+                {"layout": "conclusion", "title": "结论", "bullets": ["采用主方案"]},
+            ],
+        }
+    )
+
+    assert result.ok, result.errors
+
+
+def test_validate_deck_ir_rejects_conflicting_content_inside_merged_table_cells() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "合并冲突"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "合并冲突",
+                    "table": {
+                        "header": ["方案", "说明", "结论"],
+                        "rows": [["方案A", "不应保留", "推荐"]],
+                        "cell_spans": [{"area": "body", "row": 0, "col": 0, "rowspan": 1, "colspan": 2}],
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D005"
+    assert "covered table cells must be empty" in result.errors[0].message
+
+
+@pytest.mark.parametrize(
+    "chart_patch",
+    [
+        {"categories": ["1月", "1月"]},
+        {
+            "categories": ["1月", "2月"],
+            "series": [{"name": "方案A", "values": [10, 9]}, {"name": "方案A", "values": [12, 11]}],
+        },
+    ],
+)
+def test_validate_deck_ir_rejects_duplicate_chart_dimensions(chart_patch: dict) -> None:
+    from app.ir.validation import validate_deck_ir
+
+    chart = {
+        "kind": "line",
+        "categories": ["1月", "2月"],
+        "series": [{"name": "方案A", "values": [10, 9]}],
+    }
+    chart.update(chart_patch)
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "重复图表维度"},
+            "slides": [{"layout": "chart", "title": "趋势", "chart": chart}],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+
+
+@pytest.mark.parametrize(
+    "chart_patch",
+    [
+        {"series": [{"name": "方案A", "values": [10, float("nan")]}]},
+        {"thresholds": [{"value": float("inf"), "label": "非法阈值"}]},
+        {
+            "series": [
+                {"name": "方案A", "values": [10, 9], "emphasis": True},
+                {"name": "方案B", "values": [12, 11], "emphasis": True},
+            ]
+        },
+    ],
+)
+def test_validate_deck_ir_rejects_non_finite_or_ambiguous_chart_values(chart_patch: dict) -> None:
+    from app.ir.validation import validate_deck_ir
+
+    chart = {
+        "kind": "line",
+        "categories": ["1月", "2月"],
+        "series": [{"name": "方案A", "values": [10, 9]}],
+    }
+    chart.update(chart_patch)
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "非法图表语义"},
+            "slides": [{"layout": "chart", "title": "趋势", "chart": chart}],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+
+
+def test_validate_deck_ir_checks_month_start_threshold_claim() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    base = {
+        "ir_type": "deck",
+        "ir_version": "1.4",
+        "meta": {"title": "阈值结论"},
+        "slides": [
+            {
+                "layout": "chart",
+                "title": "性能趋势",
+                "chart": {
+                    "kind": "line",
+                    "unit": "ms",
+                    "categories": ["1月", "2月", "3月"],
+                    "series": [{"name": "方案A", "values": [62, 61, 55], "emphasis": True}],
+                    "thresholds": [{"value": 60, "label": "目标阈值"}],
+                    "side_conclusion": "方案A 2月起低于60ms目标阈值。",
+                },
+            }
+        ],
+    }
+
+    invalid = validate_deck_ir(base)
+    base["slides"][0]["chart"]["series"][0]["values"] = [62, 58, 55]
+    valid = validate_deck_ir(base)
+
+    assert invalid.value is None
+    assert invalid.errors[0].code == "D004"
+    assert valid.ok, valid.errors
+
+
+def test_validate_deck_ir_rejects_ambiguous_threshold_conclusion_target() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "歧义结论"},
+            "slides": [
+                {
+                    "layout": "chart",
+                    "title": "性能趋势",
+                    "chart": {
+                        "kind": "line",
+                        "categories": ["1月", "2月"],
+                        "series": [
+                            {"name": "方案A", "values": [62, 58]},
+                            {"name": "方案B", "values": [75, 69]},
+                        ],
+                        "thresholds": [{"value": 60, "label": "目标阈值"}],
+                        "side_conclusion": "2月起低于目标阈值。",
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+    assert "exactly one emphasized series" in result.errors[0].message
+
+
+def test_validate_deck_ir_rejects_architecture_self_loop() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.4",
+            "meta": {"title": "自环架构"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "自环架构",
+                    "nodes": [{"id": "a", "text": "节点A", "type": "primary"}],
+                    "edges": [{"from": "a", "to": "a", "direction": "forward"}],
+                    "groups": [],
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+    assert "self-loop" in result.errors[0].message
+
+
+@pytest.mark.parametrize(
+    ("block", "expected_code"),
+    [
+        ({"type": "table", "header": ["项", "值"], "rows": []}, "E004"),
+        ({"type": "image_placeholder"}, "E006"),
+    ],
+)
+def test_validate_word_ir_rejects_semantically_empty_blocks(block: dict, expected_code: str) -> None:
+    from app.ir.validation import validate_word_ir
+
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "内容合理性"},
+            "blocks": [block],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == expected_code

@@ -1,0 +1,74 @@
+{
+  "assets": [
+    {
+      "bytes": 508,
+      "path": "samples/demo/logs/failure_deck.txt",
+      "sha256": "66d818b7eb77b8b18026b6b3507e5ca2db6460047207a67095c86dfe81234569"
+    },
+    {
+      "bytes": 457,
+      "path": "samples/demo/logs/success_deck.txt",
+      "sha256": "e894fc184fde9e9f0cf04dc3d68b3f426f1b0e6fa434faddcfed15547c4e73b2"
+    },
+    {
+      "bytes": 450,
+      "path": "samples/demo/logs/success_word.txt",
+      "sha256": "b0d3ea7bd47a748394da20353446fdb06aa10de6ecf1481aac493a09ce0d3737"
+    },
+    {
+      "bytes": 82119,
+      "path": "samples/demo/screenshots/failure.png",
+      "sha256": "f497d0d968af052f75f45e4ef7bf5764982c01ab730889c6b2b5729c32b26804"
+    },
+    {
+      "bytes": 142297,
+      "path": "samples/demo/screenshots/success.png",
+      "sha256": "397552f3bc842c06ba71fdc74badd0a6fa3bbd7744909aafee3c11ac7916a4d6"
+    }
+  ],
+  "cases": {
+    "failure_deck": {
+      "command": [
+        "<PYTHON>",
+        "-m",
+        "app.cli.render",
+        "--type",
+        "deck",
+        "samples/ir/deck_invalid_d003_unknown_layout.json",
+        "--output",
+        "output/demo-recording/invalid.pptx"
+      ],
+      "returncode": 1
+    },
+    "success_deck": {
+      "command": [
+        "<PYTHON>",
+        "scripts/demo_e2e.py",
+        "samples/input/项目汇报.pptx",
+        "--target",
+        "deck",
+        "--generator",
+        "stub",
+        "--lint",
+        "--output-dir",
+        "output/demo-recording/deck"
+      ],
+      "returncode": 0
+    },
+    "success_word": {
+      "command": [
+        "<PYTHON>",
+        "scripts/demo_e2e.py",
+        "samples/input/需求说明.docx",
+        "--target",
+        "word",
+        "--generator",
+        "stub",
+        "--output-dir",
+        "output/demo-recording/word"
+      ],
+      "returncode": 0
+    }
+  },
+  "schema_version": 1
+}

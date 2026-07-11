@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "code": "D001",
+      "path": "samples/ir/deck_invalid_d001_bad_json.json"
+    },
+    {
+      "code": "D002",
+      "path": "samples/ir/deck_invalid_d002_missing_title.json"
+    },
+    {
+      "code": "D003",
+      "path": "samples/ir/deck_invalid_d003_unknown_layout.json"
+    },
+    {
+      "code": "D004",
+      "path": "samples/ir/deck_invalid_d004_architecture_missing_node.json"
+    },
+    {
+      "code": "D005",
+      "path": "samples/ir/deck_invalid_d005_bad_table_span.json"
+    },
+    {
+      "code": "D006",
+      "path": "samples/ir/deck_invalid_d006_empty_bullets.json"
+    }
+  ]
+}

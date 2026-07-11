@@ -1,0 +1,18 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "空段落",
+    "classification": "内部公开"
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "   "
+    },
+    {
+      "type": "paragraph",
+      "text": "保留正文。"
+    }
+  ]
+}

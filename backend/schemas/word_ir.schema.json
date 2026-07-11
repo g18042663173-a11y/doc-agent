@@ -204,6 +204,7 @@
             }
           ],
           "default": null,
+          "description": "各列的正数相对宽度权重；渲染时归一化到可用表宽，不是英寸或其它绝对单位。",
           "title": "Col Widths"
         },
         "header": {

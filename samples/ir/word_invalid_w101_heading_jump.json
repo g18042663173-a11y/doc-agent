@@ -1,0 +1,20 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "标题跳级",
+    "classification": "内部公开"
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "一级标题"
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "text": "跳级标题"
+    }
+  ]
+}

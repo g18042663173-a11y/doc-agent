@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "samples/ir/deck_lint_violation.json",
+  "operations": [
+    "remove_classification_footer",
+    "set_body_font_to_Comic_Sans_MS",
+    "set_body_font_size_to_6pt",
+    "set_body_color_to_123456",
+    "move_body_left_to_0.05in"
+  ],
+  "expected_codes": [
+    "HW-E01",
+    "HW-E02",
+    "HW-W01",
+    "HW-W02",
+    "HW-W06",
+    "HW-W07"
+  ]
+}

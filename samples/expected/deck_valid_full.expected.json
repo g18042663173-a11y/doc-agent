@@ -1,0 +1,41 @@
+{
+  "editable_chart_slides": [
+    8
+  ],
+  "editable_table_slides": [
+    6
+  ],
+  "layouts": [
+    "cover",
+    "agenda",
+    "section",
+    "title_bullets",
+    "two_column",
+    "table",
+    "cards",
+    "chart",
+    "architecture_diagram",
+    "image",
+    "conclusion"
+  ],
+  "lint": {
+    "errors": 0,
+    "infos": 1,
+    "pass": true,
+    "warnings": 0
+  },
+  "slide_count": 11,
+  "titles": [
+    "十一版式样例",
+    null,
+    "核心内容",
+    "关键进展",
+    "两列对比",
+    "任务状态",
+    "能力卡片",
+    "图表降级",
+    "系统架构骨架",
+    "图片占位",
+    "结论"
+  ]
+}

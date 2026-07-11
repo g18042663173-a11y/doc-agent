@@ -53,10 +53,14 @@ class WordIR(ContractModel):
         for index, block in enumerate(self.blocks):
             if isinstance(block, TableBlock):
                 expected_cols = len(block.header)
+                if not block.rows:
+                    raise ValueError(f"blocks[{index}].table rows must contain at least one data row")
                 if len(block.header) > 12:
                     raise ValueError(f"blocks[{index}].header exceeds 12 columns")
                 if any(len(row) != expected_cols for row in block.rows):
                     raise ValueError(f"blocks[{index}].rows must match header column count")
                 if block.col_widths is not None and len(block.col_widths) != expected_cols:
                     raise ValueError(f"blocks[{index}].col_widths must match header column count")
+            if isinstance(block, ImagePlaceholderBlock) and not block.ref and not block.caption:
+                raise ValueError(f"blocks[{index}].image_placeholder requires ref or caption")
         return self

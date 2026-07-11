@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import math
+import re
 from typing import Annotated, Literal, Union
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.ir.common import ContractModel, ListItem, non_empty
 
@@ -32,6 +34,11 @@ class AgendaSlide(ContractModel):
     layout: Literal["agenda"]
     items: list[str] = Field(min_length=2, max_length=8)
 
+    @field_validator("items")
+    @classmethod
+    def items_not_blank(_cls, value: list[str]) -> list[str]:
+        return [non_empty(item) for item in value]
+
 
 class SectionSlide(ContractModel):
     layout: Literal["section"]
@@ -55,6 +62,17 @@ class ColumnContent(ContractModel):
     bullets: list[ListItem] = Field(default_factory=list, max_length=7)
     text: str | None = None
 
+    @field_validator("heading", "text")
+    @classmethod
+    def optional_text_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def require_body_content(self) -> "ColumnContent":
+        if not self.text and not self.bullets:
+            raise ValueError("two_column column requires text or bullets")
+        return self
+
 
 class TwoColumnSlide(ContractModel):
     layout: Literal["two_column"]
@@ -65,16 +83,142 @@ class TwoColumnSlide(ContractModel):
     _title_not_blank = field_validator("title")(non_empty)
 
 
+class DeckTableCell(ContractModel):
+    text: str = ""
+    items: list[str] = Field(default_factory=list, max_length=4)
+    emphasis: Literal["yellow", "cyan"] | None = None
+
+    @field_validator("items")
+    @classmethod
+    def items_not_blank(_cls, value: list[str]) -> list[str]:
+        if any(not str(item).strip() for item in value):
+            raise ValueError("table cell items must not be blank")
+        return value
+
+
+class TableColumnGroup(ContractModel):
+    label: str = Field(min_length=1)
+    start_col: int = Field(ge=0, description="分组起始列的 0 起始索引。")
+    span: int = Field(ge=1, description="分组覆盖的列数量，不是结束列索引。")
+
+    _label_not_blank = field_validator("label")(non_empty)
+
+
+class TableRowGroup(ContractModel):
+    label: str = Field(min_length=1)
+    start_row: int = Field(ge=0, description="分组起始数据行的 0 起始索引。")
+    span: int = Field(ge=1, description="分组覆盖的数据行数量，不是结束行索引。")
+
+    _label_not_blank = field_validator("label")(non_empty)
+
+
+class TableCellSpan(ContractModel):
+    area: Literal["header", "body"] = "body"
+    row: int = Field(ge=0, description="合并区域起始行的 0 起始索引；header 区固定从 0 行开始。")
+    col: int = Field(ge=0, description="合并区域起始列的 0 起始索引。")
+    rowspan: int = Field(default=1, ge=1, description="合并区域覆盖的行数量，不是结束行索引。")
+    colspan: int = Field(default=1, ge=1, description="合并区域覆盖的列数量，不是结束列索引。")
+
+
+DeckTableCellValue = DeckTableCell | str
+
+
+def _table_cell_has_content(value: DeckTableCellValue) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    return bool(value.text.strip() or value.items)
+
+
 class DeckTable(ContractModel):
     header: list[str] = Field(min_length=1, max_length=8)
-    rows: list[list[str]] = Field(default_factory=list, max_length=12)
+    rows: list[list[DeckTableCellValue]] = Field(default_factory=list, max_length=12)
+    col_widths: list[float] | None = Field(
+        default=None,
+        description="各列的正数相对宽度权重；渲染时归一化到版心可用宽度，不是英寸或其它绝对单位。",
+    )
+    column_groups: list[TableColumnGroup] = Field(default_factory=list, max_length=4)
+    row_groups: list[TableRowGroup] = Field(default_factory=list, max_length=8)
+    cell_spans: list[TableCellSpan] = Field(default_factory=list, max_length=16)
+    conclusion_col: int | None = Field(default=None, ge=0, description="结论列的 0 起始列索引。")
+
+    @field_validator("header")
+    @classmethod
+    def header_cells_not_blank(_cls, value: list[str]) -> list[str]:
+        if any(not str(cell).strip() for cell in value):
+            raise ValueError("table header cells must not be blank")
+        return value
+
+    @field_validator("col_widths")
+    @classmethod
+    def col_widths_positive(_cls, value: list[float] | None) -> list[float] | None:
+        if value is not None and any(width <= 0 for width in value):
+            raise ValueError("col_widths must be positive")
+        return value
 
     @model_validator(mode="after")
     def validate_rows(self) -> "DeckTable":
         expected_cols = len(self.header)
+        if not self.rows:
+            raise ValueError("table rows must contain at least one data row")
         if any(len(row) != expected_cols for row in self.rows):
             raise ValueError("rows must match header column count")
+        if self.col_widths is not None and len(self.col_widths) != expected_cols:
+            raise ValueError("col_widths must match header column count")
+        if self.conclusion_col is not None and self.conclusion_col >= expected_cols:
+            raise ValueError("conclusion_col must be within table columns")
+        self._validate_column_groups(expected_cols)
+        self._validate_row_groups(len(self.rows))
+        self._validate_cell_spans(expected_cols, len(self.rows))
+        self._validate_covered_cell_content()
         return self
+
+    def _validate_column_groups(self, expected_cols: int) -> None:
+        used: set[int] = set()
+        for group in self.column_groups:
+            group_cols = set(range(group.start_col, group.start_col + group.span))
+            if not group_cols or max(group_cols) >= expected_cols:
+                raise ValueError("column_groups must be within table columns")
+            if used & group_cols:
+                raise ValueError("column_groups must not overlap")
+            used.update(group_cols)
+
+    def _validate_row_groups(self, row_count: int) -> None:
+        used: set[int] = set()
+        for group in self.row_groups:
+            group_rows = set(range(group.start_row, group.start_row + group.span))
+            if not group_rows or max(group_rows) >= row_count:
+                raise ValueError("row_groups must be within table rows")
+            if used & group_rows:
+                raise ValueError("row_groups must not overlap")
+            used.update(group_rows)
+
+    def _validate_cell_spans(self, expected_cols: int, row_count: int) -> None:
+        used: set[tuple[str, int, int]] = set()
+        for span in self.cell_spans:
+            max_rows = 1 if span.area == "header" else row_count
+            if span.area == "header" and span.rowspan != 1:
+                raise ValueError("header cell_spans cannot span multiple rows")
+            if span.row + span.rowspan > max_rows or span.col + span.colspan > expected_cols:
+                raise ValueError("cell_spans must be within table bounds")
+            span_cells = {
+                (span.area, row, col)
+                for row in range(span.row, span.row + span.rowspan)
+                for col in range(span.col, span.col + span.colspan)
+            }
+            if used & span_cells:
+                raise ValueError("cell_spans must not overlap")
+            used.update(span_cells)
+
+    def _validate_covered_cell_content(self) -> None:
+        for span in self.cell_spans:
+            if span.area != "body":
+                continue
+            for row in range(span.row, span.row + span.rowspan):
+                for col in range(span.col, span.col + span.colspan):
+                    if (row, col) == (span.row, span.col):
+                        continue
+                    if _table_cell_has_content(self.rows[row][col]):
+                        raise ValueError("covered table cells must be empty")
 
 
 class TableSlide(ContractModel):
@@ -90,6 +234,14 @@ class Card(ContractModel):
     desc: str = Field(min_length=1)
     tag: str | None = None
 
+    _title_not_blank = field_validator("title")(non_empty)
+    _desc_not_blank = field_validator("desc")(non_empty)
+
+    @field_validator("tag")
+    @classmethod
+    def tag_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
 
 class CardsSlide(ContractModel):
     layout: Literal["cards"]
@@ -100,14 +252,105 @@ class CardsSlide(ContractModel):
 
 
 class ChartSeries(ContractModel):
-    name: str
-    values: list[float]
+    name: str = Field(min_length=1)
+    values: list[float] = Field(min_length=1, description="系列数值；与 thresholds[].value 使用相同数值单位。")
+    emphasis: bool = False
+
+    _name_not_blank = field_validator("name")(non_empty)
+
+    @field_validator("values")
+    @classmethod
+    def values_must_be_finite(_cls, value: list[float]) -> list[float]:
+        if any(not math.isfinite(item) for item in value):
+            raise ValueError("chart series values must be finite")
+        return value
+
+
+class ChartThreshold(ContractModel):
+    value: float = Field(description="阈值数值；必须与 chart.series[].values 使用相同数值单位。")
+    label: str = Field(min_length=1)
+
+    _label_not_blank = field_validator("label")(non_empty)
+
+    @field_validator("value")
+    @classmethod
+    def value_must_be_finite(_cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("chart threshold value must be finite")
+        return value
+
+
+class ChartSideTable(ContractModel):
+    header: list[str] = Field(min_length=1, max_length=4)
+    rows: list[list[str]] = Field(default_factory=list, max_length=6)
+
+    @field_validator("header")
+    @classmethod
+    def header_cells_not_blank(_cls, value: list[str]) -> list[str]:
+        if any(not str(cell).strip() for cell in value):
+            raise ValueError("chart side_table header cells must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def validate_rows(self) -> "ChartSideTable":
+        expected_cols = len(self.header)
+        if any(len(row) != expected_cols for row in self.rows):
+            raise ValueError("chart side_table rows must match header column count")
+        return self
 
 
 class ChartSpec(ContractModel):
     kind: Literal["bar", "line", "pie"]
     categories: list[str] = Field(min_length=1)
     series: list[ChartSeries] = Field(min_length=1)
+    unit: str | None = Field(default=None, description="仅用于坐标轴和数据/阈值标签的显示后缀，不执行单位换算。")
+    thresholds: list[ChartThreshold] = Field(default_factory=list, max_length=4)
+    show_data_labels: bool = True
+    legend_position: Literal["top", "right", "none"] = "top"
+    side_conclusion: str | None = None
+    side_table: ChartSideTable | None = None
+
+    @field_validator("categories")
+    @classmethod
+    def categories_not_blank(_cls, value: list[str]) -> list[str]:
+        return [non_empty(category) for category in value]
+
+    @model_validator(mode="after")
+    def validate_chart_shape(self) -> "ChartSpec":
+        expected_points = len(self.categories)
+        if len(set(self.categories)) != len(self.categories):
+            raise ValueError("chart categories must be unique")
+        series_names = [series.name for series in self.series]
+        if len(set(series_names)) != len(series_names):
+            raise ValueError("chart series names must be unique")
+        if sum(1 for series in self.series if series.emphasis) > 1:
+            raise ValueError("chart allows at most one emphasized series")
+        for series in self.series:
+            if len(series.values) != expected_points:
+                raise ValueError("chart series values must match categories length")
+        if self.kind == "pie" and len(self.series) != 1:
+            raise ValueError("pie chart requires exactly one series")
+        if self.kind == "pie" and self.thresholds:
+            raise ValueError("pie chart does not support thresholds")
+        self._validate_side_conclusion()
+        return self
+
+    def _validate_side_conclusion(self) -> None:
+        if not self.side_conclusion or not self.thresholds:
+            return
+        predicate = _threshold_predicate(self.side_conclusion)
+        if predicate is None:
+            return
+        target = _chart_threshold_target_series(self.series)
+        if target is None:
+            raise ValueError("threshold side_conclusion requires exactly one emphasized series")
+        threshold = self.thresholds[0].value
+        count = _continuous_month_count(self.side_conclusion)
+        if count is not None and not _has_consecutive_run(target.values, count, lambda value: predicate(value, threshold)):
+            raise ValueError("side_conclusion contradicts chart threshold values")
+        start_index = _category_start_index(self.side_conclusion, self.categories)
+        if start_index is not None and not all(predicate(value, threshold) for value in target.values[start_index:]):
+            raise ValueError("side_conclusion contradicts chart threshold values")
 
 
 class ChartSlide(ContractModel):
@@ -116,6 +359,194 @@ class ChartSlide(ContractModel):
     chart: ChartSpec
 
     _title_not_blank = field_validator("title")(non_empty)
+
+
+class DiagramPosition(ContractModel):
+    x: float = Field(ge=0, le=1, description="节点中心相对架构图内容区宽度的归一化横坐标。")
+    y: float = Field(ge=0, le=1, description="节点中心相对架构图内容区高度的归一化纵坐标。")
+
+
+class DiagramSize(ContractModel):
+    width: float = Field(gt=0, le=1, description="节点宽度占架构图内容区宽度的比例。")
+    height: float = Field(gt=0, le=1, description="节点高度占架构图内容区高度的比例。")
+
+
+class ArchitectureNode(ContractModel):
+    id: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    type: Literal["primary", "secondary", "emphasis", "data"] = "secondary"
+    group: str | None = None
+    position: DiagramPosition | None = Field(default=None, description="可选节点中心位置；坐标相对架构图内容区归一化。")
+    size: DiagramSize | None = Field(default=None, description="可选节点尺寸；宽高分别是架构图内容区宽高的比例。")
+
+    _id_not_blank = field_validator("id")(non_empty)
+    _text_not_blank = field_validator("text")(non_empty)
+
+    @field_validator("group")
+    @classmethod
+    def group_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+
+class ArchitectureEdge(ContractModel):
+    model_config = ConfigDict(extra="ignore", serialize_by_alias=True)
+
+    from_node: str = Field(alias="from", min_length=1)
+    to: str = Field(min_length=1)
+    label: str | None = None
+    style: Literal["solid", "dashed"] = "solid"
+    direction: Literal["forward", "backward", "both", "none"] = "forward"
+
+    _from_not_blank = field_validator("from_node")(non_empty)
+    _to_not_blank = field_validator("to")(non_empty)
+
+    @field_validator("label")
+    @classmethod
+    def label_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+
+class ArchitectureGroup(ContractModel):
+    id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    node_ids: list[str] = Field(min_length=1, max_length=8)
+
+    _id_not_blank = field_validator("id")(non_empty)
+    _label_not_blank = field_validator("label")(non_empty)
+
+    @field_validator("node_ids")
+    @classmethod
+    def node_ids_valid(_cls, value: list[str]) -> list[str]:
+        normalized = [non_empty(node_id) for node_id in value]
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("group node_ids must be unique")
+        return normalized
+
+
+class ArchitectureManualHints(ContractModel):
+    node_positions: dict[str, DiagramPosition] = Field(
+        default_factory=dict,
+        max_length=12,
+        description="按节点 id 覆盖 nodes[].position；不是在原坐标上追加偏移。",
+    )
+    node_sizes: dict[str, DiagramSize] = Field(
+        default_factory=dict,
+        max_length=12,
+        description="按节点 id 覆盖 nodes[].size；不是在原尺寸上追加缩放。",
+    )
+
+
+class ArchitectureDiagramSlide(ContractModel):
+    layout: Literal["architecture_diagram"]
+    title: str = Field(min_length=1)
+    nodes: list[ArchitectureNode] = Field(min_length=1, max_length=12)
+    edges: list[ArchitectureEdge] = Field(max_length=24)
+    groups: list[ArchitectureGroup] = Field(max_length=6)
+    manual_hints: ArchitectureManualHints | None = None
+
+    _title_not_blank = field_validator("title")(non_empty)
+
+    @model_validator(mode="after")
+    def validate_structure(self) -> "ArchitectureDiagramSlide":
+        node_ids = [node.id for node in self.nodes]
+        if len(set(node_ids)) != len(node_ids):
+            raise ValueError("architecture node ids must be unique")
+        group_ids = [group.id for group in self.groups]
+        if len(set(group_ids)) != len(group_ids):
+            raise ValueError("architecture group ids must be unique")
+
+        known_nodes = set(node_ids)
+        known_groups = set(group_ids)
+        for edge in self.edges:
+            missing = [node_id for node_id in (edge.from_node, edge.to) if node_id not in known_nodes]
+            if missing:
+                raise ValueError(f"architecture edge references unknown node id: {', '.join(missing)}")
+            if edge.from_node == edge.to:
+                raise ValueError(f"architecture edge self-loop is not supported: {edge.from_node}")
+
+        grouped_nodes: dict[str, str] = {}
+        for group in self.groups:
+            for node_id in group.node_ids:
+                if node_id not in known_nodes:
+                    raise ValueError(f"architecture group references unknown node id: {node_id}")
+                if node_id in grouped_nodes:
+                    raise ValueError(f"architecture node belongs to multiple groups: {node_id}")
+                grouped_nodes[node_id] = group.id
+
+        for node in self.nodes:
+            if node.group is None:
+                continue
+            if node.group not in known_groups:
+                raise ValueError(f"architecture node references unknown group id: {node.group}")
+            if grouped_nodes.get(node.id) != node.group:
+                raise ValueError(f"architecture node/group membership is inconsistent: {node.id}")
+
+        if self.manual_hints is not None:
+            hinted_nodes = set(self.manual_hints.node_positions) | set(self.manual_hints.node_sizes)
+            unknown_hints = sorted(hinted_nodes - known_nodes)
+            if unknown_hints:
+                raise ValueError(f"architecture manual_hints reference unknown node id: {', '.join(unknown_hints)}")
+        return self
+
+
+def _chart_threshold_target_series(series: list[ChartSeries]) -> ChartSeries | None:
+    emphasized = [item for item in series if item.emphasis]
+    if len(emphasized) == 1:
+        return emphasized[0]
+    if len(series) == 1:
+        return series[0]
+    return None
+
+
+def _threshold_predicate(text: str):
+    if "低于" in text:
+        return lambda value, threshold: value < threshold
+    if any(word in text for word in ("高于", "超过", "超出")):
+        return lambda value, threshold: value > threshold
+    return None
+
+
+def _category_start_index(text: str, categories: list[str]) -> int | None:
+    matches = [(len(category), index) for index, category in enumerate(categories) if f"{category}起" in text]
+    if not matches:
+        return None
+    return max(matches)[1]
+
+
+def _continuous_month_count(text: str) -> int | None:
+    match = re.search(r"连续\s*(?P<count>\d+|[一二两三四五六七八九十]+)\s*个?月", text)
+    if not match:
+        return None
+    value = match.group("count")
+    if value.isdigit():
+        return int(value)
+    return _chinese_count(value)
+
+
+def _chinese_count(value: str) -> int | None:
+    digits = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    if value == "十":
+        return 10
+    if value in digits:
+        return digits[value]
+    if value.startswith("十") and len(value) == 2 and value[1] in digits:
+        return 10 + digits[value[1]]
+    if value.endswith("十") and len(value) == 2 and value[0] in digits:
+        return digits[value[0]] * 10
+    if "十" in value and len(value) == 3 and value[0] in digits and value[2] in digits:
+        return digits[value[0]] * 10 + digits[value[2]]
+    return None
+
+
+def _has_consecutive_run(values: list[float], count: int | None, predicate) -> bool:
+    if count is None or count <= 0:
+        return True
+    current = 0
+    for value in values:
+        current = current + 1 if predicate(value) else 0
+        if current >= count:
+            return True
+    return False
 
 
 class ImageSlide(ContractModel):
@@ -127,6 +558,17 @@ class ImageSlide(ContractModel):
 
     _title_not_blank = field_validator("title")(non_empty)
 
+    @field_validator("image_ref", "placeholder", "caption")
+    @classmethod
+    def optional_value_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def require_image_source_or_placeholder(self) -> "ImageSlide":
+        if not self.image_ref and not self.placeholder:
+            raise ValueError("image layout requires image_ref or placeholder")
+        return self
+
 
 class ConclusionSlide(ContractModel):
     layout: Literal["conclusion"]
@@ -135,6 +577,16 @@ class ConclusionSlide(ContractModel):
     cta: str | None = None
 
     _title_not_blank = field_validator("title")(non_empty)
+
+    @field_validator("bullets")
+    @classmethod
+    def bullets_not_blank(_cls, value: list[str]) -> list[str]:
+        return [non_empty(item) for item in value]
+
+    @field_validator("cta")
+    @classmethod
+    def cta_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
 
 
 DeckSlide = Annotated[
@@ -147,6 +599,7 @@ DeckSlide = Annotated[
         TableSlide,
         CardsSlide,
         ChartSlide,
+        ArchitectureDiagramSlide,
         ImageSlide,
         ConclusionSlide,
     ],
@@ -156,6 +609,6 @@ DeckSlide = Annotated[
 
 class DeckIR(ContractModel):
     ir_type: Literal["deck"]
-    ir_version: Literal["1.1"]
+    ir_version: Literal["1.4"]
     meta: DeckMeta
     slides: list[DeckSlide] = Field(min_length=1, max_length=30)

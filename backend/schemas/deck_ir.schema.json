@@ -24,6 +24,238 @@
       "title": "AgendaSlide",
       "type": "object"
     },
+    "ArchitectureDiagramSlide": {
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/ArchitectureEdge"
+          },
+          "maxItems": 24,
+          "title": "Edges",
+          "type": "array"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/ArchitectureGroup"
+          },
+          "maxItems": 6,
+          "title": "Groups",
+          "type": "array"
+        },
+        "layout": {
+          "const": "architecture_diagram",
+          "title": "Layout",
+          "type": "string"
+        },
+        "manual_hints": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArchitectureManualHints"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/ArchitectureNode"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Nodes",
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "nodes",
+        "edges",
+        "groups"
+      ],
+      "title": "ArchitectureDiagramSlide",
+      "type": "object"
+    },
+    "ArchitectureEdge": {
+      "properties": {
+        "direction": {
+          "default": "forward",
+          "enum": [
+            "forward",
+            "backward",
+            "both",
+            "none"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "from": {
+          "minLength": 1,
+          "title": "From",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "style": {
+          "default": "solid",
+          "enum": [
+            "solid",
+            "dashed"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "to": {
+          "minLength": 1,
+          "title": "To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "title": "ArchitectureEdge",
+      "type": "object"
+    },
+    "ArchitectureGroup": {
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Node Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "node_ids"
+      ],
+      "title": "ArchitectureGroup",
+      "type": "object"
+    },
+    "ArchitectureManualHints": {
+      "properties": {
+        "node_positions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DiagramPosition"
+          },
+          "description": "按节点 id 覆盖 nodes[].position；不是在原坐标上追加偏移。",
+          "maxProperties": 12,
+          "title": "Node Positions",
+          "type": "object"
+        },
+        "node_sizes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DiagramSize"
+          },
+          "description": "按节点 id 覆盖 nodes[].size；不是在原尺寸上追加缩放。",
+          "maxProperties": 12,
+          "title": "Node Sizes",
+          "type": "object"
+        }
+      },
+      "title": "ArchitectureManualHints",
+      "type": "object"
+    },
+    "ArchitectureNode": {
+      "properties": {
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiagramPosition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选节点中心位置；坐标相对架构图内容区归一化。"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiagramSize"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选节点尺寸；宽高分别是架构图内容区宽高的比例。"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "default": "secondary",
+          "enum": [
+            "primary",
+            "secondary",
+            "emphasis",
+            "data"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "ArchitectureNode",
+      "type": "object"
+    },
     "Card": {
       "properties": {
         "desc": {
@@ -88,14 +320,22 @@
     },
     "ChartSeries": {
       "properties": {
+        "emphasis": {
+          "default": false,
+          "title": "Emphasis",
+          "type": "boolean"
+        },
         "name": {
+          "minLength": 1,
           "title": "Name",
           "type": "string"
         },
         "values": {
+          "description": "系列数值；与 thresholds[].value 使用相同数值单位。",
           "items": {
             "type": "number"
           },
+          "minItems": 1,
           "title": "Values",
           "type": "array"
         }
@@ -105,6 +345,35 @@
         "values"
       ],
       "title": "ChartSeries",
+      "type": "object"
+    },
+    "ChartSideTable": {
+      "properties": {
+        "header": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Header",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 6,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "header"
+      ],
+      "title": "ChartSideTable",
       "type": "object"
     },
     "ChartSlide": {
@@ -150,6 +419,16 @@
           "title": "Kind",
           "type": "string"
         },
+        "legend_position": {
+          "default": "top",
+          "enum": [
+            "top",
+            "right",
+            "none"
+          ],
+          "title": "Legend Position",
+          "type": "string"
+        },
         "series": {
           "items": {
             "$ref": "#/$defs/ChartSeries"
@@ -157,6 +436,55 @@
           "minItems": 1,
           "title": "Series",
           "type": "array"
+        },
+        "show_data_labels": {
+          "default": true,
+          "title": "Show Data Labels",
+          "type": "boolean"
+        },
+        "side_conclusion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Side Conclusion"
+        },
+        "side_table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChartSideTable"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/ChartThreshold"
+          },
+          "maxItems": 4,
+          "title": "Thresholds",
+          "type": "array"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "仅用于坐标轴和数据/阈值标签的显示后缀，不执行单位换算。",
+          "title": "Unit"
         }
       },
       "required": [
@@ -165,6 +493,26 @@
         "series"
       ],
       "title": "ChartSpec",
+      "type": "object"
+    },
+    "ChartThreshold": {
+      "properties": {
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "description": "阈值数值；必须与 chart.series[].values 使用相同数值单位。",
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "ChartThreshold",
       "type": "object"
     },
     "ColumnContent": {
@@ -363,6 +711,52 @@
     },
     "DeckTable": {
       "properties": {
+        "cell_spans": {
+          "items": {
+            "$ref": "#/$defs/TableCellSpan"
+          },
+          "maxItems": 16,
+          "title": "Cell Spans",
+          "type": "array"
+        },
+        "col_widths": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "各列的正数相对宽度权重；渲染时归一化到版心可用宽度，不是英寸或其它绝对单位。",
+          "title": "Col Widths"
+        },
+        "column_groups": {
+          "items": {
+            "$ref": "#/$defs/TableColumnGroup"
+          },
+          "maxItems": 4,
+          "title": "Column Groups",
+          "type": "array"
+        },
+        "conclusion_col": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "结论列的 0 起始列索引。",
+          "title": "Conclusion Col"
+        },
         "header": {
           "items": {
             "type": "string"
@@ -372,10 +766,25 @@
           "title": "Header",
           "type": "array"
         },
+        "row_groups": {
+          "items": {
+            "$ref": "#/$defs/TableRowGroup"
+          },
+          "maxItems": 8,
+          "title": "Row Groups",
+          "type": "array"
+        },
         "rows": {
           "items": {
             "items": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DeckTableCell"
+                },
+                {
+                  "type": "string"
+                }
+              ]
             },
             "type": "array"
           },
@@ -388,6 +797,89 @@
         "header"
       ],
       "title": "DeckTable",
+      "type": "object"
+    },
+    "DeckTableCell": {
+      "properties": {
+        "emphasis": {
+          "anyOf": [
+            {
+              "enum": [
+                "yellow",
+                "cyan"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emphasis"
+        },
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Items",
+          "type": "array"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "title": "DeckTableCell",
+      "type": "object"
+    },
+    "DiagramPosition": {
+      "properties": {
+        "x": {
+          "description": "节点中心相对架构图内容区宽度的归一化横坐标。",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "description": "节点中心相对架构图内容区高度的归一化纵坐标。",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "DiagramPosition",
+      "type": "object"
+    },
+    "DiagramSize": {
+      "properties": {
+        "height": {
+          "description": "节点高度占架构图内容区高度的比例。",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "description": "节点宽度占架构图内容区宽度的比例。",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Width",
+          "type": "number"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "title": "DiagramSize",
       "type": "object"
     },
     "ImageSlide": {
@@ -507,6 +999,107 @@
       "title": "SectionSlide",
       "type": "object"
     },
+    "TableCellSpan": {
+      "properties": {
+        "area": {
+          "default": "body",
+          "enum": [
+            "header",
+            "body"
+          ],
+          "title": "Area",
+          "type": "string"
+        },
+        "col": {
+          "description": "合并区域起始列的 0 起始索引。",
+          "minimum": 0,
+          "title": "Col",
+          "type": "integer"
+        },
+        "colspan": {
+          "default": 1,
+          "description": "合并区域覆盖的列数量，不是结束列索引。",
+          "minimum": 1,
+          "title": "Colspan",
+          "type": "integer"
+        },
+        "row": {
+          "description": "合并区域起始行的 0 起始索引；header 区固定从 0 行开始。",
+          "minimum": 0,
+          "title": "Row",
+          "type": "integer"
+        },
+        "rowspan": {
+          "default": 1,
+          "description": "合并区域覆盖的行数量，不是结束行索引。",
+          "minimum": 1,
+          "title": "Rowspan",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "row",
+        "col"
+      ],
+      "title": "TableCellSpan",
+      "type": "object"
+    },
+    "TableColumnGroup": {
+      "properties": {
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "span": {
+          "description": "分组覆盖的列数量，不是结束列索引。",
+          "minimum": 1,
+          "title": "Span",
+          "type": "integer"
+        },
+        "start_col": {
+          "description": "分组起始列的 0 起始索引。",
+          "minimum": 0,
+          "title": "Start Col",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "start_col",
+        "span"
+      ],
+      "title": "TableColumnGroup",
+      "type": "object"
+    },
+    "TableRowGroup": {
+      "properties": {
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "span": {
+          "description": "分组覆盖的数据行数量，不是结束行索引。",
+          "minimum": 1,
+          "title": "Span",
+          "type": "integer"
+        },
+        "start_row": {
+          "description": "分组起始数据行的 0 起始索引。",
+          "minimum": 0,
+          "title": "Start Row",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "start_row",
+        "span"
+      ],
+      "title": "TableRowGroup",
+      "type": "object"
+    },
     "TableSlide": {
       "properties": {
         "layout": {
@@ -597,7 +1190,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "1.1",
+      "const": "1.4",
       "title": "Ir Version",
       "type": "string"
     },
@@ -609,6 +1202,7 @@
         "discriminator": {
           "mapping": {
             "agenda": "#/$defs/AgendaSlide",
+            "architecture_diagram": "#/$defs/ArchitectureDiagramSlide",
             "cards": "#/$defs/CardsSlide",
             "chart": "#/$defs/ChartSlide",
             "conclusion": "#/$defs/ConclusionSlide",
@@ -645,6 +1239,9 @@
           },
           {
             "$ref": "#/$defs/ChartSlide"
+          },
+          {
+            "$ref": "#/$defs/ArchitectureDiagramSlide"
           },
           {
             "$ref": "#/$defs/ImageSlide"

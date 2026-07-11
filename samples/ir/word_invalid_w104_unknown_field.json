@@ -1,0 +1,16 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "unknown_top": "ignored",
+  "meta": {
+    "title": "未知字段",
+    "classification": "内部公开"
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "正文",
+      "unknown_block": "ignored"
+    }
+  ]
+}

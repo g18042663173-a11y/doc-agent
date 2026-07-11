@@ -1,0 +1,75 @@
+{
+  "word_valid_01_plain": {
+    "footer": "内部公开 | ",
+    "has_legacy_word_blue": false,
+    "has_theme_red": true,
+    "header": "项目周报",
+    "paragraph_styles": [
+      "Heading 1",
+      "Normal",
+      "Heading 1",
+      "Normal"
+    ],
+    "paragraphs": [
+      "本周进展",
+      "完成 WordIR 校验器、剥壳器与 DOCX 渲染核心。",
+      "下周计划",
+      "继续推进输入解析与 Prompt 组装。"
+    ],
+    "tables": []
+  },
+  "word_valid_02_list": {
+    "footer": "内部公开 | ",
+    "has_legacy_word_blue": false,
+    "has_theme_red": true,
+    "header": "实施方案",
+    "paragraph_styles": [
+      "Heading 1",
+      "List Number",
+      "List Number 2",
+      "List Number",
+      "IR Note"
+    ],
+    "paragraphs": [
+      "实施步骤",
+      "冻结 IR 契约",
+      "导出 JSON Schema 并加入快照测试",
+      "实现确定性渲染链路",
+      "所有步骤均需在 stub 通道下可离线复现。"
+    ],
+    "tables": []
+  },
+  "word_valid_03_table": {
+    "footer": "内部公开 | ",
+    "has_legacy_word_blue": false,
+    "has_theme_red": true,
+    "header": "风险清单",
+    "paragraph_styles": [
+      "Heading 1",
+      "Normal"
+    ],
+    "paragraphs": [
+      "风险与应对",
+      "项目风险清单"
+    ],
+    "tables": [
+      [
+        [
+          "风险",
+          "等级",
+          "应对"
+        ],
+        [
+          "模型 JSON 不稳定",
+          "中",
+          "剥壳 + 校验 + 修复回路"
+        ],
+        [
+          "Windows 离线依赖缺失",
+          "中",
+          "提前构建 wheelhouse"
+        ]
+      ]
+    ]
+  }
+}

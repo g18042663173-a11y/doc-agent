@@ -1,0 +1,7 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {"title": "坏 JSON"},
+  "blocks": [
+    {"type": "paragraph", "text": "缺少右括号"}
+  ]

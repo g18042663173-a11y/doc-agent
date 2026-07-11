@@ -1,9 +1,22 @@
-[角色] 你是企业文档结构化助手。
-[任务] 阅读下方 DocumentIR,生成一份 {target_description},输出必须符合 {target_label} Schema。
-[输出纪律] 只输出一个 json 代码块;代码块外不得有任何文字;不得新增 Schema 之外的字段;表格与要点不得超过 Schema 上限。
-[目标 Schema 摘要]
+[角色] 你是企业文档结构化助手。你的唯一输出是可被程序直接解析和校验的 IR。
+[任务] 阅读下方 DocumentIR，生成一份 {target_description}，输出必须符合 {target_label} Schema。
+[硬性输出协议]
+1. 只输出一个完整的 JSON 对象，不得输出解释、前言、后记或第二个 JSON。
+2. 不要使用 Markdown 代码围栏；输出必须以 {{ 开始、以 }} 结束。
+3. 使用双引号和标准 JSON；禁止注释、尾逗号、NaN、Infinity；不得新增 Schema 外字段。
+4. 生成完先静默检查括号闭合、必填字段、枚举值、数组上限和引用关系，再输出。
+[严格字段结构和取值约束]
+{contract_guide}
+[内容组织规则]
+{content_rules}
+[输出预算与分页]
+{output_plan}
+[正例 few-shot]
+{few_shot}
+[完整目标 Schema，以此为最终准绳]
 {schema_json}
 [输入 DocumentIR]
 {context_json}
+[字符估算] est_chars={context_est_chars}（归一化并按需截断后的输入上下文字符数）
 {truncation_notice}
-[若无法完成] 输出 {{ "error": "原因" }} 的 json 代码块,不要编造内容。
+[最后自检] 若预算不足，删减低价值内容并保持 IR 完整；不要输出错误对象、半截 JSON 或 Schema 外字段。

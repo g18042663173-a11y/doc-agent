@@ -59,7 +59,7 @@
 | A2 | AICoding 输出形态:基本能稳定输出一个 json 代码块,但可能夹带解释文字,必须经“剥壳 + Schema 校验”后方可进入渲染。 |
 | A3 | 密级文案默认:DOCX 页脚为“内部公开”,PPTX 页脚为“HUAWEI CONFIDENTIAL”,均在配置中可改。 |
 | A4 | 中文字体:外网以微软雅黑为主选,HarmonyOS Sans 作为内网目标字体;不追求与母版逐像素一致,字体集中在主题配置,内网只改一处。 |
-| A5 | DeckIR v1.1 已有草案:本文 3.3 节给出的字段表为建议定稿版;若与现有实现冲突,先做兼容读取,再按本表演进。 |
+| A5 | DeckIR v1.4 已有草案:本文 3.3 节给出的字段表为建议定稿版;若与现有实现冲突,先做兼容读取,再按本表演进。 |
 | A6 | 主界面为 CLI + 本地文件目录(input/ 放输入、output/ 取产物);Web 工作台为可选项(P2),如需可复用现有 Flask,不作为核心交付。 |
 | A7 | AICoding 输入约束:单次输入按 8K–16K 字符规划(Prompt 截断上限据此设定);以“把内容贴进 Prompt”为准,不假设 AICoding 能直接读取本地文件路径。 |
 
@@ -155,7 +155,7 @@ class IRGenerator(Protocol):
 | 命令 | 入参 | 出参 | 说明 |
 | --- | --- | --- | --- |
 | parse.py <file> | md / docx / xlsx / pptx 路径 | ir/doc.json(DocumentIR) | 超限内容自动截断并记入 warnings。 |
-| prompt.py --kind word\|deck [--context ir/doc.json] | 目标类型 + 可选上下文 | prompt.txt | 输出确定性:同一输入两次逐字节一致。 |
+| prompt.py --kind word\|deck [--context ir/doc.json] [--max-output-chars N] | 目标类型 + 可选上下文 + 弱模型输出预算 | prompt.txt | 输出确定性:同一输入两次逐字节一致;预算不足时要求删减低价值内容并保持 JSON 完整。 |
 | render.py --type word\|deck <ir.json> | 目标 IR 文件 | output/x.docx \| x.pptx | 先 Schema 校验(不变量 I1)再渲染;失败给错误码与定位,PPTX 渲染后自动 lint。 |
 | check.py <pptx\|docx> | 产物路径 | report.md / report.json | 合规检查;支持对外部文件复检。 |
 | verify(脚本) | - | 验收结论 | 串联样例全链路 + pytest + 覆盖率,一键出结论(见 7.2)。 |
@@ -168,9 +168,9 @@ class IRGenerator(Protocol):
 
 **AICoding 交互流程(以 deck 为例;步骤 3–5 当前需人工,未来可脚本半自动化,见 2.4 分级):**
 
-1. 运行 prompt.py --kind deck --context ir/doc.json,系统生成 prompt.txt(四段式模板)。
+1. 运行 prompt.py --kind deck --context ir/doc.json --max-output-chars 6000,系统生成带字段约束、内容规则、预算和 few-shot 的 prompt.txt。
 2. 复制 prompt.txt 内容,交给 AICoding。
-3. AICoding 返回结果(一个 json 代码块,可能夹带解释文字)。
+3. AICoding 应只返回一个裸 JSON 对象;剥壳器仍兼容历史 json 围栏和夹带解释文字的输出。
 4. 复制其中的 json,保存为 ir/deck.json。
 5. 运行 render.py --type deck ir/deck.json 生成 PPTX,再运行 check.py 产出合规报告。
 
@@ -258,7 +258,7 @@ class IRGenerator(Protocol):
 
 渲染硬性要求:中文字体与字号、标题层级样式、段落间距、表格边框(0.5pt)、页眉(= title)、页脚(密级 + 页码)全部集中在渲染器 STYLES 常量,业务代码零散设置样式视为缺陷;产物必须是可编辑 DOCX,禁止图片化或只读输出。
 
-### 3.2  DocumentIR v1.0(输入侧契约,Step 2 核心)
+### 3.2  DocumentIR v1.1(输入侧契约,Step 2 核心)
 
 顶层结构:source { filename, format, size_kb, parsed_at } + stats(计数摘要)+ warnings[](降级与不支持项)+ content(按格式区分)。设计决定:docx / md 的 content 直接复用 WordIR 的 blocks 词汇(外加 outline 标题树摘要),使“解析结果”与“目标输出”同构,天然可当 few-shot 示例,降低模型出错率。
 
@@ -279,9 +279,9 @@ class IRGenerator(Protocol):
 | PPT 图表 | 只取图表标题与类型,不反解数据(P2 再议)。 |
 | 嵌入图片(全格式) | 记录存在与尺寸,不搬运二进制(DOCX 图片透传列为 P2)。 |
 
-### 3.3  DeckIR v1.1(PPT 输出契约,Step 3 核心)
+### 3.3  DeckIR v1.4(PPT 输出契约,Step 3 核心)
 
-meta 字段:title(必填)、subtitle、author、date、classification(默认 HUAWEI CONFIDENTIAL)、theme(默认 hw_v1)。slides[].layout 枚举 10 种,覆盖 v1.0 要求:
+meta 字段:title(必填)、subtitle、author、date、classification(默认 HUAWEI CONFIDENTIAL)、theme(默认 hw_v1)。slides[].layout 枚举 11 种,覆盖 v1.0 要求:
 
 | layout | 必填字段(可选项加问号) | 渲染要点 |
 | --- | --- | --- |
@@ -290,9 +290,10 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 | section | index, title;subtitle? | 大号章节数字 + 标题,统一分隔页样式。 |
 | title_bullets | title, bullets[{text, level:1\|2}](至多 7 条) | 单条不超 60 字,超限触发 HW-W03。 |
 | two_column | title, left, right(列 = heading? + bullets 或 text) | 左右等宽,列内小标题加粗。 |
-| table | title, table{ header, rows }(至多 12x8) | 表头灰底加粗,数字列右对齐。 |
+| table | title, table{ header, rows; column_groups?, row_groups?, cell_spans?, col_widths?, conclusion_col? }(数据区至多 12x8) | 方案对比表 / 决策矩阵;表头红底白字,支持分组表头、合并单元格、重点单元格黄 / 青强调、短列表与结论列。 |
 | cards | title, cards[2..4]{ title, desc, tag? } | 等宽卡片,浅灰底 + 顶部红色细线。 |
-| chart | title, chart{ kind: bar\|line\|pie, categories, series } | P0 降级为迷你表格 + 占位说明;时间富余用 python-pptx 原生图表(P2)。 |
+| chart | title, chart{ kind: bar\|line\|pie, categories, series; unit?, thresholds?, show_data_labels?, legend_position?, side_conclusion?, side_table? } | 指标 / 性能图表页;bar / line 用 python-pptx 原生图表,支持数据标签、图例、单位、阈值线、侧边结论 / 小表;pie 保留基础图兼容。 |
+| architecture_diagram | title, nodes[{id,text,type,group?,position?,size?}], edges[{from,to,label?,style,direction}], groups[{id,label,node_ids}], manual_hints? | 架构图可编辑骨架;节点、连接符、虚线分组框均为独立 PPT 对象;默认只承诺确定性分层布局和人工可调,不承诺一键成品。 |
 | image | title;image_ref 或 placeholder, caption? | 外网一律灰底占位框 + 题注;内网替换真图。 |
 | conclusion | title, bullets(至多 5 条);cta? | 结尾页,可带行动号召一句。 |
 
@@ -300,7 +301,7 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 
 ```
 {
-  "ir_type": "deck", "ir_version": "1.1",
+  "ir_type": "deck", "ir_version": "1.4",
   "meta": { "title": "Q3 业务汇报", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1" },
   "slides": [
     { "layout": "cover", "title": "Q3 业务汇报", "subtitle": "命令行文档工具链",
@@ -317,7 +318,7 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 }
 ```
 
-DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法、D002 缺 meta.title、D003 未知 layout、D004 该 layout 缺必填字段、D005 表格超限、D006 bullets 超条数;W1xx 为可自动降级项(如 agenda 超 8 条截断)。页数合法范围 1-30,演示目标 5-12 页。
+DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法、D002 缺 meta.title、D003 未知 layout、D004 该 layout 缺必填字段、D005 表格超限 / 行列不规整 / 分组或合并越界、D006 bullets 超条数;W1xx 为可自动降级项(如 agenda 超 8 条截断)。页数合法范围 1-30,演示目标 5-12 页。
 
 ## 4  Step 1 细化:AICoding 搞定 Word 输出(对应 v1.0 第 3.1 节)
 
@@ -354,12 +355,12 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 ```
 [角色] 你是企业文档结构化助手。
-[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.0(或 DeckIR v1.1)Schema。
-[输出纪律] 只输出一个 json 代码块;代码块外不得有任何文字;不得新增 Schema 之外的字段;
+[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.0(或 DeckIR v1.4)Schema。
+[输出纪律] 只输出一个裸 JSON 对象,不得使用代码围栏或附加文字;不得新增 Schema 之外的字段;
           表格不超过 <上限>;要点每页不超过 7 条。
 [目标 Schema 摘要] <内嵌字段说明或精简 JSON Schema,由 ir 包自动生成,禁止手抄>
 [输入 DocumentIR] <按优先级截断后的 JSON:标题 > 表头 > 关键段落 > 预览行>
-[若无法完成] 输出 { "error": "原因" } 的 json 代码块,不要编造内容。
+[若无法完成] 不输出半截 IR;由调用侧记录明确错误并进入修复回路,不要编造内容。
 ```
 
 截断策略集中在 builder.py:max_chars 默认 12000(可配,落在 A7 约定的 8K–16K 单次输入区间内);逐级丢弃顺序为 预览行、次要段落、表格尾行,每次丢弃都在 Prompt 末尾追加一行“已截断说明”,让模型知道信息不完整。
@@ -372,7 +373,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 ### 5.3  IR 修复回路与结构化输出(提升合法率,降低人工返工)
 
-- 修复回路:剥壳 + 校验失败时,把错误码与定位回喂给模型,附“只修正这些问题、仍只输出一个 json 代码块”的追问,限重试 2 次;仍失败才落为 E00x / D00x 交人处理。回路默认开,次数与开关可配。
+- 修复回路:剥壳 + 校验失败时,把错误码与定位回喂给模型,附“只修正这些问题、仍只输出一个裸 JSON 对象”的追问,限重试 2 次;仍失败才落为 E00x / D00x 交人处理。回路默认开,次数与开关可配。剥壳器继续兼容历史代码围栏和夹带解释文字的输出。
 - 结构化输出优先:若目标模型 / 通道支持约束解码或 structured outputs,直接以 IR 的 JSON Schema 约束生成,“能否吐出合法 JSON”基本不再是问题;不支持时退回“输出纪律段 + few-shot + 修复回路”。
 - few-shot 用真样例:提示里的示例直接取 samples/ir 下正样例(与 DocumentIR 同构),不手写、不与 Schema 漂移。
 
@@ -399,7 +400,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 | --- | --- | --- | --- | --- |
 | S3-1 | 风格调研与 tokens 定稿 | 产出 docs/风格规范.md 与 themes/hw_theme.json;标注来源与近似声明 | 评审通过;渲染器取值零硬编码,改 json 即改全局 | 1.0 天 |
 | S3-2 | P0 版式渲染(五种) | cover / agenda / section / title_bullets / table;页脚三段式 | 五版式样例渲染后 lint 零 Error | 2.0 天 |
-| S3-3 | P1 版式渲染(三种 + 降级) | two_column / cards / conclusion;chart 与 image 走占位降级并输出说明文案 | 十版式样例全部可渲染;降级页有明确说明 | 1.0 天 |
+| S3-3 | P1 版式渲染(三种 + chart 增强 + image 降级) | two_column / cards / conclusion;chart 走原生图表,image 走占位降级并输出说明文案 | 十一版式样例全部可渲染;chart 为可编辑原生图表;image 降级页有明确说明 | 1.0 天 |
 | S3-4 | 合规检查器与报告 | 6.3 规则表全部落码;对渲染产物回读检查;JSON + 可读双格式报告 | 每条规则正反例各至少 1;人工注入违规即刻命中 | 1.0 天 |
 | S3-5 | stub 端到端演示 | md 摘要经 stub generator 到 DeckIR 到 PPTX 到 lint,一条命令 | 断网环境跑通;产出 5-12 页可编辑 PPTX | 0.5 天 |
 | S3-6 | 黄区接入说明 | 两个替换点清单、环境变量、内网自测步骤、离线安装指引 | 评审通过;他人按文档可独立执行 | 0.5 天 |
@@ -428,7 +429,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 - 全部版式自绘(文本框 + 形状),不依赖模板母版占位符,避免“母版找不到”类环境问题;主题值一律读 hw_theme.json。
 - 每页固定绘制页脚三段式与顶部标题区;cover 与 section 使用红色装饰条形成家族感。
 - 产物必须可编辑:文本是真文本框、表格是真表格;禁止把内容画成图片。
-- chart 的 P0 降级方案:渲染“迷你数据表 + 一句图表说明占位”,并在页内标注“图表待内网 Skill / 后续版本生成”,保证信息不丢失。
+- chart 版式使用 python-pptx 原生图表;bar / line 支持阈值线、数据标签、图例、单位、侧边结论 / 小表;pie 保留基础图兼容。
 
 ### 6.3  合规检查规则表(lint;对渲染产物回读检查,外部 PPTX 亦可复检)
 
@@ -554,7 +555,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 3. 四个输入解析器(md / docx / xlsx / pptx)与配套样例、warnings 降级清单。
 4. Prompt 模板库与组装器:四段式模板、截断策略、确定性输出。
 5. DOCX 渲染器:样式表集中、失败提示齐全、3 个官方样例。
-6. 华为风格主题(hw_theme.json)+ PPTX 渲染器:10 版式(chart / image 允许占位降级)。
+6. 华为风格主题(hw_theme.json)+ PPTX 渲染器:10 版式(chart 为原生图表,image 允许占位降级)。
 7. 合规检查器与双格式报告,支持外部 PPTX 复检。
 8. 测试套件与覆盖率报告:单元 + 契约 + 端到端,一键 verify 脚本。
 9. 文档四件:README、使用说明、内网接入说明、验收手册(含全部验收命令)。
@@ -586,13 +587,18 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 | JSON 落盘 | 先人工另存(P0);排期有余量再做脚本半自动(P1);全自动(P2)待内网接口。 |
 | Web 界面 | 暂缓,专注 CLI 核心;如做则复用 Flask、仅“上传 + 展示 + 报告”三块(P2)。 |
 
-### A.2  仍需导师 / 内网确认
+### A.2  决议与剩余内网确认
 
-1. DeckIR v1.1 现有草案与本文 3.3 节字段表的差异清单,以哪份为准、如何兼容?
-2. 历史 / 运行记录是否需要?若需要,保存范围如何(是否含原始 Prompt 与输入内容)?
-3. DOCX 输出是否需要图片透传(输入文档中的图片带到输出)?当前列为 P2。
-4. chart 版式是否必须原生图表?若是,优先级是否从 P1 提升?
-5. 内网渲染 Skill 的调用形态(同步 HTTP、文件落盘还是其他)?以便接入说明按真实形态撰写。
+已决事项:
+
+1. DeckIR 以当前 v1.4 Schema 与本文 3.3 节为权威;table/chart/architecture_diagram 的受控演进已完成,旧 v1.0/v1.1/v1.2/v1.3 数据如需长期保存须按版本迁移,不在 renderer 中暗自兼容。
+2. chart 版式使用 python-pptx 原生可编辑图表;bar/line 增强和基础 pie 已落地,不再作为未决项。
+
+仍需导师 / 内网确认:
+
+1. 历史 / 运行记录是否需要?若需要,保存范围如何(是否含原始 Prompt 与输入内容)?当前 P2 默认不做。
+2. DOCX 输出是否需要图片透传(输入文档中的图片带到输出)?当前列为 P2。
+3. 内网渲染 Skill 的调用形态(同步 HTTP、文件落盘还是其他)?以便接入实现按真实协议落地。
 
 ## 附录 B  样例文件清单(samples/ 规划)
 
@@ -605,7 +611,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 | samples/input/real/(各 ≥ 3,脱敏) | 真实 docx / xlsx / pptx 语料,覆盖 §5.4 边界情况;文档无法替代,须人工收集 |
 | samples/ir/word_valid_01_plain.json 等 3 个 | Step 1 官方正样例:纯文本报告 / 带列表方案 / 带表格业务说明 |
 | samples/ir/word_invalid_*.json(10 个) | 覆盖 E001-E006 与 W 系全部错误码的回归集 |
-| samples/ir/deck_valid_full.json | DeckIR 十版式全覆盖演示样例 |
+| samples/ir/deck_valid_full.json | DeckIR 十一版式全覆盖演示样例 |
 | samples/ir/deck_invalid_*.json(6 个) | DeckIR 校验错误码回归集 |
 | samples/ir/deck_lint_violation.json | 人工注入合规违规,用于演示 lint 命中 |
 | samples/expected/ | golden 基线:回读断言所需的结构性事实(JSON 描述,不比二进制) |

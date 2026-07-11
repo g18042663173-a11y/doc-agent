@@ -1,0 +1,13 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "默认密级"
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "未提供 classification 时应记录 I201。"
+    }
+  ]
+}

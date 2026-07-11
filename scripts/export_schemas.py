@@ -1,4 +1,5 @@
 from __future__ import annotations
+# ruff: noqa: E402
 
 import sys
 from pathlib import Path
@@ -12,7 +13,7 @@ from app.ir.schema_export import export_schemas
 
 
 def main() -> int:
-    for path in export_schemas(ROOT / "backend" / "schemas"):
+    for path in export_schemas(ROOT / "backend" / "schemas", update_history=True):
         print(path.relative_to(ROOT))
     return 0
 

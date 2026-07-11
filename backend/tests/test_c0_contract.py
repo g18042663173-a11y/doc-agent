@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -58,7 +57,7 @@ def test_document_ir_validates_empty_input_summary() -> None:
     ir = DocumentIR.model_validate(
         {
             "ir_type": "document",
-            "ir_version": "1.0",
+            "ir_version": "1.1",
             "source": {
                 "filename": "empty.md",
                 "format": "md",
@@ -81,7 +80,7 @@ def test_deck_ir_validates_minimal_deck() -> None:
     ir = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.1",
+            "ir_version": "1.4",
             "meta": {"title": "C0 契约冻结", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {"layout": "cover", "title": "C0 契约冻结", "subtitle": "IR / Schema / Stub"},
@@ -105,11 +104,310 @@ def test_schema_files_match_current_models() -> None:
     assert load_schema("deck_ir") == normalized_schema(DeckIR)
 
 
+def test_schema_history_and_snapshots_match_current_models() -> None:
+    from app.ir.schema_export import verify_schema_snapshots
+
+    verified = verify_schema_snapshots(ROOT / "backend" / "schemas")
+
+    assert {path.name for path in verified} == {
+        "word_ir.schema.json",
+        "document_ir.schema.json",
+        "deck_ir.schema.json",
+    }
+
+
+def test_schema_snapshot_tamper_is_rejected(tmp_path: Path) -> None:
+    import shutil
+
+    from app.ir.schema_export import SchemaSnapshotError, verify_schema_snapshots
+
+    schema_dir = tmp_path / "schemas"
+    shutil.copytree(ROOT / "backend" / "schemas", schema_dir)
+    schema = json.loads((schema_dir / "word_ir.schema.json").read_text(encoding="utf-8"))
+    schema["properties"]["blocks"]["minItems"] = 0
+    (schema_dir / "word_ir.schema.json").write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(SchemaSnapshotError, match="snapshot drifted"):
+        verify_schema_snapshots(schema_dir)
+
+
+def test_schema_change_without_version_bump_cannot_be_exported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shutil
+
+    from app.ir import schema_export
+    from app.ir.schema_export import SchemaVersionError, export_schemas
+    from app.ir.word_ir import WordIR
+
+    class ChangedWordIR(WordIR):
+        accidental_field: str | None = None
+
+    schema_dir = tmp_path / "schemas"
+    shutil.copytree(ROOT / "backend" / "schemas", schema_dir)
+    monkeypatch.setitem(schema_export.SCHEMA_MODELS, "word_ir", ChangedWordIR)
+
+    with pytest.raises(SchemaVersionError, match="ir_version stayed"):
+        export_schemas(schema_dir, update_history=True)
+
+
+def test_explicit_schema_export_rewrites_registered_snapshots(tmp_path: Path) -> None:
+    import shutil
+
+    from app.ir.schema_export import export_schemas, verify_schema_snapshots
+
+    schema_dir = tmp_path / "schemas"
+    shutil.copytree(ROOT / "backend" / "schemas", schema_dir)
+
+    written = export_schemas(schema_dir, update_history=True)
+
+    assert {path.name for path in written} == {
+        "word_ir.schema.json",
+        "document_ir.schema.json",
+        "deck_ir.schema.json",
+        "schema_history.json",
+    }
+    assert len(verify_schema_snapshots(schema_dir)) == 3
+
+
+def test_description_only_schema_update_can_refresh_same_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import copy
+    import shutil
+
+    from app.ir import schema_export
+    from app.ir.schema_export import export_schemas, verify_schema_snapshots
+
+    schema_dir = tmp_path / "schemas"
+    shutil.copytree(ROOT / "backend" / "schemas", schema_dir)
+    original_normalized_schema = schema_export.normalized_schema
+
+    def with_description(model):
+        schema = copy.deepcopy(original_normalized_schema(model))
+        if model is schema_export.SCHEMA_MODELS["word_ir"]:
+            schema["properties"]["blocks"]["description"] = "仅补充字段语义说明"
+        return schema
+
+    monkeypatch.setattr(schema_export, "normalized_schema", with_description)
+
+    export_schemas(schema_dir, update_history=True)
+
+    assert len(verify_schema_snapshots(schema_dir)) == 3
+    updated = json.loads((schema_dir / "word_ir.schema.json").read_text(encoding="utf-8"))
+    assert updated["properties"]["blocks"]["description"] == "仅补充字段语义说明"
+
+
+def test_verify_stops_on_schema_failure_without_rewriting(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import scripts.verify as verify
+    from app.ir.schema_export import SchemaSnapshotError
+
+    def fail_verification(_path: Path) -> None:
+        raise SchemaSnapshotError("injected drift")
+
+    monkeypatch.setattr(verify, "verify_schema_snapshots", fail_verification)
+
+    assert verify.main() == 1
+    assert "schema verification failed: injected drift" in capsys.readouterr().err
+
+
 def test_word_schema_requires_non_empty_blocks() -> None:
     schema = load_schema("word_ir")
 
     assert "blocks" in schema["required"]
     assert schema["properties"]["blocks"]["minItems"] == 1
+
+
+def test_document_schema_exposes_format_and_preview_limits() -> None:
+    schema = load_schema("document_ir")
+    sheet_props = schema["$defs"]["SheetSummary"]["properties"]
+    table_props = schema["$defs"]["DocumentTableBlock"]["properties"]
+
+    assert schema["properties"]["ir_version"]["const"] == "1.1"
+    assert len(schema["allOf"]) == 3
+    assert sheet_props["preview_rows"]["maxItems"] == 20
+    assert sheet_props["preview_rows"]["items"]["maxItems"] == 15
+    assert table_props["rows"]["maxItems"] == 20
+
+
+@pytest.mark.parametrize(
+    ("source_format", "content_key"),
+    [
+        ("md", "sheets"),
+        ("docx", "slides"),
+        ("xlsx", "blocks"),
+        ("xlsx", "outline"),
+        ("pptx", "sheets"),
+    ],
+)
+def test_document_ir_rejects_content_for_another_format(source_format: str, content_key: str) -> None:
+    from pydantic import ValidationError
+
+    from app.ir.document_ir import DocumentIR
+
+    foreign_content = {
+        "blocks": [{"type": "paragraph", "text": "不应出现"}],
+        "outline": [{"level": 1, "text": "不应出现"}],
+        "sheets": [{"name": "不应出现", "nrows": 0, "ncols": 0}],
+        "slides": [{"index": 1, "title": "不应出现"}],
+    }[content_key]
+    payload = {
+        "ir_type": "document",
+        "ir_version": "1.1",
+        "source": {
+            "filename": f"input.{source_format}",
+            "format": source_format,
+            "size_kb": 1,
+            "parsed_at": "2026-07-10T00:00:00Z",
+        },
+        "stats": {},
+        "content": {content_key: foreign_content},
+    }
+
+    with pytest.raises(ValidationError, match=f"content.{content_key}"):
+        DocumentIR.model_validate(payload)
+
+
+def test_document_ir_accepts_preview_limits_and_rejects_overflow() -> None:
+    from pydantic import ValidationError
+
+    from app.ir.document_ir import DocumentIR
+
+    payload = {
+        "ir_type": "document",
+        "ir_version": "1.1",
+        "source": {
+            "filename": "台账.xlsx",
+            "format": "xlsx",
+            "size_kb": 1,
+            "parsed_at": "2026-07-10T00:00:00Z",
+        },
+        "stats": {},
+        "content": {
+            "sheets": [
+                {
+                    "name": "台账",
+                    "nrows": 21,
+                    "ncols": 15,
+                    "preview_rows": [[str(column) for column in range(15)] for _ in range(20)],
+                }
+            ]
+        },
+    }
+
+    assert len(DocumentIR.model_validate(payload).content.sheets[0].preview_rows) == 20
+    payload["content"]["sheets"][0]["preview_rows"].append(["overflow"])
+    with pytest.raises(ValidationError, match="at most 20 items"):
+        DocumentIR.model_validate(payload)
+
+    payload["content"]["sheets"][0]["preview_rows"] = [[str(column) for column in range(16)]]
+    with pytest.raises(ValidationError, match="at most 15 items"):
+        DocumentIR.model_validate(payload)
+
+
+def test_document_ir_reads_v10_as_v11_with_explicit_migration_warning() -> None:
+    from app.ir.document_ir import DocumentIR
+
+    payload = {
+        "ir_type": "document",
+        "ir_version": "1.0",
+        "source": {
+            "filename": "legacy.md",
+            "format": "md",
+            "size_kb": 1,
+            "parsed_at": "2026-07-01T00:00:00Z",
+        },
+        "stats": {},
+        "warnings": [],
+        "content": {"blocks": [{"type": "paragraph", "text": "存量摘要"}]},
+    }
+
+    migrated = DocumentIR.model_validate(payload)
+
+    assert migrated.ir_version == "1.1"
+    assert migrated.content.blocks[0].text == "存量摘要"
+    assert any("DocumentIR 1.0" in warning and "1.1" in warning for warning in migrated.warnings)
+
+
+def test_document_ir_v10_migration_still_enforces_v11_constraints() -> None:
+    from pydantic import ValidationError
+
+    from app.ir.document_ir import DocumentIR
+
+    payload = {
+        "ir_type": "document",
+        "ir_version": "1.0",
+        "source": {"filename": "legacy.md", "format": "md", "size_kb": 1, "parsed_at": "now"},
+        "stats": {},
+        "content": {"sheets": [{"name": "非法跨格式", "nrows": 0, "ncols": 0}]},
+    }
+
+    with pytest.raises(ValidationError, match="content.sheets"):
+        DocumentIR.model_validate(payload)
+
+
+def test_deck_schema_exposes_decision_matrix_table_contract() -> None:
+    schema = load_schema("deck_ir")
+    table_props = schema["$defs"]["DeckTable"]["properties"]
+
+    assert schema["properties"]["ir_version"]["const"] == "1.4"
+    assert {"column_groups", "row_groups", "cell_spans", "conclusion_col", "col_widths"} <= set(table_props)
+    assert table_props["rows"]["maxItems"] == 12
+    assert table_props["header"]["maxItems"] == 8
+
+
+def test_deck_schema_exposes_performance_chart_contract() -> None:
+    schema = load_schema("deck_ir")
+    chart_props = schema["$defs"]["ChartSpec"]["properties"]
+    series_props = schema["$defs"]["ChartSeries"]["properties"]
+
+    assert {"unit", "thresholds", "show_data_labels", "legend_position", "side_conclusion", "side_table"} <= set(chart_props)
+    assert "emphasis" in series_props
+
+
+def test_deck_schema_exposes_architecture_diagram_contract() -> None:
+    schema = load_schema("deck_ir")
+    slide_props = schema["$defs"]["ArchitectureDiagramSlide"]["properties"]
+    node_props = schema["$defs"]["ArchitectureNode"]["properties"]
+    edge_props = schema["$defs"]["ArchitectureEdge"]["properties"]
+    group_props = schema["$defs"]["ArchitectureGroup"]["properties"]
+
+    assert schema["properties"]["ir_version"]["const"] == "1.4"
+    assert {"nodes", "edges", "groups", "manual_hints"} <= set(slide_props)
+    assert {"layout", "title", "nodes", "edges", "groups"} <= set(schema["$defs"]["ArchitectureDiagramSlide"]["required"])
+    assert {"id", "text", "type", "group", "position", "size"} <= set(node_props)
+    assert {"from", "to", "label", "style", "direction"} <= set(edge_props)
+    assert {"id", "label", "node_ids"} <= set(group_props)
+
+
+def test_schema_describes_model_facing_table_chart_and_architecture_semantics() -> None:
+    word_schema = load_schema("word_ir")
+    deck_schema = load_schema("deck_ir")
+
+    word_col_widths = word_schema["$defs"]["TableBlock"]["properties"]["col_widths"]["description"]
+    table_props = deck_schema["$defs"]["DeckTable"]["properties"]
+    column_group_props = deck_schema["$defs"]["TableColumnGroup"]["properties"]
+    span_props = deck_schema["$defs"]["TableCellSpan"]["properties"]
+    chart_props = deck_schema["$defs"]["ChartSpec"]["properties"]
+    threshold_props = deck_schema["$defs"]["ChartThreshold"]["properties"]
+    position_props = deck_schema["$defs"]["DiagramPosition"]["properties"]
+    size_props = deck_schema["$defs"]["DiagramSize"]["properties"]
+    hint_props = deck_schema["$defs"]["ArchitectureManualHints"]["properties"]
+
+    assert "相对宽度权重" in word_col_widths and "不是英寸" in word_col_widths
+    assert "相对宽度权重" in table_props["col_widths"]["description"]
+    assert "0 起始" in table_props["conclusion_col"]["description"]
+    assert "0 起始" in column_group_props["start_col"]["description"]
+    assert "数量" in column_group_props["span"]["description"]
+    assert "0 起始" in span_props["row"]["description"]
+    assert "数量" in span_props["rowspan"]["description"]
+    assert "显示后缀" in chart_props["unit"]["description"]
+    assert "相同数值单位" in threshold_props["value"]["description"]
+    assert "中心" in position_props["x"]["description"]
+    assert "比例" in size_props["width"]["description"]
+    assert "覆盖" in hint_props["node_positions"]["description"]
 
 
 def test_stub_generator_outputs_valid_target_ir() -> None:
@@ -126,18 +424,69 @@ def test_stub_generator_outputs_valid_target_ir() -> None:
     assert deck.ir_type == "deck"
 
 
-def test_verify_script_runs_empty_stub_chain() -> None:
-    result = subprocess.run(
-        [sys.executable, "scripts/verify.py"],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+def test_nga_generator_requires_intranet_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.generators.nga import NgaGenerator
 
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "C0 verify passed" in result.stdout
+    monkeypatch.delenv("NGA_BASE_URL", raising=False)
+    monkeypatch.delenv("NGA_TOKEN", raising=False)
+    generator = NgaGenerator(base_url=None, token=None)
+
+    with pytest.raises(RuntimeError, match="NGA_BASE_URL"):
+        generator.generate("prompt", target="deck_ir")
+
+
+def test_verify_main_runs_stub_chain_when_all_gates_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+    import scripts.verify as verify
+
+    monkeypatch.setattr(verify, "_run_four_format_e2e", lambda _output_dir: True)
+    monkeypatch.setattr(verify, "_run_pytest_with_coverage", lambda _output_dir: True)
+
+    assert verify.main() == 0
     assert (ROOT / "output" / "c0_word.docx").exists()
     assert (ROOT / "output" / "c0_deck.pptx").exists()
     report = json.loads((ROOT / "output" / "report.json").read_text(encoding="utf-8"))
     assert report["summary"]["pass"] is True
+
+
+def test_verify_coverage_gate_cannot_be_bypassed_by_external_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scripts.verify as verify
+
+    monkeypatch.setenv("VERIFY_RUNNING", "1")
+    monkeypatch.setattr(
+        verify.subprocess,
+        "run",
+        lambda *_args, **_kwargs: type("Result", (), {"returncode": 1, "stdout": "failed", "stderr": ""})(),
+    )
+
+    assert verify._run_pytest_with_coverage(tmp_path) is False
+
+
+def test_verify_coverage_gate_rejects_low_package_and_overall_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scripts.verify as verify
+
+    def write_low_coverage(command, **_kwargs):
+        report_arg = next(value for value in command if value.startswith("--cov-report=json:"))
+        report_path = Path(report_arg.split(":", 1)[1])
+        report_path.write_text(
+            json.dumps(
+                {
+                    "files": {
+                        "backend/app/parsers/a.py": {"summary": {"num_statements": 100, "covered_lines": 79}},
+                        "backend/app/ir/a.py": {"summary": {"num_statements": 100, "covered_lines": 79}},
+                        "backend/app/lint/a.py": {"summary": {"num_statements": 100, "covered_lines": 79}},
+                    },
+                    "totals": {"percent_covered": 69.0},
+                }
+            ),
+            encoding="utf-8",
+        )
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    monkeypatch.delenv("VERIFY_RUNNING", raising=False)
+    monkeypatch.setattr(verify.subprocess, "run", write_low_coverage)
+
+    assert verify._run_pytest_with_coverage(tmp_path) is False

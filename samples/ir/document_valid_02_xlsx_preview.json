@@ -1,0 +1,35 @@
+{
+  "ir_type": "document",
+  "ir_version": "1.1",
+  "source": {
+    "filename": "方案台账.xlsx",
+    "format": "xlsx",
+    "size_kb": 12.5,
+    "parsed_at": "2026-07-10T00:00:00Z"
+  },
+  "stats": {
+    "headings": 0,
+    "paragraphs": 0,
+    "tables": 1,
+    "images": 0
+  },
+  "warnings": [],
+  "content": {
+    "sheets": [
+      {
+        "name": "方案台账",
+        "nrows": 2,
+        "ncols": 3,
+        "header_guess": ["方案", "状态", "责任组"],
+        "preview_rows": [
+          ["方案A", "进行中", "小组甲"],
+          ["方案B", "待评审", "小组乙"]
+        ],
+        "col_stats": [],
+        "formula_count": 0,
+        "merged_count": 0,
+        "truncated": false
+      }
+    ]
+  }
+}

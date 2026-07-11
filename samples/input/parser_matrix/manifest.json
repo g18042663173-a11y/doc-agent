@@ -1,0 +1,132 @@
+{
+  "categories": [
+    "normal",
+    "empty",
+    "corrupt",
+    "large",
+    "degraded"
+  ],
+  "formats": {
+    "docx": [
+      {
+        "category": "normal",
+        "outcome": "success",
+        "path": "samples/input/parser_samples/docx_sample_01.docx"
+      },
+      {
+        "category": "empty",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/docx_empty.docx"
+      },
+      {
+        "category": "corrupt",
+        "expected_error": "E001",
+        "outcome": "error",
+        "path": "samples/input/parser_matrix/docx_corrupt.docx"
+      },
+      {
+        "category": "large",
+        "expected_warning_contains": "W103",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/docx_large.docx"
+      },
+      {
+        "category": "degraded",
+        "expected_warning_contains": "unsupported text boxes",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/docx_degraded.docx"
+      }
+    ],
+    "md": [
+      {
+        "category": "normal",
+        "outcome": "success",
+        "path": "samples/input/parser_samples/md_sample_01.md"
+      },
+      {
+        "category": "empty",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/md_empty.md"
+      },
+      {
+        "category": "corrupt",
+        "expected_error": "E001",
+        "outcome": "error",
+        "path": "samples/input/parser_matrix/md_corrupt.md"
+      },
+      {
+        "category": "large",
+        "expected_warning_contains": "W103",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/md_large.md"
+      },
+      {
+        "category": "degraded",
+        "expected_warning_contains": "malformed table rows",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/md_degraded.md"
+      }
+    ],
+    "pptx": [
+      {
+        "category": "normal",
+        "outcome": "success",
+        "path": "samples/input/项目汇报.pptx"
+      },
+      {
+        "category": "empty",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/pptx_empty.pptx"
+      },
+      {
+        "category": "corrupt",
+        "expected_error": "E001",
+        "outcome": "error",
+        "path": "samples/input/parser_matrix/pptx_corrupt.pptx"
+      },
+      {
+        "category": "large",
+        "expected_warning_contains": "W103",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/pptx_large.pptx"
+      },
+      {
+        "category": "degraded",
+        "expected_warning_contains": "SmartArt",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/pptx_degraded.pptx"
+      }
+    ],
+    "xlsx": [
+      {
+        "category": "normal",
+        "outcome": "success",
+        "path": "samples/input/parser_samples/xlsx_sample_01.xlsx"
+      },
+      {
+        "category": "empty",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/xlsx_empty.xlsx"
+      },
+      {
+        "category": "corrupt",
+        "expected_error": "E001",
+        "outcome": "error",
+        "path": "samples/input/parser_matrix/xlsx_corrupt.xlsx"
+      },
+      {
+        "category": "large",
+        "expected_warning_contains": "W103",
+        "outcome": "success",
+        "path": "samples/input/synthetic/xlsx_04_large_ledger_50000.xlsx"
+      },
+      {
+        "category": "degraded",
+        "expected_warning_contains": "chart unsupported",
+        "outcome": "success",
+        "path": "samples/input/parser_matrix/xlsx_degraded.xlsx"
+      }
+    ]
+  },
+  "schema_version": 1
+}

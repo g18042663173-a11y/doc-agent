@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         "-r",
         str(args.requirements),
     ]
-    return subprocess.run(command, check=False).returncode
+    return subprocess.run(command, check=False, encoding="utf-8", errors="replace").returncode
 
 
 if __name__ == "__main__":

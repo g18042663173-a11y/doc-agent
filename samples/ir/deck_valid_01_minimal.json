@@ -1,0 +1,22 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.4",
+  "meta": {
+    "title": "Deck 最小样例",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "cover",
+      "title": "Deck 最小样例"
+    },
+    {
+      "layout": "agenda",
+      "items": [
+        "背景",
+        "方案"
+      ]
+    }
+  ]
+}

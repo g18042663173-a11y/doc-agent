@@ -12,11 +12,15 @@ SUGGESTIONS = {
     "E006": "为 blocks 或列表 items 至少提供 1 条内容。",
     "D001": "确认模型输出是一个完整 JSON 对象或单个 json 代码块。",
     "D002": "补齐 meta.title, 且标题不能为空白字符串。",
-    "D003": "把 slides[].layout 改为 DeckIR v1.1 允许的版式。",
+    "D003": "把 slides[].layout 改为 DeckIR v1.4 允许的版式。",
     "D004": "补齐该 layout 的必填字段。",
-    "D005": "检查表格页数据是否超过 12 行 x 8 列, 且行列规整。",
+    "D005": "检查表格页 header、rows、column_groups、row_groups、cell_spans 与 col_widths 是否越界或不规整, 且数据区不超过 12 行 x 8 列。",
     "D006": "减少 bullets 条数到该 layout 的上限。",
+    "W101": "按 1、2、3、4 顺序组织标题层级,避免从 1 级直接跳到 3 级。",
+    "W102": "删除空 paragraph,或填写实际正文。",
+    "W103": "将超长段落或单元格拆分,控制单段 / 单元格在上限内。",
     "W104": "删除未知字段; 若确需保留, 先升级 IR 契约与 Schema。",
+    "I201": "如需覆盖默认密级,显式填写 meta.classification。",
 }
 
 

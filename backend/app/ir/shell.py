@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -20,26 +21,49 @@ def extract_json_text(raw: str) -> str:
     if not text:
         raise JsonExtractionError("empty model output")
 
-    fenced = FENCED_JSON_RE.search(text)
-    if fenced:
-        return fenced.group(1).strip()
+    fenced_blocks = list(FENCED_JSON_RE.finditer(text))
+    if len(fenced_blocks) > 1:
+        raise JsonExtractionError("multiple JSON objects found")
+    if fenced_blocks:
+        fenced = fenced_blocks[0]
+        candidate = _single_json_object(fenced.group(1).strip())
+        outside = f"{text[:fenced.start()]} {text[fenced.end():]}"
+        outside_valid, _outside_invalid, outside_truncated = _scan_json_objects(outside)
+        if outside_valid or outside_truncated:
+            raise JsonExtractionError("multiple JSON objects found")
+        return candidate
+    return _single_json_object(text)
 
-    object_text = _first_balanced_object(text)
-    if object_text is None:
-        raise JsonExtractionError("no JSON object found")
-    return object_text
+
+def _single_json_object(text: str) -> str:
+    valid, invalid, truncated = _scan_json_objects(text)
+    if len(valid) > 1 or (valid and truncated):
+        raise JsonExtractionError("multiple JSON objects found")
+    if len(valid) == 1:
+        return valid[0]
+    if truncated:
+        raise JsonExtractionError("truncated JSON object")
+    if invalid:
+        raise JsonExtractionError(f"invalid JSON object: {invalid[0]}")
+    raise JsonExtractionError("no JSON object found")
 
 
-def _first_balanced_object(text: str) -> str | None:
-    start = text.find("{")
-    if start < 0:
-        return None
-
+def _scan_json_objects(text: str) -> tuple[list[str], list[str], bool]:
+    valid: list[str] = []
+    invalid: list[str] = []
+    start: int | None = None
     depth = 0
     in_string = False
     escaped = False
-    for index in range(start, len(text)):
-        char = text[index]
+
+    for index, char in enumerate(text):
+        if depth == 0:
+            if char == "{":
+                start = index
+                depth = 1
+                in_string = False
+                escaped = False
+            continue
         if escaped:
             escaped = False
             continue
@@ -55,9 +79,19 @@ def _first_balanced_object(text: str) -> str | None:
             depth += 1
         elif char == "}":
             depth -= 1
-            if depth == 0:
-                return text[start : index + 1].strip()
-    return None
+            if depth == 0 and start is not None:
+                candidate = text[start : index + 1].strip()
+                try:
+                    parsed = json.loads(candidate)
+                except json.JSONDecodeError as exc:
+                    invalid.append(exc.msg)
+                else:
+                    if isinstance(parsed, dict):
+                        valid.append(candidate)
+                    else:
+                        invalid.append("top-level JSON value must be an object")
+                start = None
+    return valid, invalid, depth > 0
 
 
 def _extract_error(code: str, raw: str, message: str) -> ValidationItem:
@@ -67,7 +101,7 @@ def _extract_error(code: str, raw: str, message: str) -> ValidationItem:
         level="Error",
         loc="",
         message=f"剥壳失败: {message}; 原文前 200 字: {preview}",
-        suggestion="确认模型只输出一个 json 代码块,且 JSON 对象未被截断。",
+        suggestion="确认模型只输出一个完整 JSON 对象,不要使用 Markdown 围栏,且对象未被截断或重复输出。",
     )
 
 

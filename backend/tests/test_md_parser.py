@@ -54,3 +54,28 @@ def test_parse_markdown_round_trips_to_docx(tmp_path: Path) -> None:
 
     assert "Q3 业务汇报" in [paragraph.text for paragraph in doc.paragraphs]
     assert doc.tables[0].cell(0, 0).text == "风险"
+
+
+def test_parse_markdown_falls_back_to_gbk_with_warning(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "gbk.md"
+    path.write_bytes("# 周报\n\n本周完成台账核对。".encode("gbk"))
+
+    ir = parse_markdown(path)
+
+    assert ir.content.outline[0].text == "周报"
+    assert any("gb18030 fallback" in warning for warning in ir.warnings)
+
+
+def test_parse_markdown_warns_for_malformed_table_rows(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "malformed-table.md"
+    path.write_text("| 项目 | 状态 |\n| --- | --- |\n| 仅一列 |\n| 正常 | 完成 |\n", encoding="utf-8")
+
+    ir = parse_markdown(path)
+
+    table = next(block for block in ir.content.blocks if block.type == "table")
+    assert table.rows == [["正常", "完成"]]
+    assert any("malformed table rows" in warning for warning in ir.warnings)

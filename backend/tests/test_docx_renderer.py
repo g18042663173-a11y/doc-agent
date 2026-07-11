@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from docx import Document
+from docx.shared import Pt
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
@@ -138,9 +139,87 @@ def test_render_word_ir_formats_table_header_and_widths(tmp_path: Path) -> None:
     with zipfile.ZipFile(output) as package:
         document_xml = package.read("word/document.xml").decode("utf-8")
     assert "w:tblHeader" in document_xml
-    assert 'w:fill="F5F5F5"' in document_xml
+    assert 'w:fill="C7000B"' in document_xml
+    assert 'w:color w:val="FFFFFF"' in document_xml
+    assert "DDDDDD" in document_xml
     widths = [int(value) for value in re.findall(r'<w:gridCol w:w="(\d+)"', document_xml)]
     assert widths[:2][0] > widths[:2][1]
+
+
+def test_render_word_ir_uses_hw_theme_tokens_not_word_blue(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "主题", "classification": "HUAWEI CONFIDENTIAL"},
+            "blocks": [
+                {"type": "heading", "level": 1, "text": "主题标题"},
+                {"type": "heading", "level": 2, "text": "二级标题"},
+                {"type": "paragraph", "text": "正文"},
+                {"type": "table", "header": ["项", "值"], "rows": [["颜色", "主题红"]]},
+            ],
+        }
+    )
+
+    output = render_word_ir(ir, tmp_path / "theme.docx")
+    doc = Document(str(output))
+    xml = _word_package_xml(output)
+
+    assert "C7000B" in xml
+    assert "4F81BD" not in xml
+    assert str(doc.styles["Heading 1"].font.color.rgb) == "C7000B"
+    assert doc.styles["Heading 1"].font.size == Pt(14)
+    assert doc.styles["Heading 2"].font.size == Pt(12)
+    assert str(doc.styles["Normal"].font.color.rgb) == "1D1D1A"
+    assert doc.styles["Normal"].font.size == Pt(10)
+
+
+def test_render_word_ir_draws_bordered_image_placeholder_and_caption(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "图片", "classification": "HUAWEI CONFIDENTIAL"},
+            "blocks": [{"type": "image_placeholder", "ref": "arch.png", "caption": "图1: 架构图"}],
+        }
+    )
+
+    output = render_word_ir(ir, tmp_path / "image-placeholder.docx")
+    doc = Document(str(output))
+    xml = _word_package_xml(output)
+
+    assert len(doc.tables) == 1
+    assert "图片占位" in doc.tables[0].cell(0, 0).text
+    assert any(paragraph.text == "图1: 架构图" for paragraph in doc.paragraphs)
+    assert 'w:val="single"' in xml
+    assert "DDDDDD" in xml
+
+
+def test_render_word_ir_quote_has_left_border(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "引用", "classification": "HUAWEI CONFIDENTIAL"},
+            "blocks": [{"type": "paragraph", "style": "quote", "text": "引用段落"}],
+        }
+    )
+
+    output = render_word_ir(ir, tmp_path / "quote.docx")
+    with zipfile.ZipFile(output) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert "<w:left" in document_xml
+    assert 'w:color="666666"' in document_xml
 
 
 def test_render_word_ir_handles_100_by_12_table(tmp_path: Path) -> None:
@@ -167,3 +246,12 @@ def test_render_word_ir_handles_100_by_12_table(tmp_path: Path) -> None:
 
     assert len(doc.tables[0].rows) == 101
     assert len(doc.tables[0].columns) == 12
+
+
+def _word_package_xml(path: Path) -> str:
+    with zipfile.ZipFile(path) as package:
+        return "\n".join(
+            package.read(name).decode("utf-8")
+            for name in package.namelist()
+            if name.startswith("word/") and name.endswith(".xml")
+        )

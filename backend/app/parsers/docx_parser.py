@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import zipfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -10,21 +9,29 @@ from docx import Document
 from docx.document import Document as DocxDocument
 from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
+from docx.oxml.ns import qn
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 from app.ir.document_ir import DocumentIR
+from app.parsers.errors import parser_error_boundary
+from app.parsers.source_metadata import deterministic_parsed_at
+from app.parsers.text_limits import TextLimiter
 
 
 HEADING_STYLE_RE = re.compile(r"^(Heading|标题)\s*([1-6])$")
 
 
+@parser_error_boundary
 def parse_docx(path: Path) -> DocumentIR:
     document = Document(str(path))
     blocks: list[dict] = []
     outline: list[dict] = []
     warnings = _unsupported_warnings(path)
+    warnings.extend(_image_warnings(document))
+    limiter = TextLimiter(warnings)
     current_list: dict | None = None
+    table_index = 0
 
     def flush_list() -> None:
         nonlocal current_list
@@ -32,9 +39,9 @@ def parse_docx(path: Path) -> DocumentIR:
             blocks.append(current_list)
             current_list = None
 
-    for item in _iter_block_items(document):
+    for item_index, item in enumerate(_iter_block_items(document), start=1):
         if isinstance(item, Paragraph):
-            text = item.text.strip()
+            text = limiter.limit(item.text.strip(), loc=f"docx body paragraph {item_index}")
             if not text:
                 continue
             heading_level = _heading_level(item)
@@ -61,23 +68,26 @@ def parse_docx(path: Path) -> DocumentIR:
             blocks.append({"type": "paragraph", "text": text})
         elif isinstance(item, Table):
             flush_list()
-            table_block, truncated = _parse_table(item)
+            table_index += 1
+            table_block, truncated, nested_tables = _parse_table(item, limiter=limiter, table_index=table_index)
             if table_block is not None:
                 blocks.append(table_block)
             if truncated:
-                warnings.append("docx table preview truncated to 20 rows")
+                warnings.append("W103: docx table preview truncated to 20 rows")
+            if nested_tables:
+                warnings.append(f"docx nested tables unsupported: {nested_tables}; nested content skipped")
 
     flush_list()
 
     return DocumentIR.model_validate(
         {
             "ir_type": "document",
-            "ir_version": "1.0",
+            "ir_version": "1.1",
             "source": {
                 "filename": path.name,
                 "format": "docx",
                 "size_kb": round(path.stat().st_size / 1024, 2),
-                "parsed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "parsed_at": deterministic_parsed_at(path),
             },
             "stats": {
                 "headings": len(outline),
@@ -102,9 +112,21 @@ def _iter_block_items(document: DocxDocument) -> Iterator[Paragraph | Table]:
 
 def _heading_level(paragraph: Paragraph) -> int | None:
     match = HEADING_STYLE_RE.match(paragraph.style.name)
-    if match is None:
+    if match is not None:
+        return int(match.group(2))
+    ppr = paragraph._p.pPr
+    if ppr is None:
         return None
-    return int(match.group(2))
+    outline = ppr.find(qn("w:outlineLvl"))
+    if outline is None:
+        return None
+    value = outline.get(qn("w:val"))
+    if value is None:
+        return None
+    try:
+        return int(value) + 1
+    except ValueError:
+        return None
 
 
 def _list_kind(paragraph: Paragraph) -> str | None:
@@ -121,42 +143,95 @@ def _list_level(paragraph: Paragraph) -> int:
     return 2 if re.search(r"(^|\D)2($|\D)", style_name) else 1
 
 
-def _parse_table(table: Table) -> tuple[dict | None, bool]:
+def _parse_table(
+    table: Table,
+    *,
+    limiter: TextLimiter | None = None,
+    table_index: int = 1,
+) -> tuple[dict | None, bool, int]:
     if not table.rows or not table.columns:
-        return None, False
-    header = [_cell_text(cell) or f"Column {index + 1}" for index, cell in enumerate(table.rows[0].cells)]
+        return None, False, 0
+    column_count = min(len(table.columns), 12)
+    if len(table.columns) > column_count and limiter is not None:
+        limiter.warnings.append(f"W103: docx table {table_index} preview truncated to 12 columns")
+    header = [
+        _cell_text(
+            cell,
+            limiter=limiter,
+            loc=f"docx table {table_index} header column {index + 1}",
+        )
+        or f"Column {index + 1}"
+        for index, cell in enumerate(table.rows[0].cells[:column_count])
+    ]
     rows: list[list[str]] = []
     truncated = False
-    for row in table.rows[1:]:
-        values = [_cell_text(cell) for cell in row.cells]
+    for row_index, row in enumerate(table.rows[1:], start=1):
+        values = [
+            _cell_text(
+                cell,
+                limiter=limiter,
+                loc=f"docx table {table_index} row {row_index} column {column_index + 1}",
+            )
+            for column_index, cell in enumerate(row.cells[:column_count])
+        ]
         if len(rows) < 20:
             rows.append(values)
         else:
             truncated = True
-    return {"type": "table", "header": header, "rows": rows}, truncated
+    return {"type": "table", "header": header, "rows": rows}, truncated, _nested_table_count(table)
 
 
-def _cell_text(cell) -> str:
-    return "\n".join(paragraph.text.strip() for paragraph in cell.paragraphs if paragraph.text.strip())
+def _cell_text(cell, *, limiter: TextLimiter | None = None, loc: str = "docx table cell") -> str:
+    value = "\n".join(paragraph.text.strip() for paragraph in cell.paragraphs if paragraph.text.strip())
+    return limiter.limit(value, loc=loc) if limiter is not None else value
+
+
+def _nested_table_count(table: Table) -> int:
+    count = 0
+    for row in table.rows:
+        for cell in row.cells:
+            for nested_table in cell.tables:
+                count += 1 + _nested_table_count(nested_table)
+    return count
 
 
 def _unsupported_warnings(path: Path) -> list[str]:
     warnings: list[str] = []
+    patterns = [
+        (r"<w:commentRangeStart\b", "comments"),
+        (r"<w:ins\b", "revisions"),
+        (r"<w:del\b", "revisions"),
+        (r"<w:rPrChange\b", "format revisions"),
+        (r"<w:pPrChange\b", "format revisions"),
+        (r"<w:txbxContent\b", "text boxes"),
+        (r"<wps:txbx\b", "text boxes"),
+        (r"<dgm:", "SmartArt"),
+    ]
     with zipfile.ZipFile(path) as package:
-        xml = "\n".join(
-            package.read(name).decode("utf-8", errors="ignore")
-            for name in package.namelist()
-            if name.startswith("word/") and name.endswith(".xml")
-        )
-    for needle, label in [
-        ("w:commentRangeStart", "comments"),
-        ("w:ins", "revisions"),
-        ("w:del", "revisions"),
-        ("w:txbxContent", "text boxes"),
-        ("wps:txbx", "text boxes"),
-        ("dgm:", "SmartArt"),
-    ]:
-        count = xml.count(needle)
-        if count:
-            warnings.append(f"unsupported {label}: {count}")
+        names = package.namelist()
+        for name in names:
+            if not name.startswith("word/") or not name.endswith(".xml"):
+                continue
+            xml = package.read(name).decode("utf-8", errors="replace")
+            counts: dict[str, int] = {}
+            for pattern, label in patterns:
+                count = len(re.findall(pattern, xml))
+                if count:
+                    counts[label] = counts.get(label, 0) + count
+            for label, count in counts.items():
+                warnings.append(f"unsupported {label}: {count} at part {name}; content skipped")
+        embedding_parts = [name for name in names if name.startswith("word/embeddings/")]
+        if embedding_parts:
+            total_bytes = sum(package.getinfo(name).file_size for name in embedding_parts)
+            warnings.append(
+                "unsupported embedded/OLE objects: "
+                f"{len(embedding_parts)} at parts {', '.join(embedding_parts)}; binary skipped, total_bytes={total_bytes}"
+            )
+    return warnings
+
+
+def _image_warnings(document: DocxDocument) -> list[str]:
+    warnings: list[str] = []
+    for index, shape in enumerate(document.inline_shapes, start=1):
+        warnings.append(f"docx image present #{index} width={shape.width / 914400:.2f}in height={shape.height / 914400:.2f}in")
     return warnings

@@ -52,23 +52,26 @@ class TableBlock(ContractModel):
     header: list[str] = Field(min_length=1, max_length=12)
     rows: list[list[str]] = Field(max_length=100)
     caption: str | None = None
-    col_widths: list[float] | None = None
+    col_widths: list[float] | None = Field(
+        default=None,
+        description="各列的正数相对宽度权重；渲染时归一化到可用表宽，不是英寸或其它绝对单位。",
+    )
 
     @field_validator("header")
     @classmethod
-    def header_cells_not_blank(cls, value: list[str]) -> list[str]:
+    def header_cells_not_blank(_cls, value: list[str]) -> list[str]:
         if any(not str(cell).strip() for cell in value):
             raise ValueError("table header cells must not be blank")
         return value
 
     @field_validator("rows")
     @classmethod
-    def row_cells_as_strings(cls, value: list[list[str]]) -> list[list[str]]:
+    def row_cells_as_strings(_cls, value: list[list[str]]) -> list[list[str]]:
         return [[str(cell) for cell in row] for row in value]
 
     @field_validator("col_widths")
     @classmethod
-    def col_widths_positive(cls, value: list[float] | None) -> list[float] | None:
+    def col_widths_positive(_cls, value: list[float] | None) -> list[float] | None:
         if value is not None and any(width <= 0 for width in value):
             raise ValueError("col_widths must be positive")
         return value

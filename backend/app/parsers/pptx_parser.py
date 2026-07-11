@@ -1,30 +1,44 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Iterable
 from pathlib import Path
+import posixpath
+import re
+from xml.etree import ElementTree
+import zipfile
 
 from pptx import Presentation
 
 from app.ir.document_ir import DocumentIR
+from app.parsers.errors import parser_error_boundary
+from app.parsers.source_metadata import deterministic_parsed_at
+from app.parsers.text_limits import TextLimiter
 
 
+@parser_error_boundary
 def parse_pptx(path: Path) -> DocumentIR:
     presentation = Presentation(str(path))
     slide_summaries: list[dict] = []
-    warnings: list[str] = []
+    embedding_warnings, warnings = _embedding_warnings(path)
+    limiter = TextLimiter(warnings)
+    image_count = 0
 
     for index, slide in enumerate(presentation.slides, start=1):
-        shape_warnings = _slide_warnings(slide)
+        shape_warnings: list[str] = []
+        shape_warnings.extend(embedding_warnings.get(index, []))
+        shapes = list(_iter_shapes(slide.shapes, shape_warnings))
+        shape_warnings.extend(_slide_warnings(slide, shapes))
         if shape_warnings:
             warnings.extend(f"slide {index}: {warning}" for warning in shape_warnings)
+        image_count += _image_count(shapes)
         slide_summaries.append(
             {
                 "index": index,
                 "layout_name": slide.slide_layout.name,
-                "title": _slide_title(slide),
-                "bodies": _slide_bodies(slide),
-                "tables": _slide_tables(slide),
-                "notes": _slide_notes(slide),
+                "title": _slide_title(slide, shapes, limiter=limiter, slide_index=index),
+                "bodies": _slide_bodies(slide, shapes, limiter=limiter, slide_index=index),
+                "tables": _slide_tables(slide, shapes, limiter=limiter, slide_index=index),
+                "notes": _slide_notes(slide, limiter=limiter, slide_index=index),
                 "shape_warnings": shape_warnings,
             }
         )
@@ -32,18 +46,18 @@ def parse_pptx(path: Path) -> DocumentIR:
     return DocumentIR.model_validate(
         {
             "ir_type": "document",
-            "ir_version": "1.0",
+            "ir_version": "1.1",
             "source": {
                 "filename": path.name,
                 "format": "pptx",
                 "size_kb": round(path.stat().st_size / 1024, 2),
-                "parsed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "parsed_at": deterministic_parsed_at(path),
             },
             "stats": {
                 "headings": sum(1 for slide in slide_summaries if slide.get("title")),
                 "paragraphs": sum(len(slide.get("bodies", [])) for slide in slide_summaries),
                 "tables": sum(len(slide.get("tables", [])) for slide in slide_summaries),
-                "images": _image_count(presentation),
+                "images": image_count,
             },
             "warnings": warnings,
             "content": {"slides": slide_summaries},
@@ -51,23 +65,35 @@ def parse_pptx(path: Path) -> DocumentIR:
     )
 
 
-def _slide_title(slide) -> str | None:
-    title_shape = slide.shapes.title
+def _slide_title(
+    slide,
+    shapes: list | None = None,
+    *,
+    limiter: TextLimiter | None = None,
+    slide_index: int = 1,
+) -> str | None:
+    title_shape = getattr(slide.shapes, "title", None)
     if title_shape is not None and getattr(title_shape, "has_text_frame", False):
         text = title_shape.text.strip()
-        return text or None
-    for shape in slide.shapes:
+        return limiter.limit(text, loc=f"pptx slide {slide_index} title") if text and limiter is not None else text or None
+    for shape_index, shape in enumerate(shapes if shapes is not None else _iter_shapes(slide.shapes, []), start=1):
         if getattr(shape, "has_text_frame", False):
             text = shape.text.strip()
             if text:
-                return text
+                return limiter.limit(text, loc=f"pptx slide {slide_index} fallback title shape {shape_index}") if limiter is not None else text
     return None
 
 
-def _slide_bodies(slide) -> list[str]:
-    title_shape = slide.shapes.title
+def _slide_bodies(
+    slide,
+    shapes: list | None = None,
+    *,
+    limiter: TextLimiter | None = None,
+    slide_index: int = 1,
+) -> list[str]:
+    title_shape = getattr(slide.shapes, "title", None)
     bodies: list[str] = []
-    for shape in slide.shapes:
+    for shape_index, shape in enumerate(shapes if shapes is not None else _iter_shapes(slide.shapes, []), start=1):
         if shape is title_shape:
             continue
         if getattr(shape, "has_table", False):
@@ -75,57 +101,170 @@ def _slide_bodies(slide) -> list[str]:
         if getattr(shape, "has_text_frame", False):
             text = shape.text.strip()
             if text:
-                bodies.extend(part.strip() for part in text.splitlines() if part.strip())
+                for part_index, part in enumerate((part.strip() for part in text.splitlines() if part.strip()), start=1):
+                    bodies.append(
+                        limiter.limit(
+                            part,
+                            loc=f"pptx slide {slide_index} shape {shape_index} paragraph {part_index}",
+                        )
+                        if limiter is not None
+                        else part
+                    )
         elif getattr(shape, "has_chart", False):
-            bodies.append(f"[chart] {shape.chart.chart_type}")
+            chart_title = _chart_title(shape.chart)
+            if chart_title and limiter is not None:
+                chart_title = limiter.limit(chart_title, loc=f"pptx slide {slide_index} chart {shape_index} title")
+            label = f"{chart_title} " if chart_title else ""
+            bodies.append(f"[chart] {label}{shape.chart.chart_type}")
     return bodies
 
 
-def _slide_tables(slide) -> list[dict]:
+def _slide_tables(
+    slide,
+    shapes: list | None = None,
+    *,
+    limiter: TextLimiter | None = None,
+    slide_index: int = 1,
+) -> list[dict]:
     tables: list[dict] = []
-    for shape in slide.shapes:
+    for shape_index, shape in enumerate(shapes if shapes is not None else _iter_shapes(slide.shapes, []), start=1):
         if not getattr(shape, "has_table", False):
             continue
         table = shape.table
         if not table.rows or not table.columns:
             continue
-        header = [_cell_text(table.cell(0, col)) for col in range(len(table.columns))]
+        column_count = min(len(table.columns), 12)
+        if len(table.columns) > column_count and limiter is not None:
+            limiter.warnings.append(f"W103: pptx slide {slide_index} table {shape_index} truncated to 12 columns")
+        header = [
+            _cell_text(
+                table.cell(0, col),
+                limiter=limiter,
+                loc=f"pptx slide {slide_index} table {shape_index} header column {col + 1}",
+            )
+            or f"Column {col + 1}"
+            for col in range(column_count)
+        ]
         rows: list[list[str]] = []
-        for row in range(1, len(table.rows)):
-            rows.append([_cell_text(table.cell(row, col)) for col in range(len(table.columns))])
+        for row in range(1, min(len(table.rows), 21)):
+            rows.append(
+                [
+                    _cell_text(
+                        table.cell(row, col),
+                        limiter=limiter,
+                        loc=f"pptx slide {slide_index} table {shape_index} row {row} column {col + 1}",
+                    )
+                    for col in range(column_count)
+                ]
+            )
+        if len(table.rows) > 21 and limiter is not None:
+            limiter.warnings.append(f"W103: pptx slide {slide_index} table {shape_index} preview truncated to 20 rows")
         tables.append({"header": header, "rows": rows})
     return tables
 
 
-def _cell_text(cell) -> str:
-    return "\n".join(paragraph.text.strip() for paragraph in cell.text_frame.paragraphs if paragraph.text.strip())
-
-
-def _slide_notes(slide) -> str | None:
+def _chart_title(chart) -> str | None:
+    if not getattr(chart, "has_title", False):
+        return None
     try:
-        text = slide.notes_slide.notes_text_frame.text.strip()
+        text = chart.chart_title.text_frame.text.strip()
     except (AttributeError, ValueError):
         return None
     return text or None
 
 
-def _slide_warnings(slide) -> list[str]:
+def _cell_text(cell, *, limiter: TextLimiter | None = None, loc: str = "pptx table cell") -> str:
+    value = "\n".join(paragraph.text.strip() for paragraph in cell.text_frame.paragraphs if paragraph.text.strip())
+    return limiter.limit(value, loc=loc) if limiter is not None else value
+
+
+def _slide_notes(slide, *, limiter: TextLimiter | None = None, slide_index: int = 1) -> str | None:
+    try:
+        text = slide.notes_slide.notes_text_frame.text.strip()
+    except (AttributeError, ValueError):
+        return None
+    if text and limiter is not None:
+        return limiter.limit(text, loc=f"pptx slide {slide_index} notes")
+    return text or None
+
+
+def _slide_warnings(slide, shapes: list) -> list[str]:
     xml = slide.element.xml
     warnings: list[str] = []
     if "<p:transition" in xml:
         warnings.append("transition unsupported")
     if "<p:timing" in xml:
         warnings.append("animation timing unsupported")
-    for shape in slide.shapes:
-        if getattr(shape, "shape_type", None) is not None and str(shape.shape_type) == "GROUP":
-            warnings.append("group shape unsupported")
+    if "dgm:" in xml or "<dgm:" in xml:
+        warnings.append("SmartArt unsupported")
+    if "<p:oleObj" in xml:
+        warnings.append("embedded/OLE object unsupported; binary skipped")
+    for shape in shapes:
+        if "PICTURE" in str(getattr(shape, "shape_type", "")):
+            warnings.append(f"image present width={_emu_to_inches(shape.width):.2f}in height={_emu_to_inches(shape.height):.2f}in")
     return warnings
 
 
-def _image_count(presentation) -> int:
-    count = 0
-    for slide in presentation.slides:
-        for shape in slide.shapes:
-            if "PICTURE" in str(getattr(shape, "shape_type", "")):
-                count += 1
-    return count
+def _image_count(shapes: list) -> int:
+    return sum(1 for shape in shapes if "PICTURE" in str(getattr(shape, "shape_type", "")))
+
+
+def _iter_shapes(shapes: Iterable, shape_warnings: list[str]) -> Iterable:
+    try:
+        iterator = iter(shapes)
+    except Exception:
+        shape_warnings.append("group shape traversal failed; child shapes skipped")
+        return
+    while True:
+        try:
+            shape = next(iterator)
+        except StopIteration:
+            return
+        except Exception:
+            shape_warnings.append("group shape traversal failed; child shapes skipped")
+            return
+        yield shape
+        try:
+            child_shapes = getattr(shape, "shapes", None)
+            if child_shapes is not None:
+                yield from _iter_shapes(child_shapes, shape_warnings)
+        except Exception:
+            shape_warnings.append("group shape traversal failed; child shapes skipped")
+
+
+def _emu_to_inches(value) -> float:
+    try:
+        return int(value) / 914400
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _embedding_warnings(path: Path) -> tuple[dict[int, list[str]], list[str]]:
+    by_slide: dict[int, list[str]] = {}
+    package_warnings: list[str] = []
+    with zipfile.ZipFile(path) as package:
+        names = set(package.namelist())
+        embedding_parts = {name for name in names if name.startswith("ppt/embeddings/")}
+        referenced: set[str] = set()
+        for rel_name in names:
+            match = re.fullmatch(r"ppt/slides/_rels/slide(\d+)\.xml\.rels", rel_name)
+            if match is None:
+                continue
+            slide_index = int(match.group(1))
+            root = ElementTree.fromstring(package.read(rel_name))
+            for relationship in root:
+                target = relationship.attrib.get("Target", "")
+                if "embeddings/" not in target:
+                    continue
+                part = posixpath.normpath(posixpath.join("ppt/slides", target))
+                referenced.add(part)
+                size = package.getinfo(part).file_size if part in names else 0
+                by_slide.setdefault(slide_index, []).append(
+                    f"embedded/OLE object unsupported at part {part}, bytes={size}; binary skipped"
+                )
+        for part in sorted(embedding_parts - referenced):
+            package_warnings.append(
+                f"pptx embedded/OLE object unsupported at unreferenced part {part}, "
+                f"bytes={package.getinfo(part).file_size}; binary skipped"
+            )
+    return by_slide, package_warnings

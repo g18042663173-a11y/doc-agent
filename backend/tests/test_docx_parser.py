@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import base64
+import zipfile
 import sys
 from pathlib import Path
 
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
@@ -57,3 +61,140 @@ def test_parse_docx_truncates_table_preview_to_20_rows(tmp_path: Path) -> None:
     assert table_block.type == "table"
     assert len(table_block.rows) == 20
     assert any("truncated to 20 rows" in warning for warning in ir.warnings)
+
+
+def test_parse_docx_warns_when_nested_table_content_is_skipped(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "nested-table.docx"
+    doc = Document()
+    table = doc.add_table(rows=2, cols=1)
+    table.cell(0, 0).text = "外层表头"
+    outer_cell = table.cell(1, 0)
+    outer_cell.text = "外层说明"
+    nested = outer_cell.add_table(rows=2, cols=1)
+    nested.cell(0, 0).text = "内层表头"
+    nested.cell(1, 0).text = "内层敏感内容"
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert any("nested tables unsupported: 1" in warning for warning in ir.warnings)
+
+
+def test_parse_docx_detects_heading_from_outline_level_without_heading_style(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "outline-level.docx"
+    doc = Document()
+    paragraph = doc.add_paragraph("XML 大纲标题")
+    ppr = paragraph._p.get_or_add_pPr()
+    outline = OxmlElement("w:outlineLvl")
+    outline.set(qn("w:val"), "1")
+    ppr.append(outline)
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert ir.content.blocks[0].type == "heading"
+    assert ir.content.blocks[0].level == 2
+    assert ir.content.outline[0].text == "XML 大纲标题"
+
+
+def test_parse_docx_records_image_presence_and_dimensions(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    image = tmp_path / "pixel.png"
+    image.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="))
+    path = tmp_path / "image.docx"
+    doc = Document()
+    doc.add_paragraph("带图片")
+    doc.add_picture(str(image))
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert ir.stats.images == 1
+    assert any("docx image present" in warning for warning in ir.warnings)
+
+
+def test_parse_docx_records_unsupported_word_features_from_xml(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "unsupported.docx"
+    doc = Document()
+    doc.add_paragraph("正文")
+    doc.save(path)
+    with zipfile.ZipFile(path, "a") as package:
+        package.writestr(
+            "word/unsupported.xml",
+            "<w:commentRangeStart/><w:ins/><w:txbxContent/><dgm:relIds/>",
+        )
+
+    ir = parse_docx(path)
+
+    assert any("unsupported comments" in warning for warning in ir.warnings)
+    assert any("unsupported revisions" in warning for warning in ir.warnings)
+    assert any("unsupported text boxes" in warning for warning in ir.warnings)
+    assert any("unsupported SmartArt" in warning for warning in ir.warnings)
+    assert all("at part word/unsupported.xml" in warning for warning in ir.warnings if warning.startswith("unsupported"))
+
+
+def test_parse_docx_truncates_long_paragraph_and_cell_with_locations(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "long-text.docx"
+    doc = Document()
+    doc.add_paragraph("段" * 2100)
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "字段"
+    table.cell(0, 1).text = "说明"
+    table.cell(1, 0).text = "正常"
+    table.cell(1, 1).text = "格" * 2101
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert len(ir.content.blocks[0].text) == 2000
+    assert len(ir.content.blocks[1].rows[0][1]) == 2000
+    assert any("docx body paragraph 1" in warning for warning in ir.warnings)
+    assert any("docx table 1 row 1 column 2" in warning for warning in ir.warnings)
+    assert not any("row 1 column 1" in warning for warning in ir.warnings)
+
+
+def test_parse_docx_records_embedded_ole_part_and_size(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "embedded.docx"
+    doc = Document()
+    doc.add_paragraph("带嵌入对象")
+    doc.save(path)
+    with zipfile.ZipFile(path, "a") as package:
+        package.writestr("word/embeddings/oleObject1.bin", b"fake-ole")
+
+    ir = parse_docx(path)
+
+    assert any(
+        "embedded/OLE objects" in warning
+        and "word/embeddings/oleObject1.bin" in warning
+        and "total_bytes=8" in warning
+        for warning in ir.warnings
+    )
+
+
+def test_parse_docx_truncates_wide_table_to_contract_limit(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "wide.docx"
+    doc = Document()
+    table = doc.add_table(rows=2, cols=13)
+    for column in range(13):
+        table.cell(0, column).text = f"列{column + 1}"
+        table.cell(1, column).text = f"值{column + 1}"
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert len(ir.content.blocks[0].header) == 12
+    assert len(ir.content.blocks[0].rows[0]) == 12
+    assert any("table 1 preview truncated to 12 columns" in warning for warning in ir.warnings)
