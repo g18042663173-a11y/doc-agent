@@ -358,7 +358,7 @@ def _architecture_items(slide, slide_index: int, theme: dict) -> list[PptxLintIt
                 "HW-W03",
                 "Warning",
                 slide_index,
-                f"架构图包含 {edge_count} 条边,超过密度建议值 {edge_limit}。",
+                f"架构图过密·边数 {edge_count} 超过阈值 {edge_limit},建议人工调整或拆分。",
                 "架构图过密建议人工调整或拆分。",
             )
         )
@@ -450,10 +450,25 @@ def _bullet_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
             continue
         if _paragraph_has_native_bullet(paragraph) or text.startswith(("•", "-", "–")):
             bullet_lines.append(text.lstrip("•-– "))
-    too_many = len(bullet_lines) > theme["constraints"]["max_bullets_per_slide"]
-    too_long = any(len(line) > theme["constraints"]["max_bullet_chars"] for line in bullet_lines)
+    count_limit = theme["constraints"]["max_bullets_per_slide"]
+    char_limit = theme["constraints"]["max_bullet_chars"]
+    longest = max((len(line) for line in bullet_lines), default=0)
+    too_many = len(bullet_lines) > count_limit
+    too_long = longest > char_limit
     if too_many or too_long:
-        return [_item("HW-W03", "Warning", slide_index, "单页要点过多或单条过长。", "控制在 7 条以内且单条不超过 60 字。")]
+        reasons: list[str] = []
+        if too_many:
+            reasons.append(f"本页共 {len(bullet_lines)} 条要点,超过上限 {count_limit} 条")
+        if too_long:
+            reasons.append(f"单条最长 {longest} 字,超过上限 {char_limit} 字")
+        if too_many and too_long:
+            action = "建议精简要点并拆分"
+        elif too_many:
+            action = "建议删减或拆分"
+        else:
+            action = "建议精简表述"
+        message = f"要点超限·{'；'.join(reasons)},{action}。"
+        return [_item("HW-W03", "Warning", slide_index, message, f"控制在 {count_limit} 条以内且单条不超过 {char_limit} 字。")]
     return []
 
 
@@ -493,7 +508,7 @@ def _overflow_warning(slide_index: int, theme: dict) -> PptxLintItem:
         "HW-W03",
         "Warning",
         slide_index,
-        f"自动缩字到主题可读字号下限 {minimum:g}pt 后仍无法容纳全部内容。",
+        f"内容超版面·自动缩字到主题可读字号下限 {minimum:g}pt 后仍无法容纳全部内容,建议人工拆分。",
         "该页内容过多建议人工拆分；系统不会截断内容或自动拆页。",
     )
 

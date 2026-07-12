@@ -263,9 +263,32 @@ def test_check_pptx_reports_too_many_or_too_long_bullets(tmp_path: Path) -> None
         _add_textbox(slide, f"• 要点 {index}", 0.6, (120 + index * 34) / 72, _grid_width(4), 24 / 72)
     prs.save(path)
 
-    codes = _codes(check_pptx(path, classification="HUAWEI CONFIDENTIAL"))
+    report = check_pptx(path, classification="HUAWEI CONFIDENTIAL")
+    warnings = [item for item in report.items if item.code == "HW-W03"]
 
-    assert "HW-W03" in codes
+    assert any(
+        item.message == "要点超限·本页共 8 条要点,超过上限 7 条,建议删减或拆分。"
+        for item in warnings
+    )
+
+
+def test_check_pptx_hw_w03_identifies_single_bullet_length_reason(tmp_path: Path) -> None:
+    from app.lint.pptx_lint import check_pptx
+
+    path = tmp_path / "bullet-too-long.pptx"
+    prs = _blank_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_required_footer(slide)
+    _add_textbox(slide, f"• {'长' * 61}", 0.6, 120 / 72, _grid_width(8), 48 / 72)
+    prs.save(path)
+
+    report = check_pptx(path, classification="HUAWEI CONFIDENTIAL")
+    warnings = [item for item in report.items if item.code == "HW-W03"]
+
+    assert any(
+        item.message == "要点超限·单条最长 61 字,超过上限 60 字,建议精简表述。"
+        for item in warnings
+    )
 
 
 def test_check_pptx_accepts_non_overlapping_boxes_with_sufficient_gap(tmp_path: Path) -> None:
@@ -934,9 +957,11 @@ def test_check_pptx_architecture_density_warning_boundary(
     prs.save(path)
 
     report = check_pptx(path, classification="HUAWEI CONFIDENTIAL")
-    density_warnings = [item for item in report.items if item.code == "HW-W03" and "架构图包含" in item.message]
+    density_warnings = [item for item in report.items if item.code == "HW-W03" and item.message.startswith("架构图过密·")]
 
     assert bool(density_warnings) is warns
+    if warns:
+        assert density_warnings[0].message == "架构图过密·边数 13 超过阈值 12,建议人工调整或拆分。"
 
 
 @pytest.mark.parametrize(("text", "width", "height", "warns"), [("短文本", 3.0, 0.8, False), ("超长内容" * 200, 1.0, 0.3, True)])
@@ -958,10 +983,13 @@ def test_check_pptx_warns_when_autofit_cannot_preserve_minimum_font_size(
     prs.save(path)
 
     report = check_pptx(path, classification="HUAWEI CONFIDENTIAL")
-    overflow_warnings = [item for item in report.items if item.code == "HW-W03" and "可读字号下限" in item.message]
+    overflow_warnings = [item for item in report.items if item.code == "HW-W03" and item.message.startswith("内容超版面·")]
 
     assert bool(overflow_warnings) is warns
     if warns:
+        assert overflow_warnings[0].message == (
+            "内容超版面·自动缩字到主题可读字号下限 8pt 后仍无法容纳全部内容,建议人工拆分。"
+        )
         assert "人工拆分" in overflow_warnings[0].suggestion
         assert "不会截断" in overflow_warnings[0].suggestion
 
