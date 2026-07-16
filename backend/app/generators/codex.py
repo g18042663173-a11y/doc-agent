@@ -9,6 +9,7 @@ from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from app.generation.layout_policy import LAYOUT_SELECTION_RULES
 
 GeneratorTarget = Literal["word_ir", "deck_ir", "analysis"]
 API_BASE_URL = "https://api.openai.com/v1"
@@ -246,7 +247,8 @@ def _system_prompt(target: GeneratorTarget) -> str:
         )
     return common + (
         f"目标为 {target_name}。技术评审稿应让观点写进标题，每页最多 3 个内容点，"
-        "对比关系优先用 two_column/table，数值趋势才使用 chart，节点关系才使用 architecture_diagram，"
+        "对比关系优先用 two_column/table，数值趋势才使用 chart。"
+        f"{LAYOUT_SELECTION_RULES}"
         "结论页使用 conclusion 收束结论、风险或下一步。关键内容应通过结论式标题和合适布局突出；"
         "当前 IR 没有通用富文本红色/加粗字段，除 table.cell.emphasis 外不得虚构样式字段。"
     )

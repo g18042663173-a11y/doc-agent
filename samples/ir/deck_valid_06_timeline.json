@@ -1,0 +1,21 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.6",
+  "meta": {
+    "title": "方案演进路线",
+    "classification": "内部公开",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "timeline",
+      "title": "三阶段推进使交付风险逐步收敛",
+      "orientation": "horizontal",
+      "milestones": [
+        {"label": "阶段一", "title": "契约冻结", "description": "Schema 与样例", "status": "completed"},
+        {"label": "阶段二", "title": "能力验证", "description": "渲染与 lint", "status": "current"},
+        {"label": "阶段三", "title": "内网终审", "description": "字体与 CI", "status": "planned"}
+      ]
+    }
+  ]
+}

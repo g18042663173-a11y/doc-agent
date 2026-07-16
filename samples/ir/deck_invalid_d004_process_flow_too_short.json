@@ -1,0 +1,12 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.6",
+  "meta": {"title": "非法流程"},
+  "slides": [
+    {
+      "layout": "process_flow",
+      "title": "流程步骤不足",
+      "steps": [{"id": "only", "title": "仅一步"}]
+    }
+  ]
+}

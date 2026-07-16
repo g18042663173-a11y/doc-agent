@@ -1,0 +1,22 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.6",
+  "meta": {
+    "title": "方案验证流程",
+    "classification": "内部公开",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "process_flow",
+      "title": "四步闭环保证方案结论可复核",
+      "orientation": "horizontal",
+      "steps": [
+        {"id": "input", "title": "材料输入", "description": "收集原始报告"},
+        {"id": "parse", "title": "结构解析", "description": "形成 DocumentIR"},
+        {"id": "generate", "title": "生成方案", "description": "形成 DeckIR"},
+        {"id": "review", "title": "合规复核", "description": "输出报告与产物"}
+      ]
+    }
+  ]
+}

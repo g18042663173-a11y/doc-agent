@@ -1,16 +1,16 @@
 {
   "ir_type": "deck",
-  "ir_version": "1.4",
+  "ir_version": "1.6",
   "meta": {
-    "title": "十一版式样例",
+    "title": "十三版式样例",
     "classification": "HUAWEI CONFIDENTIAL",
     "theme": "hw_v1"
   },
   "slides": [
     {
       "layout": "cover",
-      "title": "十一版式样例",
-      "subtitle": "覆盖 DeckIR v1.4"
+      "title": "十三版式样例",
+      "subtitle": "覆盖 DeckIR v1.6"
     },
     {
       "layout": "agenda",
@@ -195,6 +195,50 @@
       ]
     },
     {
+      "layout": "process_flow",
+      "title": "确定性处理流程",
+      "orientation": "horizontal",
+      "steps": [
+        {
+          "id": "parse",
+          "title": "解析",
+          "description": "输入转 DocumentIR"
+        },
+        {
+          "id": "generate",
+          "title": "生成",
+          "description": "规则生成 DeckIR"
+        },
+        {
+          "id": "verify",
+          "title": "验收",
+          "description": "渲染并执行 lint"
+        }
+      ]
+    },
+    {
+      "layout": "timeline",
+      "title": "交付路线",
+      "orientation": "horizontal",
+      "milestones": [
+        {
+          "label": "阶段一",
+          "title": "契约冻结",
+          "status": "completed"
+        },
+        {
+          "label": "阶段二",
+          "title": "能力验证",
+          "status": "current"
+        },
+        {
+          "label": "阶段三",
+          "title": "内网终审",
+          "status": "planned"
+        }
+      ]
+    },
+    {
       "layout": "image",
       "title": "图片占位",
       "placeholder": "内网替换真图",
@@ -204,7 +248,7 @@
       "layout": "conclusion",
       "title": "结论",
       "bullets": [
-        "十一版式均可渲染"
+        "十三版式均可渲染"
       ],
       "cta": "进入人工视觉终审"
     }

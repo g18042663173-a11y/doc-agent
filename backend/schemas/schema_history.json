@@ -2,7 +2,9 @@
   "schema_format": 1,
   "schemas": {
     "deck_ir": {
-      "1.4": "e65f63e44f948f33a6a7309dddf87e34351fe373addb380acd586320d78cd104"
+      "1.4": "e65f63e44f948f33a6a7309dddf87e34351fe373addb380acd586320d78cd104",
+      "1.5": "7f447ecc8157970776f0f4c4b351c63c24da53a1415f8b3dd7f9edc9bcea8f4e",
+      "1.6": "6028e875d24450d84d6d5654459c7719e8e12f64faa3579658a88d32533ad6ac"
     },
     "document_ir": {
       "1.0": "915a9807d3da05931fc00bb43b6f02c06b544edf154f11da5ed285dc3ef99604",

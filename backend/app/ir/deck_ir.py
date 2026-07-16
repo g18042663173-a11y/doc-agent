@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Annotated, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -247,6 +247,13 @@ class CardsSlide(ContractModel):
     layout: Literal["cards"]
     title: str = Field(min_length=1)
     cards: list[Card] = Field(min_length=2, max_length=4)
+    variant: Literal["default", "kpi"] = Field(
+        default="default",
+        description=(
+            "卡片视觉语义。default 为普通并列卡片；kpi 时 card.title 是指标名、"
+            "card.desc 是核心数值、card.tag 是可选趋势或统计口径。"
+        ),
+    )
 
     _title_not_blank = field_validator("title")(non_empty)
 
@@ -301,6 +308,10 @@ class ChartSideTable(ContractModel):
 
 class ChartSpec(ContractModel):
     kind: Literal["bar", "line", "pie"]
+    orientation: Literal["vertical", "horizontal"] = Field(
+        default="vertical",
+        description="bar 的数据方向；horizontal 生成横向数据条，line/pie 只能使用默认 vertical。",
+    )
     categories: list[str] = Field(min_length=1)
     series: list[ChartSeries] = Field(min_length=1)
     unit: str | None = Field(default=None, description="仅用于坐标轴和数据/阈值标签的显示后缀，不执行单位换算。")
@@ -332,6 +343,8 @@ class ChartSpec(ContractModel):
             raise ValueError("pie chart requires exactly one series")
         if self.kind == "pie" and self.thresholds:
             raise ValueError("pie chart does not support thresholds")
+        if self.orientation == "horizontal" and self.kind != "bar":
+            raise ValueError("horizontal chart orientation is only supported for bar charts")
         self._validate_side_conclusion()
         return self
 
@@ -489,6 +502,87 @@ class ArchitectureDiagramSlide(ContractModel):
         return self
 
 
+class ProcessStep(ContractModel):
+    id: str = Field(min_length=1, description="流程步骤的唯一稳定标识，供渲染对象命名和顺序复核使用。")
+    title: str = Field(min_length=1, description="步骤名称，应直接来自输入材料中的顺序步骤。")
+    description: str | None = Field(default=None, description="可选的步骤说明；不得补写输入中不存在的事实。")
+
+    _id_not_blank = field_validator("id")(non_empty)
+    _title_not_blank = field_validator("title")(non_empty)
+
+    @field_validator("description")
+    @classmethod
+    def description_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+
+class ProcessFlowSlide(ContractModel):
+    layout: Literal["process_flow"] = Field(description="固定为 process_flow，仅表达无分支的线性步骤。")
+    title: str = Field(min_length=1, description="结论式页面标题，说明该流程达成的结果。")
+    steps: list[ProcessStep] = Field(
+        min_length=2,
+        max_length=7,
+        description="按执行顺序排列的 2-7 个步骤；存在分支时应改用 architecture_diagram。",
+    )
+    orientation: Literal["horizontal", "vertical"] = Field(
+        default="horizontal",
+        description="步骤排列方向；密集纵向流程可能触发 HW-W03 人工拆分提示。",
+    )
+
+    _title_not_blank = field_validator("title")(non_empty)
+
+    @model_validator(mode="after")
+    def validate_step_ids(self) -> "ProcessFlowSlide":
+        step_ids = [step.id for step in self.steps]
+        if len(set(step_ids)) != len(step_ids):
+            raise ValueError("process_flow step ids must be unique")
+        return self
+
+
+class TimelineMilestone(ContractModel):
+    label: str = Field(min_length=1, description="时间或里程碑标签，例如 2026 Q3、7月或 M1。")
+    title: str = Field(min_length=1, description="该时间节点对应的事件或阶段名称。")
+    description: str | None = Field(default=None, description="可选的里程碑说明；不得编造日期、状态或结果。")
+    status: Literal["completed", "current", "planned"] = Field(
+        default="planned",
+        description="里程碑状态；数组内按 completed、current、planned 的时间顺序排列。",
+    )
+
+    _label_not_blank = field_validator("label")(non_empty)
+    _title_not_blank = field_validator("title")(non_empty)
+
+    @field_validator("description")
+    @classmethod
+    def description_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+
+class TimelineSlide(ContractModel):
+    layout: Literal["timeline"] = Field(description="固定为 timeline，仅表达带明确时间标签的阶段演进。")
+    title: str = Field(min_length=1, description="结论式页面标题，说明阶段演进带来的判断。")
+    milestones: list[TimelineMilestone] = Field(
+        min_length=2,
+        max_length=8,
+        description="按时间顺序排列的 2-8 个里程碑；不用于表达精确 Gantt 的持续时间或依赖关系。",
+    )
+    orientation: Literal["horizontal", "vertical"] = Field(
+        default="horizontal",
+        description="里程碑排列方向；密集纵向时间线可能触发 HW-W03 人工拆分提示。",
+    )
+
+    _title_not_blank = field_validator("title")(non_empty)
+
+    @model_validator(mode="after")
+    def validate_status_sequence(self) -> "TimelineSlide":
+        statuses = [milestone.status for milestone in self.milestones]
+        if statuses.count("current") > 1:
+            raise ValueError("timeline allows at most one current milestone")
+        rank = {"completed": 0, "current": 1, "planned": 2}
+        if any(rank[current] < rank[previous] for previous, current in zip(statuses, statuses[1:])):
+            raise ValueError("timeline statuses must follow completed, current, planned order")
+        return self
+
+
 def _chart_threshold_target_series(series: list[ChartSeries]) -> ChartSeries | None:
     emphasized = [item for item in series if item.emphasis]
     if len(emphasized) == 1:
@@ -600,6 +694,8 @@ DeckSlide = Annotated[
         CardsSlide,
         ChartSlide,
         ArchitectureDiagramSlide,
+        ProcessFlowSlide,
+        TimelineSlide,
         ImageSlide,
         ConclusionSlide,
     ],
@@ -607,8 +703,23 @@ DeckSlide = Annotated[
 ]
 
 
+def migrate_deck_payload(value: Any, *, target_version: str = "1.6") -> tuple[Any, str | None]:
+    if not isinstance(value, dict) or value.get("ir_version") not in {"1.4", "1.5"} or target_version != "1.6":
+        return value, None
+    source_version = value["ir_version"]
+    migrated = dict(value)
+    migrated["ir_version"] = "1.6"
+    return migrated, source_version
+
+
 class DeckIR(ContractModel):
     ir_type: Literal["deck"]
-    ir_version: Literal["1.4"]
+    ir_version: Literal["1.6"]
     meta: DeckMeta
     slides: list[DeckSlide] = Field(min_length=1, max_length=30)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_v14_payload(cls, value: Any) -> Any:
+        migrated, _source_version = migrate_deck_payload(value)
+        return migrated

@@ -5,8 +5,10 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
 from pptx import Presentation
 from pptx.dml.color import RGBColor
+from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE
 from pptx.util import Inches, Pt
 
@@ -23,7 +25,7 @@ def test_render_deck_ir_p0_layouts_are_editable(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "Q3 业务汇报", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {"layout": "cover", "title": "Q3 业务汇报", "subtitle": "命令行文档工具链", "presenter": "张三"},
@@ -63,7 +65,7 @@ def test_render_deck_ir_p0_layouts_lint_with_zero_errors(tmp_path: Path) -> None
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "P0 五版式", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {"layout": "cover", "title": "P0 五版式"},
@@ -88,7 +90,7 @@ def test_render_deck_ir_decision_matrix_table_matches_source_spec(tmp_path: Path
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "方案对比", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -168,7 +170,7 @@ def test_render_deck_ir_wide_table_widths_fill_content_area(tmp_path: Path) -> N
         deck = DeckIR.model_validate(
             {
                 "ir_type": "deck",
-                "ir_version": "1.4",
+                "ir_version": "1.6",
                 "meta": {"title": "宽表回归", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
                 "slides": [{"layout": "table", "title": "研究目标必须由可量化指标约束", "table": table_data}],
             }
@@ -241,7 +243,7 @@ def test_render_deck_ir_legal_extremes_stay_in_page_and_shrink_text(tmp_path: Pa
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "极端版式", "classification": "公开", "theme": "hw_v1"},
             "slides": slides,
         }
@@ -293,7 +295,7 @@ def test_render_architecture_dense_edge_labels_do_not_overlap(tmp_path: Path) ->
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "密集架构图", "classification": "公开", "theme": "hw_v1"},
             "slides": [
                 {
@@ -339,7 +341,7 @@ def test_render_deck_ir_uses_16_by_9_page_size(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "尺寸"},
             "slides": [{"layout": "cover", "title": "尺寸"}],
         }
@@ -350,6 +352,128 @@ def test_render_deck_ir_uses_16_by_9_page_size(tmp_path: Path) -> None:
 
     assert round(prs.slide_width / 914400, 2) == 13.34
     assert round(prs.slide_height / 914400, 1) == 7.5
+
+
+def test_render_process_flow_as_equal_editable_shapes_in_both_orientations(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    steps = [
+        {"id": "input", "title": "材料输入", "description": "收集原始报告"},
+        {"id": "parse", "title": "结构解析", "description": "形成 DocumentIR"},
+        {"id": "review", "title": "合规复核", "description": "输出报告"},
+    ]
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "流程", "classification": "公开"},
+            "slides": [
+                {"layout": "process_flow", "title": "横向流程", "orientation": "horizontal", "steps": steps},
+                {"layout": "process_flow", "title": "纵向流程", "orientation": "vertical", "steps": steps},
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "process-flow.pptx")
+    prs = Presentation(str(output))
+    for slide in prs.slides:
+        step_shapes = [shape for shape in slide.shapes if shape.name.startswith("HW_PROCESS_STEP:")]
+        connectors = [shape for shape in slide.shapes if shape.name.startswith("HW_PROCESS_CONNECTOR:")]
+        assert len(step_shapes) == 3
+        assert len(connectors) == 2
+        assert len({(shape.width, shape.height) for shape in step_shapes}) == 1
+        assert all(getattr(shape, "has_text_frame", False) for shape in step_shapes)
+        assert all(shape.text_frame.auto_size == MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE for shape in step_shapes)
+        assert all(shape.top + shape.height < Inches(6.9) for shape in step_shapes)
+        assert not any("PICTURE" in str(shape.shape_type) for shape in slide.shapes)
+
+
+def test_render_timeline_as_equal_editable_milestones_in_both_orientations(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    milestones = [
+        {"label": "阶段一", "title": "基线冻结", "description": "Schema 与样例", "status": "completed"},
+        {"label": "阶段二", "title": "能力验证", "description": "渲染与 lint", "status": "current"},
+        {"label": "阶段三", "title": "内网终审", "description": "真实字体与 CI", "status": "planned"},
+    ]
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "时间线", "classification": "公开"},
+            "slides": [
+                {"layout": "timeline", "title": "横向路线", "orientation": "horizontal", "milestones": milestones},
+                {"layout": "timeline", "title": "纵向路线", "orientation": "vertical", "milestones": milestones},
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "timeline.pptx")
+    prs = Presentation(str(output))
+    for slide in prs.slides:
+        cards = [shape for shape in slide.shapes if shape.name.startswith("HW_TIMELINE_MILESTONE:")]
+        markers = [shape for shape in slide.shapes if shape.name.startswith("HW_TIMELINE_MARKER:")]
+        axes = [shape for shape in slide.shapes if shape.name == "HW_TIMELINE_AXIS"]
+        assert len(cards) == 3
+        assert len(markers) == 3
+        assert len(axes) == 1
+        assert len({(shape.width, shape.height) for shape in cards}) == 1
+        assert all(card.text_frame.auto_size == MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE for card in cards)
+        assert all(card.top + card.height < Inches(6.9) for card in cards)
+        assert not any("PICTURE" in str(shape.shape_type) for shape in slide.shapes)
+
+
+def test_render_horizontal_data_bar_kpi_and_image_slot_as_editable_objects(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    payload = json.loads((ROOT / "samples/ir/deck_valid_09_data_bar_kpi.json").read_text(encoding="utf-8"))
+    deck = DeckIR.model_validate(payload)
+    output = render_deck_ir(deck, tmp_path / "data-bar-kpi.pptx")
+    prs = Presentation(str(output))
+
+    kpi_shapes = [shape for shape in prs.slides[0].shapes if shape.name.startswith("HW_RENDERED_TEXT:KPI_CARD:")]
+    assert len(kpi_shapes) == 3
+    assert len({(shape.width, shape.height) for shape in kpi_shapes}) == 1
+    assert [shape.text_frame.paragraphs[0].text for shape in kpi_shapes] == ["96.8%", "42ms", "98.2%"]
+    assert all(shape.text_frame.paragraphs[0].runs[0].font.name == "Arial" for shape in kpi_shapes)
+
+    chart_shape = next(shape for shape in prs.slides[1].shapes if getattr(shape, "has_chart", False))
+    threshold_line = next(shape for shape in prs.slides[1].shapes if shape.name.startswith("HW_THRESHOLD_LINE"))
+    threshold_label = next(shape for shape in prs.slides[1].shapes if shape.name.startswith("HW_THRESHOLD_LABEL"))
+    assert chart_shape.chart.chart_type == XL_CHART_TYPE.BAR_CLUSTERED
+    assert chart_shape.chart.category_axis.reverse_order is True
+    assert chart_shape.chart.value_axis.minimum_scale == 0
+    assert chart_shape.chart.value_axis.maximum_scale == pytest.approx(100.1)
+    assert threshold_line.height > threshold_line.width
+    assert "通过率目标阈值 75%" in threshold_label.text
+    assert threshold_label.text_frame.margin_left == 0
+    assert threshold_label.text_frame.margin_right == 0
+    assert threshold_label.text_frame.margin_top == 0
+    assert threshold_label.text_frame.margin_bottom == 0
+    assert threshold_label.top + threshold_label.height < chart_shape.top
+
+    theme = json.loads(
+        (ROOT / "backend" / "app" / "rendering" / "themes" / "hw_theme.json").read_text(encoding="utf-8")
+    )
+    plot = theme["layouts"]["chart"]["plot"]
+    threshold = theme["layouts"]["chart"]["threshold"]
+    plot_left = plot["left_in"] + threshold["plot_left_offset_in"]
+    plot_width = plot["width_in"] - threshold["plot_left_offset_in"] - threshold["plot_right_offset_in"]
+    expected_threshold_x = plot_left + plot_width * 75 / 100.1
+    assert threshold_line.left / 914400 == pytest.approx(expected_threshold_x, abs=0.02)
+
+    image_slot = next(shape for shape in prs.slides[2].shapes if shape.name == "HW_IMAGE_PLACEHOLDER")
+    assert abs((image_slot.width / image_slot.height) - (16 / 9)) < 0.01
+    assert "等比放入" in image_slot.text and "禁止随意裁切" in image_slot.text
+    assert not any("PICTURE" in str(shape.shape_type) for shape in prs.slides[2].shapes)
+
+    report = check_pptx(output, classification=deck.meta.classification)
+    assert report.summary["errors"] == 0
+    assert not {"HW-W01", "HW-W02", "HW-W06", "HW-W07", "HW-W09"} & {item.code for item in report.items}
 
 
 def test_render_deck_ir_uses_theme_layout_coordinates(tmp_path: Path, monkeypatch) -> None:
@@ -372,7 +496,7 @@ def test_render_deck_ir_uses_theme_layout_coordinates(tmp_path: Path, monkeypatc
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "主题坐标", "theme": "custom"},
             "slides": [{"layout": "title_bullets", "title": "可校准标题", "bullets": [{"text": "坐标来自 theme", "level": 1}]}],
         }
@@ -398,7 +522,7 @@ def test_render_deck_ir_applies_source_file_theme_font_footer_and_card_tokens(tm
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "主题映射", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {"layout": "section", "index": 1, "title": "阶段一", "subtitle": "技术评审"},
@@ -479,7 +603,7 @@ def test_render_deck_ir_p1_layouts_and_downgrades(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "P1 版式"},
             "slides": [
                 {
@@ -528,7 +652,7 @@ def test_render_deck_ir_performance_chart_matches_source_spec(tmp_path: Path) ->
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "性能图表", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -572,8 +696,10 @@ def test_render_deck_ir_performance_chart_matches_source_spec(tmp_path: Path) ->
     assert side_table.cell(0, 0).text == "指标"
     assert side_table.cell(1, 1).text == "2月起达标"
     threshold_line = next(shape for shape in slide.shapes if shape.name.startswith("HW_THRESHOLD_LINE"))
+    threshold_label = next(shape for shape in slide.shapes if shape.name.startswith("HW_THRESHOLD_LABEL"))
     shape_names = [shape.name for shape in slide.shapes]
     assert shape_names.index(threshold_line.name) < shape_names.index(chart_shape.name)
+    assert threshold_label.top + threshold_label.height < chart_shape.top
     assert str(threshold_line.line.color.rgb) == "C7000B"
     assert threshold_line.line.width == Pt(0.75)
 
@@ -585,7 +711,7 @@ def test_render_deck_ir_threshold_label_expands_short_label_with_series_and_unit
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "阈值标签", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -617,7 +743,7 @@ def test_render_deck_ir_threshold_line_stays_inside_plot_area(tmp_path: Path) ->
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "阈值线位置", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -651,7 +777,7 @@ def test_render_architecture_diagram_as_editable_shapes(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "架构骨架", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {

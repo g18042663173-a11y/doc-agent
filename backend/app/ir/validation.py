@@ -37,10 +37,15 @@ from app.ir.deck_ir import (
     DiagramPosition,
     DiagramSize,
     ImageSlide,
+    ProcessFlowSlide,
+    ProcessStep,
     SectionSlide,
     TableSlide,
     TitleBulletsSlide,
+    TimelineMilestone,
+    TimelineSlide,
     TwoColumnSlide,
+    migrate_deck_payload,
 )
 from app.ir.document_ir import DocumentIR
 from app.ir.document_ir import DocumentContent, DocumentSource, DocumentStats
@@ -71,6 +76,8 @@ DECK_SLIDE_MODELS: dict[str, Type[BaseModel]] = {
     "cards": CardsSlide,
     "chart": ChartSlide,
     "architecture_diagram": ArchitectureDiagramSlide,
+    "process_flow": ProcessFlowSlide,
+    "timeline": TimelineSlide,
     "image": ImageSlide,
     "conclusion": ConclusionSlide,
 }
@@ -268,6 +275,30 @@ def _collect_deck_unknowns(data: Mapping[str, Any]) -> list[ValidationItem]:
                                         f"{manual_prefix}.{field_name}.{node_id}",
                                     )
                                 )
+            if layout == "process_flow":
+                steps = slide.get("steps")
+                if isinstance(steps, list):
+                    for step_index, step in enumerate(steps):
+                        if isinstance(step, Mapping):
+                            warnings.extend(
+                                _unknown_fields(
+                                    step,
+                                    _model_input_fields(ProcessStep),
+                                    f"{slide_prefix}.steps[{step_index}]",
+                                )
+                            )
+            if layout == "timeline":
+                milestones = slide.get("milestones")
+                if isinstance(milestones, list):
+                    for milestone_index, milestone in enumerate(milestones):
+                        if isinstance(milestone, Mapping):
+                            warnings.extend(
+                                _unknown_fields(
+                                    milestone,
+                                    _model_input_fields(TimelineMilestone),
+                                    f"{slide_prefix}.milestones[{milestone_index}]",
+                                )
+                            )
     return warnings
 
 
@@ -567,7 +598,17 @@ def validate_deck_ir(raw: str | Mapping[str, Any]) -> ValidationResult[DeckIR]:
     data, parse_errors = _parse_raw(raw, "D001")
     if data is None:
         return ValidationResult(value=None, errors=parse_errors)
+    data, migrated_from = migrate_deck_payload(data)
     warnings = _collect_deck_unknowns(data)
+    if migrated_from is not None:
+        warnings.append(
+            _warning(
+                "D004",
+                "ir_version",
+                f"DeckIR {migrated_from} 已在内存中兼容迁移到 1.6，并按 1.6 契约重新校验。",
+                f"重新生成或序列化为 1.6 可消除该兼容提示；原始 {migrated_from} 文件不会被覆写。",
+            )
+        )
     data, normalization_warnings = _normalize_deck_data(data)
     warnings.extend(normalization_warnings)
     try:

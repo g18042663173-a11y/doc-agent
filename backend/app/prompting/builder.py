@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
+from app.generation.layout_policy import LAYOUT_SELECTION_RULES
 from app.ir.deck_ir import DeckIR
 from app.ir.document_ir import DocumentIR
 from app.ir.schema_export import normalized_schema
@@ -17,7 +18,7 @@ DEFAULT_MAX_OUTPUT_CHARS = 6000
 SAMPLE_DIR = Path(__file__).resolve().parents[3] / "samples" / "ir"
 FEW_SHOT_FILES: dict[Kind, str] = {
     "word": "word_valid_01_plain.json",
-    "deck": "deck_valid_01_minimal.json",
+    "deck": "deck_valid_08_layout_selection.json",
 }
 
 TARGETS = {
@@ -27,7 +28,7 @@ TARGETS = {
         "model": WordIR,
     },
     "deck": {
-        "label": "DeckIR v1.4",
+        "label": "DeckIR v1.6",
         "description": "华为风格 PPTX 演示文稿",
         "model": DeckIR,
     },
@@ -79,11 +80,13 @@ def _contract_guide(kind: Kind) -> str:
         )
     return (
         "顶层只能有 ir_type、ir_version、meta、slides。"
-        "ir_type 固定为 deck，ir_version 固定为 1.4，meta.title 必填且非空，slides 至少 1 页。\n"
+        "ir_type 固定为 deck，ir_version 固定为 1.6，meta.title 必填且非空，slides 至少 1 页。\n"
         "slides[].layout 只能是 cover、agenda、section、title_bullets、two_column、table、cards、chart、"
-        "architecture_diagram、image、conclusion；每种 layout 只填写 Schema 为它定义的字段。\n"
+        "architecture_diagram、process_flow、timeline、image、conclusion；每种 layout 只填写 Schema 为它定义的字段。\n"
         "agenda.items 为 2-8 条；title_bullets.bullets 至少 1 条；table.rows 每行列数等于 header；"
-        "chart.series[].values 数量等于 categories；architecture_diagram 的 edge.from/to 必须引用已有 node.id。"
+        "chart.series[].values 数量等于 categories；architecture_diagram 的 edge.from/to 必须引用已有 node.id；"
+        "process_flow.steps 为 2-7 个且 id 唯一；timeline.milestones 为 2-8 个；"
+        "chart.orientation=horizontal 只允许 kind=bar；cards.variant=kpi 时 title/desc/tag 分别表示指标名/数值/口径。"
     )
 
 
@@ -97,8 +100,9 @@ def _content_rules(kind: Kind, *, depth: Depth | None = None, pages: int | None 
     legacy = (
         "- 观点在标题：除 cover、agenda、section 外，title 应写结论或判断，不只写“背景/分析/数据”等栏目名。\n"
         "- 每页只表达一个观点，每页最多 3 个内容点；材料过多时拆页，不缩成长段。\n"
-        "- 版式选择：顺序用 agenda/section；观点用 title_bullets；对比用 two_column/table；"
-        "并列要素用 cards；数值趋势用 chart；节点关系用 architecture_diagram；图片说明用 image；收束用 conclusion。\n"
+        "- 版式选择：章节导航用 agenda/section；观点用 title_bullets；对比用 two_column/table；"
+        "并列要素用 cards；数值趋势用 chart；图片说明用 image；收束用 conclusion。"
+        f"{LAYOUT_SELECTION_RULES}\n"
         "- chart 的结论必须与 series/thresholds 一致；table 不得缺行或出现合并区冲突；"
         "architecture_diagram 不得有缺失节点或自环 edge。"
     )

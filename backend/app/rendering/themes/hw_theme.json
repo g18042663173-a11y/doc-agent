@@ -233,7 +233,11 @@
       "paragraph_gap_pt": 8,
       "title_font_size_pt": 11,
       "desc_font_size_pt": 10,
-      "tag_font_size_pt": 10
+      "tag_font_size_pt": 10,
+      "kpi_value_font_size_pt": 14,
+      "kpi_title_font_size_pt": 10,
+      "kpi_tag_font_size_pt": 9,
+      "kpi_paragraph_gap_pt": 8
     },
     "conclusion": {
       "left_in": 0.57,
@@ -267,6 +271,7 @@
       "threshold": {
         "line_width_pt": 0.75,
         "label_font_size_pt": 8,
+        "label_margin_in": 0,
         "label_gap_in": 0.08,
         "label_left_in": 8.05,
         "label_top_offset_in": -0.12,
@@ -323,18 +328,56 @@
       "edge_label_local_steps": 3,
       "edge_label_max_distance_in": 0.35
     },
+    "process_flow": {
+      "content": {
+        "left_in": 0.85,
+        "top_in": 1.55,
+        "width_in": 11.64,
+        "height_in": 4.95
+      },
+      "gap_in": 0.22,
+      "horizontal_step_height_in": 1.45,
+      "vertical_step_width_in": 8.8,
+      "step_padding_in": 0.1,
+      "title_font_size_pt": 11,
+      "description_font_size_pt": 9,
+      "border_pt": 1.0,
+      "connector_width_pt": 1.25
+    },
+    "timeline": {
+      "content": {
+        "left_in": 0.85,
+        "top_in": 1.55,
+        "width_in": 11.64,
+        "height_in": 4.95
+      },
+      "gap_in": 0.18,
+      "horizontal_card_height_in": 1.8,
+      "vertical_card_width_in": 9.45,
+      "marker_size_in": 0.18,
+      "axis_width_pt": 1.25,
+      "label_font_size_pt": 9,
+      "title_font_size_pt": 11,
+      "description_font_size_pt": 9,
+      "border_pt": 1.0,
+      "status_colors": {
+        "completed": "accent5",
+        "current": "hw_red",
+        "planned": "gray_light"
+      }
+    },
     "image": {
       "box": {
-        "left_in": 0.57,
-        "top_in": 1.777778,
-        "width_in": 12.2,
-        "height_in": 4.222222
+        "left_in": 1.87,
+        "top_in": 1.18,
+        "width_in": 9.6,
+        "height_in": 5.4
       },
       "caption": {
-        "left_in": 0.57,
-        "top_in": 6.111111,
-        "width_in": 11.183333,
-        "height_in": 0.333333,
+        "left_in": 1.586667,
+        "top_in": 6.666667,
+        "width_in": 10.166666,
+        "height_in": 0.222222,
         "font_size_pt": 9
       },
       "placeholder_font_size_pt": 10

@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.generators.interface import IRTextGenerator
+from app.generation.layout_policy import LAYOUT_SELECTION_RULES, detect_sequence_evidence, timeline_parts
 from app.ir.deck_ir import DeckIR
 from app.ir.document_ir import DocumentIR
 from app.ir.errors import ValidationItem, ValidationResult
@@ -33,6 +34,8 @@ LayoutName = Literal[
     "cards",
     "chart",
     "architecture_diagram",
+    "process_flow",
+    "timeline",
     "image",
     "conclusion",
 ]
@@ -69,7 +72,9 @@ class OutlinePage(BaseModel):
     title: str = Field(min_length=1)
     focus: str = Field(min_length=1)
     source_headings: list[str] = Field(default_factory=list, max_length=3)
-    evidence_requirements: list[str] = Field(default_factory=list, max_length=3)
+    source_evidence: list[str] = Field(default_factory=list, max_length=3)
+    selection_reason: str = Field(min_length=1)
+    content_budget: int = Field(ge=1, le=3)
 
 
 class DeckOutline(BaseModel):
@@ -86,6 +91,17 @@ class DeckOutline(BaseModel):
             raise ValueError("outline first page must use cover")
         if self.pages[-1].layout != "conclusion":
             raise ValueError("outline last page must use conclusion")
+        page_count = len(self.pages)
+        layouts = [page.layout for page in self.pages]
+        if page_count < 7 and "agenda" in layouts:
+            raise ValueError("少于 7 页的大纲不得使用 agenda")
+        if page_count < 10 and "section" in layouts:
+            raise ValueError("少于 10 页的大纲不得使用 section")
+        repeated = 1
+        for previous, current in zip(layouts[1:-2], layouts[2:-1]):
+            repeated = repeated + 1 if current == previous else 1
+            if repeated >= 3:
+                raise ValueError("正文不得连续 3 页使用同一 layout")
         return self
 
 
@@ -138,19 +154,40 @@ def generate_deck(
 
 
 def build_outline_prompt(document: DocumentIR, options: GenerationOptions, *, max_context_chars: int) -> str:
-    source_outline = [item.text for item in document.content.outline]
+    source_outline = [item.model_dump(mode="json") for item in document.content.outline]
+    source_title = next(
+        (str(item.get("text", "")).strip() for item in source_outline if str(item.get("text", "")).strip()),
+        document.source.filename.rsplit(".", 1)[0],
+    )
+    sequence_evidence = detect_sequence_evidence(document.model_dump(mode="json"))
+    source_evidence = _planning_evidence(document)
     planning = {
         "depth": options.effective_depth,
         "target_pages": options.target_pages,
         "source_filename": document.source.filename,
-        "source_title": source_outline[0] if source_outline else document.source.filename.rsplit(".", 1)[0],
-        "source_headings": source_outline[:60],
+        "source_title": source_title,
+        "source_outline": source_outline[:60],
+        "source_evidence": source_evidence,
+        "sequence_evidence": (
+            {
+                "layout": sequence_evidence.layout,
+                "items": list(sequence_evidence.items),
+                "labels": list(sequence_evidence.labels),
+            }
+            if sequence_evidence is not None
+            else None
+        ),
     }
     context = _outline_context(document, max_context_chars=max_context_chars)
     return (
         "[任务] 先规划完整 Deck 大纲，本轮不生成 DeckIR。只输出符合下方独立 Schema 的 JSON。\n"
         "[要求] 页数必须精确；第 1 页 cover、最后 1 页 conclusion；观点写进标题；每页 focus 只承载一个判断；"
-        "source_headings 只能引用输入里的真实标题；evidence_requirements 写该页需要的方法名、数据、权衡或条件。\n"
+        "source_headings 只能引用输入里的真实标题；source_evidence 只能摘取输入中的方法名、数据、权衡或条件；"
+        "selection_reason 解释为何该内容适合当前 layout；content_budget 取 1-3，表示该页核心内容点上限。\n"
+        "[版式节奏] 7 页以上才默认使用 agenda；10 页以上且输入存在至少两个一级章节时才使用 section；"
+        "有足够内容关系时再增加版式变化；正文不得连续 3 页使用同一 layout。"
+        f"{LAYOUT_SELECTION_RULES}"
+        "只能使用 DeckIR 已登记的 layout，禁止输出 H01-H42 等外部参考编号。\n"
         f"{OUTLINE_MARKER}\n{json.dumps(planning, ensure_ascii=False, sort_keys=True)}\n"
         f"[大纲输入 DocumentIR 摘要]\n{context}\n"
         f"[独立大纲 Schema]\n{json.dumps(DeckOutline.model_json_schema(), ensure_ascii=False, sort_keys=True)}\n"
@@ -188,21 +225,28 @@ def validate_outline_text(raw: str, *, expected_pages: int) -> ValidationResult[
 def stub_outline_payload(planning: dict[str, Any]) -> dict[str, Any]:
     total = int(planning.get("target_pages", 8))
     title = str(planning.get("source_title") or "Stub 技术报告")
-    headings = [str(value) for value in planning.get("source_headings", []) if str(value).strip()]
-    middle_layouts: list[LayoutName] = [
-        "agenda",
-        "section",
+    source_outline = [item for item in planning.get("source_outline", []) if isinstance(item, dict)]
+    headings = [str(item.get("text")) for item in source_outline if str(item.get("text", "")).strip()]
+    top_level_headings = [item for item in source_outline if item.get("level") == 1]
+    evidence_pool = [str(item).strip() for item in planning.get("source_evidence", []) if str(item).strip()]
+    layout_cycle: list[LayoutName] = [
         "title_bullets",
         "two_column",
         "table",
-        "architecture_diagram",
         "cards",
-        "title_bullets",
-        "table",
-        "two_column",
-        "cards",
-        "title_bullets",
     ]
+    middle_layouts: list[LayoutName] = []
+    if total >= 7:
+        middle_layouts.append("agenda")
+    if total >= 10 and len(top_level_headings) >= 2:
+        middle_layouts.append("section")
+    sequence = planning.get("sequence_evidence")
+    if isinstance(sequence, dict) and sequence.get("layout") in {"process_flow", "timeline"}:
+        middle_layouts.append(sequence["layout"])
+    cycle_index = 0
+    while len(middle_layouts) < total - 2:
+        middle_layouts.append(layout_cycle[cycle_index % len(layout_cycle)])
+        cycle_index += 1
     pages: list[dict[str, Any]] = []
     for index in range(1, total + 1):
         if index == 1:
@@ -210,8 +254,13 @@ def stub_outline_payload(planning: dict[str, Any]) -> dict[str, Any]:
         elif index == total:
             layout = "conclusion"
         else:
-            layout = middle_layouts[(index - 2) % len(middle_layouts)]
+            layout = middle_layouts[index - 2]
         source_heading = headings[(index - 2) % len(headings)] if headings and index > 1 else title
+        source_evidence = evidence_pool[:3] or ([source_heading] if headings else [])
+        if layout in {"process_flow", "timeline"} and isinstance(sequence, dict):
+            source_evidence = [str(item) for item in sequence.get("items", [])[:3] if str(item).strip()]
+            source_heading = source_evidence[0] if source_evidence else source_heading
+        content_budget = 1 if layout == "cover" else 2 if layout in {"agenda", "section"} else 3
         pages.append(
             {
                 "index": index,
@@ -219,10 +268,45 @@ def stub_outline_payload(planning: dict[str, Any]) -> dict[str, Any]:
                 "title": title if layout == "cover" else f"{source_heading}形成可复核结论",
                 "focus": f"围绕{source_heading}给出方法、数据和适用条件",
                 "source_headings": [source_heading] if headings else [],
-                "evidence_requirements": ["具体方法", "关键数据", "适用条件"],
+                "source_evidence": source_evidence,
+                "selection_reason": _stub_layout_reason(layout),
+                "content_budget": content_budget,
             }
         )
     return {"title": title, "pages": pages}
+
+
+def _planning_evidence(document: DocumentIR) -> list[str]:
+    evidence: list[str] = []
+    for block in document.content.blocks:
+        payload = block.model_dump(mode="json")
+        if payload.get("type") == "heading":
+            continue
+        values = _text_values(payload)
+        text = " ".join(value.strip() for value in values if value.strip())
+        if text and text not in evidence:
+            evidence.append(text[:240])
+        if len(evidence) >= 12:
+            break
+    return evidence
+
+
+def _stub_layout_reason(layout: LayoutName) -> str:
+    return {
+        "cover": "封面建立汇报主题",
+        "agenda": "目录概括长稿结构",
+        "section": "章节页分隔多个一级主题",
+        "title_bullets": "观点页承载结论与少量依据",
+        "two_column": "双栏适合方法与依据对照",
+        "table": "表格适合结构化比较",
+        "cards": "卡片适合并列要素",
+        "chart": "图表适合数值比较",
+        "architecture_diagram": "架构图适合节点关系",
+        "process_flow": "流程页适合线性步骤",
+        "timeline": "时间线适合阶段演进",
+        "image": "图文页保留证据位置",
+        "conclusion": "结论页收束行动",
+    }[layout]
 
 
 def stub_chunk_payload(chunk: dict[str, Any]) -> dict[str, Any]:
@@ -231,7 +315,7 @@ def stub_chunk_payload(chunk: dict[str, Any]) -> dict[str, Any]:
     slides = [_stub_slide(page, title=title, total_pages=int(chunk.get("global_target_pages", len(pages)))) for page in pages]
     return {
         "ir_type": "deck",
-        "ir_version": "1.4",
+        "ir_version": "1.6",
         "meta": {"title": title, "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
         "slides": slides,
     }
@@ -636,7 +720,7 @@ def _stub_slide(page: dict[str, Any], *, title: str, total_pages: int) -> dict[s
     layout = str(page.get("layout"))
     page_title = str(page.get("title") or page.get("focus") or title)
     focus = str(page.get("focus") or "内容待复核")
-    evidence = [str(item) for item in page.get("evidence_requirements", []) if str(item).strip()]
+    evidence = [str(item) for item in page.get("source_evidence", []) if str(item).strip()]
     bullets = evidence or [focus]
     if layout == "cover":
         return {"layout": "cover", "title": title, "subtitle": "按所选深度生成的可编辑技术评审稿"}
@@ -687,6 +771,32 @@ def _stub_slide(page: dict[str, Any], *, title: str, total_pages: int) -> dict[s
             ],
             "edges": [{"from": "input", "to": "method"}, {"from": "method", "to": "output"}],
             "groups": [],
+        }
+    if layout == "process_flow":
+        steps = bullets[:7]
+        return {
+            "layout": "process_flow",
+            "title": page_title,
+            "steps": [
+                {"id": f"step-{index}", "title": item, "description": None}
+                for index, item in enumerate(steps, start=1)
+            ],
+            "orientation": "horizontal",
+        }
+    if layout == "timeline":
+        milestone_items = bullets[:8]
+        return {
+            "layout": "timeline",
+            "title": page_title,
+            "milestones": [
+                {
+                    "label": timeline_parts(item)[0],
+                    "title": timeline_parts(item)[1],
+                    "status": "planned",
+                }
+                for item in milestone_items
+            ],
+            "orientation": "horizontal",
         }
     if layout == "image":
         return {"layout": "image", "title": page_title, "placeholder": focus, "caption": bullets[0]}

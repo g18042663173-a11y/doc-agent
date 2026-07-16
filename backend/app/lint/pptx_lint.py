@@ -9,6 +9,7 @@ from typing import Any
 import unicodedata
 
 from pptx import Presentation
+from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE
 
 from app.rendering.theme import load_theme
@@ -87,6 +88,9 @@ def check_pptx(path: Path, *, classification: str | None = None, theme_name: str
         items.extend(_chart_items(slide, slide_index, theme))
         items.extend(_threshold_line_items(slide, slide_index, theme))
         items.extend(_architecture_items(slide, slide_index, theme))
+        items.extend(_sequence_layout_items(slide, slide_index, theme))
+        items.extend(_kpi_items(slide, slide_index, theme))
+        items.extend(_image_placeholder_items(slide, slide_index, theme))
         items.extend(_bullet_items(slide, slide_index, theme))
         items.extend(_content_overflow_items(slide, slide_index, theme, expected_classification))
         items.extend(_grid_items(text_shapes, slide_index, prs, theme, expected_classification))
@@ -319,6 +323,10 @@ def _chart_fonts(chart) -> list[tuple[str, Any]]:
 def _threshold_line_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
     expected_color = theme["colors"]["hw_red"].upper()
     expected_width = theme["layouts"]["chart"]["threshold"]["line_width_pt"]
+    horizontal_chart = any(
+        getattr(shape, "has_chart", False) and shape.chart.chart_type == XL_CHART_TYPE.BAR_CLUSTERED
+        for shape in slide.shapes
+    )
     for shape in slide.shapes:
         if not getattr(shape, "name", "").startswith("HW_THRESHOLD_LINE"):
             continue
@@ -331,6 +339,18 @@ def _threshold_line_items(slide, slide_index: int, theme: dict) -> list[PptxLint
             width = expected_width
         if abs(width - expected_width) > 0.1:
             return [_item("HW-W02", "Warning", slide_index, f"阈值线线宽 {width:.1f}pt 与主题不一致。", f"阈值线线宽设为 {expected_width:g}pt。")]
+        line_is_vertical = shape.height > shape.width
+        if horizontal_chart != line_is_vertical:
+            expected_direction = "竖向" if horizontal_chart else "横向"
+            return [
+                _item(
+                    "HW-W07",
+                    "Warning",
+                    slide_index,
+                    f"阈值线方向与图表数值轴不一致，当前应为{expected_direction}。",
+                    "横向数据条使用竖向阈值线；纵向柱状图和折线图使用横向阈值线。",
+                )
+            ]
     return []
 
 
@@ -391,6 +411,180 @@ def _architecture_items(slide, slide_index: int, theme: dict) -> list[PptxLintIt
                         )
                     ]
     return items
+
+
+def _sequence_layout_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
+    process_steps = [
+        shape for shape in slide.shapes if getattr(shape, "name", "").startswith("HW_PROCESS_STEP:")
+    ]
+    timeline_cards = [
+        shape for shape in slide.shapes if getattr(shape, "name", "").startswith("HW_TIMELINE_MILESTONE:")
+    ]
+    if not process_steps and not timeline_cards:
+        return []
+    shapes = process_steps or timeline_cards
+    layout_name = "process_flow" if process_steps else "timeline"
+    layout = theme["layouts"][layout_name]
+    content = layout["content"]
+    tolerance = max(float(theme["grid"]["snap_tolerance_in"]), 0.02)
+    expected_width = _inches(shapes[0].width)
+    expected_height = _inches(shapes[0].height)
+    for shape in shapes[1:]:
+        if (
+            abs(_inches(shape.width) - expected_width) > tolerance
+            or abs(_inches(shape.height) - expected_height) > tolerance
+        ):
+            return [
+                _item(
+                    "HW-W07",
+                    "Warning",
+                    slide_index,
+                    f"{layout_name} 同级步骤或里程碑未保持等宽等高。",
+                    "按主题内容区等分布局,让同级元素使用同一宽度和高度。",
+                )
+            ]
+    content_left = content["left_in"]
+    content_top = content["top_in"]
+    content_right = content_left + content["width_in"]
+    content_bottom = content_top + content["height_in"]
+    for shape in shapes:
+        left = _inches(shape.left)
+        top = _inches(shape.top)
+        right = _inches(shape.left + shape.width)
+        bottom = _inches(shape.top + shape.height)
+        if (
+            left < content_left - tolerance
+            or top < content_top - tolerance
+            or right > content_right + tolerance
+            or bottom > content_bottom + tolerance
+        ):
+            return [
+                _item(
+                    "HW-W07",
+                    "Warning",
+                    slide_index,
+                    f"{layout_name} 步骤或里程碑超出主题内容区或进入页脚安全区。",
+                    "按 theme.layouts 对应 content 坐标重新排布。",
+                )
+                ]
+    lefts = [_inches(shape.left) for shape in shapes]
+    tops = [_inches(shape.top) for shape in shapes]
+    is_vertical = max(lefts) - min(lefts) <= tolerance and max(tops) - min(tops) > tolerance
+    dense_limit = 5 if layout_name == "process_flow" else 6
+    if is_vertical and len(shapes) > dense_limit:
+        label = "步骤" if layout_name == "process_flow" else "里程碑"
+        return [
+            _item(
+                "HW-W03",
+                "Warning",
+                slide_index,
+                f"{layout_name} 纵向内容过密·{label}数 {len(shapes)} 超过可读阈值 {dense_limit},建议人工调整或拆分。",
+                "保留可编辑骨架；人工拆成多页或减少单页节点，不会截断内容或静默改为横向。",
+            )
+        ]
+    allowed_sizes = {
+        float(layout["title_font_size_pt"]),
+        float(layout["description_font_size_pt"]),
+    }
+    if layout_name == "timeline":
+        allowed_sizes.add(float(layout["label_font_size_pt"]))
+    for shape in shapes:
+        for run in _shape_runs(shape):
+            if not run.text.strip() or run.font.size is None:
+                continue
+            if not any(abs(run.font.size.pt - allowed) <= 0.1 for allowed in allowed_sizes):
+                return [
+                    _item(
+                        "HW-W01",
+                        "Warning",
+                        slide_index,
+                        f"{layout_name} 元素字号 {run.font.size.pt:.1f}pt 与主题 token 不一致。",
+                        "使用 theme.layouts 对应标题、说明和标签字号。",
+                    )
+                ]
+    if timeline_cards:
+        allowed_marker_colors = {
+            theme["colors"][color_key].upper()
+            for color_key in layout["status_colors"].values()
+        }
+        for shape in slide.shapes:
+            if not getattr(shape, "name", "").startswith("HW_TIMELINE_MARKER:"):
+                continue
+            fill = _shape_fill_color(shape)
+            if fill is None or fill.upper() not in allowed_marker_colors:
+                return [
+                    _item(
+                        "HW-W02",
+                        "Warning",
+                        slide_index,
+                        f"timeline 状态点颜色 {fill or '未设置'} 不在主题状态色映射中。",
+                        "按 completed/current/planned 对应主题色渲染状态点。",
+                    )
+                ]
+    return []
+
+
+def _kpi_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
+    shapes = [
+        shape for shape in slide.shapes if getattr(shape, "name", "").startswith("HW_RENDERED_TEXT:KPI_CARD:")
+    ]
+    if not shapes:
+        return []
+    layout = theme["layouts"]["cards"]
+    tolerance = max(float(theme["grid"]["snap_tolerance_in"]), 0.02)
+    expected_width = _inches(shapes[0].width)
+    expected_height = _inches(shapes[0].height)
+    if any(
+        abs(_inches(shape.width) - expected_width) > tolerance
+        or abs(_inches(shape.height) - expected_height) > tolerance
+        for shape in shapes[1:]
+    ):
+        return [_item("HW-W07", "Warning", slide_index, "KPI 指标块未保持等宽等高。", "按 cards 网格 token 等分 KPI 指标块。")]
+    for shape in shapes:
+        paragraphs = [paragraph for paragraph in shape.text_frame.paragraphs if paragraph.text.strip()]
+        if len(paragraphs) < 2 or not paragraphs[0].runs:
+            return [_item("HW-W03", "Warning", slide_index, "KPI 指标缺少核心数值或指标名。", "每个 KPI 提供数值、指标名和可选口径。")]
+        value_run = paragraphs[0].runs[0]
+        expected_font = theme["fonts"]["number"][0]
+        expected_size = float(layout["kpi_value_font_size_pt"])
+        actual_size = value_run.font.size.pt if value_run.font.size is not None else 0
+        if value_run.font.name != expected_font or abs(actual_size - expected_size) > 0.1:
+            return [
+                _item(
+                    "HW-W01",
+                    "Warning",
+                    slide_index,
+                    f"KPI 核心数值未使用主题 number 字体或 {expected_size:g}pt 字号。",
+                    "从 hw_theme.json 的 fonts.number 和 cards.kpi_value_font_size_pt 读取样式。",
+                )
+            ]
+        value_color = _run_color(value_run, theme["colors"]["body"])
+        if value_color.upper() != theme["colors"]["hw_red"].upper():
+            return [_item("HW-W02", "Warning", slide_index, "KPI 核心数值未使用主题红。", "核心数值使用 hw_red。")]
+    return []
+
+
+def _image_placeholder_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
+    placeholders = [shape for shape in slide.shapes if getattr(shape, "name", "") == "HW_IMAGE_PLACEHOLDER"]
+    if not placeholders:
+        return []
+    expected_ratio = 16 / 9
+    margin = float(theme["grid"]["min_edge_margin_in"])
+    footer_top = float(theme["slide"]["footer_top_in"])
+    for shape in placeholders:
+        width = _inches(shape.width)
+        height = _inches(shape.height)
+        ratio = width / height if height else 0
+        left = _inches(shape.left)
+        right = left + width
+        bottom = _inches(shape.top) + height
+        if abs(ratio - expected_ratio) > 0.01:
+            return [_item("HW-W07", "Warning", slide_index, f"图片占位槽宽高比 {ratio:.3f} 不是 16:9。", "使用 theme.layouts.image.box 的 16:9 尺寸。")]
+        if left < margin or right > theme["slide"]["width_in"] - margin or bottom > footer_top - theme["grid"]["min_gap_in"]:
+            return [_item("HW-W07", "Warning", slide_index, "图片占位槽进入页边距或页脚安全区。", "按主题图片槽坐标恢复安全边距。")]
+        if "等比放入" not in _shape_text(shape) or "禁止随意裁切" not in _shape_text(shape):
+            return [_item("HW-W03", "Warning", slide_index, "图片占位槽缺少等比适配说明。", "保留等比放入、禁止随意裁切的替换提示。")]
+    return []
 
 
 def _shape_fill_color(shape) -> str | None:
@@ -549,7 +743,7 @@ def _grid_items(text_shapes: list, slide_index: int, prs, theme: dict, expected_
     for shape in text_shapes:
         if not _has_visible_text(shape) or _is_footer_shape(shape, theme, expected_classification):
             continue
-        if _is_architecture_shape(shape) or _is_threshold_shape(shape):
+        if _is_architecture_shape(shape) or _is_threshold_shape(shape) or _is_sequence_shape(shape) or _is_image_placeholder_shape(shape):
             continue
         left = _inches(shape.left)
         right = _inches(shape.left + shape.width)
@@ -582,6 +776,15 @@ def _is_architecture_shape(shape) -> bool:
 
 def _is_threshold_shape(shape) -> bool:
     return getattr(shape, "name", "").startswith("HW_THRESHOLD_")
+
+
+def _is_sequence_shape(shape) -> bool:
+    name = getattr(shape, "name", "")
+    return name.startswith("HW_PROCESS_") or name.startswith("HW_TIMELINE_")
+
+
+def _is_image_placeholder_shape(shape) -> bool:
+    return getattr(shape, "name", "") == "HW_IMAGE_PLACEHOLDER"
 
 
 def _layout_items(slide, slide_index: int, prs, theme: dict, expected_classification: str) -> list[PptxLintItem]:
@@ -625,6 +828,7 @@ def _layout_shapes(slide, prs, theme: dict, expected_classification: str) -> lis
             or name.startswith("HW_DECORATION:")
             or _is_architecture_shape(shape)
             or _is_threshold_shape(shape)
+            or _is_sequence_shape(shape)
         ):
             continue
         shape_type = str(getattr(shape, "shape_type", ""))

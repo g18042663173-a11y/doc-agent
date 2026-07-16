@@ -205,8 +205,20 @@ def test_demo_e2e_stub_deck_generates_linted_pptx(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     pptx = output_dir / "deck.pptx"
     report = json.loads((output_dir / "report.json").read_text(encoding="utf-8"))
+    deck_ir = json.loads((output_dir / "deck_ir.json").read_text(encoding="utf-8"))
     assert pptx.exists()
     assert 5 <= len(Presentation(str(pptx)).slides) <= 12
+    layouts = {slide["layout"] for slide in deck_ir["slides"]}
+    assert "process_flow" in layouts
+    assert "timeline" not in layouts
+    assert "完成输入解析" in json.dumps(deck_ir, ensure_ascii=False)
+    shape_names = {
+        shape.name
+        for slide in Presentation(str(pptx)).slides
+        for shape in slide.shapes
+    }
+    assert any(name.startswith("HW_PROCESS_STEP:") for name in shape_names)
+    assert not any(name.startswith("HW_TIMELINE_MILESTONE:") for name in shape_names)
     assert report["summary"]["pass"] is True
 
 

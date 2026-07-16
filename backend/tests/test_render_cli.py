@@ -70,7 +70,7 @@ def test_render_cli_writes_deck_pptx_and_runs_lint(tmp_path: Path) -> None:
         """
 {
   "ir_type": "deck",
-  "ir_version": "1.4",
+  "ir_version": "1.6",
   "meta": {"title": "CLI Deck", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
   "slides": [
     {"layout": "cover", "title": "CLI Deck"},
@@ -114,7 +114,7 @@ def test_render_cli_reports_validation_code_for_invalid_deck_ir(tmp_path: Path) 
         """
 {
   "ir_type": "deck",
-  "ir_version": "1.4",
+  "ir_version": "1.6",
   "meta": {"title": "坏 Deck"},
   "slides": [{"layout": "unknown", "title": "无法渲染"}]
 }

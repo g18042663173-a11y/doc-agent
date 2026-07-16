@@ -20,6 +20,11 @@ def test_deck_ir_positive_samples_validate_and_render(tmp_path: Path) -> None:
         "deck_valid_02_decision_matrix.json",
         "deck_valid_03_performance_chart.json",
         "deck_valid_04_architecture_diagram.json",
+        "deck_valid_05_process_flow.json",
+        "deck_valid_06_timeline.json",
+        "deck_valid_07_technical_review_12_pages.json",
+        "deck_valid_08_layout_selection.json",
+        "deck_valid_09_data_bar_kpi.json",
         "deck_valid_full.json",
     ]:
         payload = json.loads((ROOT / "samples" / "ir" / sample_name).read_text(encoding="utf-8"))
@@ -40,6 +45,9 @@ def test_deck_ir_negative_sample_hits_expected_error_code() -> None:
         "deck_invalid_d005_bad_table_span.json": "D005",
         "deck_invalid_d004_bad_chart_threshold.json": "D004",
         "deck_invalid_d004_architecture_missing_node.json": "D004",
+        "deck_invalid_d004_process_flow_too_short.json": "D004",
+        "deck_invalid_d004_timeline_bad_status.json": "D004",
+        "deck_invalid_d004_horizontal_line.json": "D004",
     }
     for sample_name, expected_code in expected_errors.items():
         payload = json.loads((ROOT / "samples" / "ir" / sample_name).read_text(encoding="utf-8"))

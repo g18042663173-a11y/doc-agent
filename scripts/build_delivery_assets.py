@@ -159,7 +159,7 @@ def _make_appendix_pptx(path: Path) -> Path:
 
     slide = presentation.slides.add_slide(presentation.slide_layouts[6])
     slide.shapes.add_textbox(Inches(0.6), Inches(0.4), Inches(6.0), Inches(0.5)).text_frame.text = "实施进展"
-    table = slide.shapes.add_table(4, 3, Inches(0.8), Inches(1.4), Inches(8.0), Inches(2.2)).table
+    table = slide.shapes.add_table(4, 3, Inches(0.8), Inches(1.5), Inches(8.0), Inches(2.2)).table
     for column, value in enumerate(("事项", "状态", "说明")):
         table.cell(0, column).text = value
     for row, values in enumerate(

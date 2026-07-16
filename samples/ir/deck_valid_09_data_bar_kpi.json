@@ -1,0 +1,42 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.6",
+  "meta": {
+    "title": "经营指标概览",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "cards",
+      "variant": "kpi",
+      "title": "三项核心指标均处于可控区间",
+      "cards": [
+        {"title": "交付及时率", "desc": "96.8%", "tag": "本季度"},
+        {"title": "平均处理时长", "desc": "42ms", "tag": "较基线下降 8%"},
+        {"title": "自动校验通过率", "desc": "98.2%", "tag": "样本口径 N=120"}
+      ]
+    },
+    {
+      "layout": "chart",
+      "title": "三个方案的通过率均高于75%目标线",
+      "chart": {
+        "kind": "bar",
+        "orientation": "horizontal",
+        "categories": ["方案A", "方案B", "方案C"],
+        "series": [{"name": "通过率", "values": [82, 76, 91], "emphasis": true}],
+        "unit": "%",
+        "thresholds": [{"value": 75, "label": "目标"}],
+        "show_data_labels": true,
+        "legend_position": "none",
+        "side_conclusion": "三个方案的通过率均高于75%目标线。"
+      }
+    },
+    {
+      "layout": "image",
+      "title": "截图证据应等比放入标准占位槽",
+      "placeholder": "内网系统验证截图",
+      "caption": "图1 验证结果截图，待内网人工替换"
+    }
+  ]
+}

@@ -45,7 +45,7 @@ def test_build_prompt_truncates_context_and_declares_it() -> None:
 
     prompt = build_prompt(kind="deck", context=context, max_context_chars=300)
 
-    assert "DeckIR v1.4" in prompt
+    assert "DeckIR v1.6" in prompt
     assert "已截断说明" in prompt
     assert len(prompt.split("[输入 DocumentIR]", 1)[1]) < 700
 
@@ -101,7 +101,7 @@ def test_build_deck_prompt_contains_weak_model_rules_and_few_shot() -> None:
     assert "优先组织为 8-10 页技术评审稿" in prompt
     assert "[正例 few-shot]" in prompt
     assert '"ir_type":"deck"' in prompt
-    sample = json.loads((ROOT / "samples" / "ir" / "deck_valid_01_minimal.json").read_text(encoding="utf-8"))
+    sample = json.loads((ROOT / "samples" / "ir" / "deck_valid_08_layout_selection.json").read_text(encoding="utf-8"))
     compact_sample = json.dumps(sample, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     assert compact_sample in prompt
     assert "est_chars=2" in prompt
@@ -252,7 +252,7 @@ def test_stub_handles_image_page_break_empty_sheet_and_dirty_prompt_edges() -> N
         generator.generate("", target="unsupported")  # type: ignore[arg-type]
 
 
-def test_deck_prompt_optional_depth_rules_leave_legacy_prompt_unchanged() -> None:
+def test_deck_prompt_optional_depth_rules_keep_default_path_deterministic() -> None:
     from app.parsers.md_parser import parse_markdown
     from app.prompting.builder import build_prompt
 
@@ -262,13 +262,13 @@ def test_deck_prompt_optional_depth_rules_leave_legacy_prompt_unchanged() -> Non
     detailed = build_prompt(kind="deck", context=context, depth="详细", pages=16)
 
     assert hashlib.sha256(legacy.encode("utf-8")).hexdigest() == (
-        "9bf4674d081d1b11b95874bdc43aee10ae10c69b6f8df28cf756cfe4bd21f6da"
+        "cddb37d18e3ba090edf509d1d409ba6746243f55d0e9340cd739abe91eac998e"
     )
     from app.generators.stub import StubGenerator
 
     legacy_raw = StubGenerator().generate(legacy, target="deck_ir")
     assert hashlib.sha256(legacy_raw.encode("utf-8")).hexdigest() == (
-        "e8cb08de16a9d38036c63ed98f3ec25e8d28c4a554ed10bd721f2d3f9e8efc55"
+        "5cfcdcb31a2933fbeaeab1281ddd568de172b3be290ca9c20f9b09209675c72c"
     )
     assert "[生成深度与目标页数]" not in legacy
     assert "结论句 + 1个关键支撑" in standard
@@ -277,3 +277,19 @@ def test_deck_prompt_optional_depth_rules_leave_legacy_prompt_unchanged() -> Non
     assert "结论 + 具体方法/架构名称 + 关键数据/指标 + 必要的权衡或适用条件" in detailed
     assert "CNN-LSTM" in detailed and "1000km LEO" in detailed and "NMSE -10dB" in detailed
     assert "严禁标题党" in detailed
+
+
+def test_deck_prompt_declares_page_plan_rhythm_and_registered_layout_boundary() -> None:
+    from app.generation.depth import GenerationOptions, build_outline_prompt
+    from app.parsers.md_parser import parse_markdown
+
+    document = parse_markdown(ROOT / "samples" / "input" / "parser_samples" / "md_sample_01.md")
+    prompt = build_outline_prompt(document, GenerationOptions(depth="标准", pages=10), max_context_chars=12000)
+
+    for field in ("source_evidence", "selection_reason", "content_budget"):
+        assert field in prompt
+    assert "有足够内容关系时再增加版式变化" in prompt
+    assert "不为增加版式数量强行套版" in prompt
+    assert "不得连续 3 页" in prompt
+    assert "H01-H42" in prompt and "禁止" in prompt
+    assert "10 页以上" in prompt and "section" in prompt

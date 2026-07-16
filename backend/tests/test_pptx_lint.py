@@ -29,7 +29,7 @@ def test_check_pptx_rendered_deck_has_no_errors(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "合规", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "cover", "title": "合规"}],
         }
@@ -80,7 +80,7 @@ def test_check_pptx_accepts_theme_key_frame_coordinates(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "关键框", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "title_bullets", "title": "关键框", "bullets": [{"text": "坐标合规"}]}],
         }
@@ -398,7 +398,7 @@ def test_check_pptx_accepts_chart_accent_series_and_threshold_line(tmp_path: Pat
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "性能图表", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
@@ -447,7 +447,7 @@ def test_check_pptx_accepts_image_placeholder_contrast(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "图片占位", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [{"layout": "image", "title": "图片占位", "placeholder": "系统架构截图", "caption": "图1: 架构截图待补齐"}],
         }
@@ -554,7 +554,7 @@ def test_check_pptx_accepts_table_and_chart_theme_fonts_and_sizes(tmp_path: Path
     prs = _blank_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_required_footer(slide)
-    table = slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.4), Inches(3.2), Inches(1.0)).table
+    table = slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.5), Inches(3.2), Inches(1.0)).table
     table.cell(0, 0).text = "字段"
     table.cell(0, 1).text = "结论"
     table.cell(1, 0).text = "时延"
@@ -584,7 +584,7 @@ def test_check_pptx_reports_table_and_chart_non_theme_fonts_and_small_table_text
     prs = _blank_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_required_footer(slide)
-    table = slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.4), Inches(3.2), Inches(1.0)).table
+    table = slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.5), Inches(3.2), Inches(1.0)).table
     table.cell(0, 0).text = "坏字体"
     table_run = table.cell(0, 0).text_frame.paragraphs[0].runs[0]
     table_run.font.name = "Comic Sans MS"
@@ -645,7 +645,7 @@ def test_check_pptx_counts_native_powerpoint_bullets(tmp_path: Path) -> None:
         prs = _blank_presentation()
         slide = prs.slides.add_slide(prs.slide_layouts[6])
         _add_required_footer(slide)
-        shape = slide.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(5), Inches(4))
+        shape = slide.shapes.add_textbox(Inches(0.8), Inches(1.5), Inches(5), Inches(4))
         frame = shape.text_frame
         frame.clear()
         for index in range(count):
@@ -668,7 +668,7 @@ def test_check_pptx_reports_renderer_text_coordinate_regression(tmp_path: Path) 
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "坐标回归", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "title_bullets", "title": "坐标回归", "bullets": [{"text": "正文要点"}]}],
         }
@@ -694,7 +694,7 @@ def test_check_pptx_reports_renderer_text_inside_forbidden_page_margin(tmp_path:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "页边距回归", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "title_bullets", "title": "页边距回归", "bullets": [{"text": "正文要点"}]}],
         }
@@ -722,9 +722,9 @@ def test_check_pptx_accepts_table_chart_and_nontext_shape_geometry(tmp_path: Pat
     prs = _blank_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_required_footer(slide)
-    slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.4), Inches(3), Inches(1))
-    _add_basic_chart_at(slide, left=4.4, top=1.4, width=4.5, height=2.5)
-    slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(10), Inches(1.4), Inches(1.5), Inches(1))
+    slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.5), Inches(3), Inches(1))
+    _add_basic_chart_at(slide, left=4.4, top=1.5, width=4.5, height=2.5)
+    slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(10), Inches(1.5), Inches(1.5), Inches(1))
     prs.save(path)
 
     codes = _codes(check_pptx(path, classification="HUAWEI CONFIDENTIAL"))
@@ -767,12 +767,12 @@ def test_check_pptx_reports_table_chart_and_nontext_shape_geometry_violations(tm
     from app.lint.pptx_lint import check_pptx
 
     builders = {
-        "table": lambda slide: slide.shapes.add_table(2, 2, Inches(0.05), Inches(1.4), Inches(3), Inches(1)),
+        "table": lambda slide: slide.shapes.add_table(2, 2, Inches(0.05), Inches(1.5), Inches(3), Inches(1)),
         "chart": lambda slide: (
-            _add_basic_chart_at(slide, left=1.0, top=1.4, width=5, height=3),
+            _add_basic_chart_at(slide, left=1.0, top=1.5, width=5, height=3),
             _add_textbox(slide, "压在图表上", 2.0, 2.0, 2.0, 0.5),
         ),
-        "shape": lambda slide: slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(12.95), Inches(1.4), Inches(0.3), Inches(1)),
+        "shape": lambda slide: slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(12.95), Inches(1.5), Inches(0.3), Inches(1)),
     }
     for name, builder in builders.items():
         path = tmp_path / f"geometry-{name}.pptx"
@@ -793,12 +793,12 @@ def test_check_pptx_checks_table_and_chart_text_contrast(tmp_path: Path) -> None
         prs = _blank_presentation()
         slide = prs.slides.add_slide(prs.slide_layouts[6])
         _add_required_footer(slide)
-        table = slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.4), Inches(3), Inches(1)).table
+        table = slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.5), Inches(3), Inches(1)).table
         table.cell(0, 0).text = "对比度"
         table.cell(0, 0).fill.solid()
         table.cell(0, 0).fill.fore_color.rgb = _rgb("F5F5F5")
         table.cell(0, 0).text_frame.paragraphs[0].runs[0].font.color.rgb = _rgb(text_color)
-        chart = _add_basic_chart_at(slide, left=4.4, top=1.4, width=4.5, height=2.5).chart
+        chart = _add_basic_chart_at(slide, left=4.4, top=1.5, width=4.5, height=2.5).chart
         chart.category_axis.tick_labels.font.color.rgb = _rgb("666666" if path == ok_path else "DDDDDD")
         prs.save(path)
 
@@ -817,7 +817,7 @@ def test_check_pptx_marks_picture_background_contrast_as_manual_review(tmp_path:
     prs = _blank_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_required_footer(slide)
-    slide.shapes.add_picture(str(image), Inches(1), Inches(1.4), Inches(5), Inches(2))
+    slide.shapes.add_picture(str(image), Inches(1), Inches(1.5), Inches(5), Inches(2))
     _add_textbox(slide, "图片上的文字", 1.5, 1.8, 3.0, 0.5, color="FFFFFF")
     prs.save(path)
 
@@ -855,7 +855,7 @@ def test_check_pptx_accepts_matching_agenda_and_section_counts(tmp_path: Path) -
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "结构一致", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {"layout": "cover", "title": "结构一致"},
@@ -880,7 +880,7 @@ def test_check_pptx_infos_when_agenda_and_section_counts_differ(tmp_path: Path) 
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "结构不一致", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {"layout": "cover", "title": "结构不一致"},
@@ -904,7 +904,7 @@ def test_check_pptx_architecture_uses_dedicated_layout_checks(tmp_path: Path) ->
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "架构 lint", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
@@ -931,6 +931,227 @@ def test_check_pptx_architecture_uses_dedicated_layout_checks(tmp_path: Path) ->
     assert "HW-W07" not in codes
     assert "HW-W01" not in codes
     assert "HW-W02" not in codes
+
+
+@pytest.mark.parametrize("layout", ["process_flow", "timeline"])
+def test_check_pptx_sequence_layouts_use_actual_geometry_and_theme_tokens(tmp_path: Path, layout: str) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    if layout == "process_flow":
+        slide = {
+            "layout": layout,
+            "title": "流程元素按主题等尺寸排布",
+            "steps": [
+                {"id": "a", "title": "输入", "description": "材料"},
+                {"id": "b", "title": "处理", "description": "规则"},
+                {"id": "c", "title": "输出", "description": "结果"},
+            ],
+        }
+        prefix = "HW_PROCESS_STEP:"
+    else:
+        slide = {
+            "layout": layout,
+            "title": "里程碑按主题等尺寸排布",
+            "milestones": [
+                {"label": "一", "title": "基线", "status": "completed"},
+                {"label": "二", "title": "验证", "status": "current"},
+                {"label": "三", "title": "终审", "status": "planned"},
+            ],
+        }
+        prefix = "HW_TIMELINE_MILESTONE:"
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": layout, "classification": "公开"},
+            "slides": [slide],
+        }
+    )
+    path = render_deck_ir(deck, tmp_path / f"{layout}.pptx")
+
+    report = check_pptx(path, classification="公开")
+    assert not {"HW-W01", "HW-W02", "HW-W06", "HW-W07"} & set(_codes(report))
+
+    prs = Presentation(str(path))
+    target = next(shape for shape in prs.slides[0].shapes if shape.name.startswith(prefix))
+    target.width += Inches(0.3)
+    prs.save(path)
+
+    tampered = check_pptx(path, classification="公开")
+    assert any(item.code == "HW-W07" and "等宽等高" in item.message for item in tampered.items)
+
+
+def test_check_pptx_warns_when_dense_process_flow_cannot_fit_minimum_text(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "密集流程", "classification": "公开"},
+            "slides": [
+                {
+                    "layout": "process_flow",
+                    "title": "密集流程仍不截断内容",
+                    "steps": [
+                        {"id": f"s{index}", "title": f"步骤{index}", "description": "超长说明" * 120}
+                        for index in range(7)
+                    ],
+                }
+            ],
+        }
+    )
+    path = render_deck_ir(deck, tmp_path / "dense-process.pptx")
+
+    report = check_pptx(path, classification="公开")
+
+    assert any(item.code == "HW-W03" and item.message.startswith("内容超版面·") for item in report.items)
+
+
+@pytest.mark.parametrize(
+    ("layout", "count", "warns"),
+    [("process_flow", 5, False), ("process_flow", 6, True), ("timeline", 6, False), ("timeline", 7, True)],
+)
+def test_check_pptx_warns_for_dense_vertical_sequence_layouts(
+    tmp_path: Path,
+    layout: str,
+    count: int,
+    warns: bool,
+) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    if layout == "process_flow":
+        slide = {
+            "layout": layout,
+            "title": "纵向流程密度验证",
+            "orientation": "vertical",
+            "steps": [{"id": f"s{index}", "title": f"步骤{index}"} for index in range(count)],
+        }
+    else:
+        slide = {
+            "layout": layout,
+            "title": "纵向时间线密度验证",
+            "orientation": "vertical",
+            "milestones": [
+                {"label": f"M{index}", "title": f"里程碑{index}", "status": "planned"}
+                for index in range(count)
+            ],
+        }
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "密度", "classification": "公开"},
+            "slides": [slide],
+        }
+    )
+    path = render_deck_ir(deck, tmp_path / f"{layout}-{count}.pptx")
+
+    messages = [item.message for item in check_pptx(path, classification="公开").items if item.code == "HW-W03"]
+
+    assert any("纵向内容过密" in message for message in messages) is warns
+
+
+def test_check_pptx_detects_tampered_kpi_and_image_slot(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    payload = {
+        "ir_type": "deck",
+        "ir_version": "1.6",
+        "meta": {"title": "增强 lint", "classification": "公开"},
+        "slides": [
+            {
+                "layout": "cards",
+                "variant": "kpi",
+                "title": "KPI",
+                "cards": [{"title": "及时率", "desc": "96%"}, {"title": "时延", "desc": "42ms"}],
+            },
+            {"layout": "image", "title": "图片", "placeholder": "截图"},
+        ],
+    }
+    deck = DeckIR.model_validate(payload)
+    path = render_deck_ir(deck, tmp_path / "enhanced-lint.pptx")
+    clean = check_pptx(path, classification="公开")
+    assert not {"HW-W01", "HW-W07"} & {item.code for item in clean.items}
+
+    prs = Presentation(str(path))
+    kpi = next(shape for shape in prs.slides[0].shapes if shape.name.startswith("HW_RENDERED_TEXT:KPI_CARD:"))
+    kpi.text_frame.paragraphs[0].runs[0].font.size = Pt(10)
+    image_slot = next(shape for shape in prs.slides[1].shapes if shape.name == "HW_IMAGE_PLACEHOLDER")
+    image_slot.width += Inches(0.5)
+    prs.save(path)
+
+    report = check_pptx(path, classification="公开")
+    assert any(item.code == "HW-W01" and "KPI" in item.message for item in report.items)
+    assert any(item.code == "HW-W07" and "16:9" in item.message for item in report.items)
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_code", "message_fragment"),
+    [
+        ("kpi_size", "HW-W07", "KPI 指标块未保持等宽等高"),
+        ("kpi_missing", "HW-W03", "KPI 指标缺少核心数值或指标名"),
+        ("kpi_color", "HW-W02", "KPI 核心数值未使用主题红"),
+        ("image_margin", "HW-W07", "图片占位槽进入页边距或页脚安全区"),
+        ("image_instruction", "HW-W03", "图片占位槽缺少等比适配说明"),
+    ],
+)
+def test_check_pptx_reports_specific_kpi_and_image_slot_tampering(
+    tmp_path: Path,
+    scenario: str,
+    expected_code: str,
+    message_fragment: str,
+) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "增强 lint 负例", "classification": "公开"},
+            "slides": [
+                {
+                    "layout": "cards",
+                    "variant": "kpi",
+                    "title": "KPI",
+                    "cards": [{"title": "及时率", "desc": "96%"}, {"title": "时延", "desc": "42ms"}],
+                },
+                {"layout": "image", "title": "图片", "placeholder": "截图"},
+            ],
+        }
+    )
+    path = render_deck_ir(deck, tmp_path / f"enhanced-lint-{scenario}.pptx")
+    prs = Presentation(str(path))
+    kpi_shapes = [
+        shape for shape in prs.slides[0].shapes if shape.name.startswith("HW_RENDERED_TEXT:KPI_CARD:")
+    ]
+    image_slot = next(shape for shape in prs.slides[1].shapes if shape.name == "HW_IMAGE_PLACEHOLDER")
+
+    if scenario == "kpi_size":
+        kpi_shapes[1].width += Inches(0.3)
+    elif scenario == "kpi_missing":
+        kpi_shapes[0].text = "96%"
+    elif scenario == "kpi_color":
+        kpi_shapes[0].text_frame.paragraphs[0].runs[0].font.color.rgb = RGBColor(97, 178, 48)
+    elif scenario == "image_margin":
+        image_slot.left = Inches(0.1)
+    else:
+        image_slot.text = "16:9 图片占位\n截图"
+    prs.save(path)
+
+    report = check_pptx(path, classification="公开")
+
+    assert any(item.code == expected_code and message_fragment in item.message for item in report.items)
 
 
 @pytest.mark.parametrize(("edge_count", "warns"), [(12, False), (13, True)])
@@ -1002,7 +1223,7 @@ def test_check_pptx_architecture_reports_node_fill_outside_accent_palette(tmp_pa
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "架构配色", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
@@ -1036,7 +1257,7 @@ def test_check_cli_writes_json_and_markdown_reports(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.4",
+            "ir_version": "1.6",
             "meta": {"title": "报告", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "cover", "title": "报告"}],
         }

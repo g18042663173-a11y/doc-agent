@@ -6,6 +6,7 @@ import re
 from typing import Any, Literal
 
 from app.generation.analysis import ANALYSIS_MARKER, stub_analysis_payload
+from app.generation.layout_policy import detect_sequence_evidence, timeline_parts
 
 
 CONTEXT_MARKER = "[输入 DocumentIR]"
@@ -188,6 +189,7 @@ def _deck_payload(context: dict[str, Any] | None) -> dict[str, Any]:
         facts = ["输入内容已进入确定性生成链路", "产物可继续人工编辑和复检"]
     agenda = _agenda_items(context, title)
     table = _first_table(context, max_columns=8)
+    sequence = detect_sequence_evidence(context)
     format_name = _text((context or {}).get("source", {}).get("format"), fallback="topic").upper()
     stats = (context or {}).get("stats", {})
     scale = (
@@ -222,6 +224,28 @@ def _deck_payload(context: dict[str, Any] | None) -> dict[str, Any]:
                 "right": {"heading": "摘要", "text": facts[0]},
             }
         )
+    if sequence is not None and sequence.layout == "process_flow":
+        slides.append(
+            {
+                "layout": "process_flow",
+                "title": "原文步骤形成可顺序执行的流程",
+                "steps": [
+                    {"id": f"step-{index}", "title": item}
+                    for index, item in enumerate(sequence.items, start=1)
+                ],
+            }
+        )
+    elif sequence is not None and sequence.layout == "timeline":
+        slides.append(
+            {
+                "layout": "timeline",
+                "title": "原文时间节点形成连续里程碑",
+                "milestones": [
+                    {"label": timeline_parts(item)[0], "title": timeline_parts(item)[1], "status": "planned"}
+                    for item in sequence.items
+                ],
+            }
+        )
     if len(slides) < 11:
         slides.append(
             {
@@ -243,7 +267,7 @@ def _deck_payload(context: dict[str, Any] | None) -> dict[str, Any]:
     )
     return {
         "ir_type": "deck",
-        "ir_version": "1.4",
+        "ir_version": "1.6",
         "meta": {"title": title, "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
         "slides": slides,
     }

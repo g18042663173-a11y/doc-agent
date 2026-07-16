@@ -1,0 +1,17 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.6",
+  "meta": {"title": "非法横向折线图"},
+  "slides": [
+    {
+      "layout": "chart",
+      "title": "折线图不能使用横向数据条方向",
+      "chart": {
+        "kind": "line",
+        "orientation": "horizontal",
+        "categories": ["一月", "二月"],
+        "series": [{"name": "指标", "values": [1, 2]}]
+      }
+    }
+  ]
+}

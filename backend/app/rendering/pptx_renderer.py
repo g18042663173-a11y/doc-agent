@@ -28,8 +28,10 @@ from app.ir.deck_ir import (
     DeckTableCell,
     DeckIR,
     ImageSlide,
+    ProcessFlowSlide,
     SectionSlide,
     TableSlide,
+    TimelineSlide,
     TitleBulletsSlide,
     TwoColumnSlide,
 )
@@ -65,6 +67,10 @@ def render_deck_ir(deck: DeckIR, output_path: Path) -> Path:
             _render_chart_slide(slide, slide_ir, theme)
         elif isinstance(slide_ir, ArchitectureDiagramSlide):
             _render_architecture_diagram(slide, slide_ir, theme)
+        elif isinstance(slide_ir, ProcessFlowSlide):
+            _render_process_flow(slide, slide_ir, theme)
+        elif isinstance(slide_ir, TimelineSlide):
+            _render_timeline(slide, slide_ir, theme)
         elif isinstance(slide_ir, ImageSlide):
             _render_image_placeholder(slide, slide_ir, theme)
         else:
@@ -401,8 +407,20 @@ def _render_cards(slide, slide_ir: CardsSlide, theme: dict) -> None:
     start_column = max(0, (theme["grid"]["columns"] - used_columns) // 2)
     for index, card in enumerate(slide_ir.cards):
         left, card_width = _grid_horizontal_box(theme, start_column + index * (span + gap), span)
-        card_shape = _card_box(slide, left, layout["top_in"], card_width, layout["height_in"], layout, theme)
-        _card_content(card_shape, card, layout, theme)
+        card_shape = _card_box(
+            slide,
+            left,
+            layout["top_in"],
+            card_width,
+            layout["height_in"],
+            layout,
+            theme,
+            fill_color_key="background" if slide_ir.variant == "kpi" else "surface",
+        )
+        if slide_ir.variant == "kpi":
+            _kpi_card_content(card_shape, card, index, layout, theme)
+        else:
+            _card_content(card_shape, card, layout, theme)
 
 
 def _grid_horizontal_box(theme: dict, start_column: int, span: int) -> tuple[float, float]:
@@ -437,11 +455,44 @@ def _card_content(shape, card, layout: dict, theme: dict) -> None:
         _format_run(run, theme, size=size, bold=bold, color_key=color_key)
 
 
-def _card_box(slide, left: float, top: float, width: float, height: float, layout: dict, theme: dict):
+def _kpi_card_content(shape, card, index: int, layout: dict, theme: dict) -> None:
+    shape.name = f"HW_RENDERED_TEXT:KPI_CARD:{index + 1}"
+    text_frame = shape.text_frame
+    text_frame.clear()
+    _fit_text_frame(text_frame)
+    text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    for part_index, (text, size, bold, color_key, font_role) in enumerate(
+        [
+            (card.desc, layout["kpi_value_font_size_pt"], True, "hw_red", "number"),
+            (card.title, layout["kpi_title_font_size_pt"], True, "title", "body"),
+            *(([(card.tag, layout["kpi_tag_font_size_pt"], False, "secondary", "body")]) if card.tag else []),
+        ]
+    ):
+        paragraph = text_frame.paragraphs[0] if part_index == 0 else text_frame.add_paragraph()
+        paragraph.alignment = PP_ALIGN.CENTER
+        _format_paragraph(paragraph, theme)
+        if part_index < 2:
+            paragraph.space_after = Pt(layout["kpi_paragraph_gap_pt"])
+        run = paragraph.add_run()
+        run.text = text
+        _format_run(run, theme, size=size, bold=bold, color_key=color_key, font_role=font_role)
+
+
+def _card_box(
+    slide,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    layout: dict,
+    theme: dict,
+    *,
+    fill_color_key: str,
+):
     shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
     shape.name = "HW_LAYOUT_CONTAINER:CARD"
     shape.fill.solid()
-    shape.fill.fore_color.rgb = _rgb(theme["colors"]["surface"])
+    shape.fill.fore_color.rgb = _rgb(theme["colors"][fill_color_key])
     shape.line.color.rgb = _rgb(theme["colors"]["border"])
     shape.line.width = Pt(theme["strokes"]["card_border_pt"])
     bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(layout["red_bar_height_in"]))
@@ -476,7 +527,7 @@ def _render_chart_slide(slide, slide_ir: ChartSlide, theme: dict) -> None:
     chart_layout = layout["plot"]
     chart_data = _chart_data(slide_ir.chart)
     chart_shape = slide.shapes.add_chart(
-        _chart_type(slide_ir.chart.kind),
+        _chart_type(slide_ir.chart),
         Inches(chart_layout["left_in"]),
         Inches(chart_layout["top_in"]),
         Inches(chart_layout["width_in"]),
@@ -497,10 +548,12 @@ def _chart_data(chart_ir: ChartSpec) -> CategoryChartData:
     return chart_data
 
 
-def _chart_type(kind: str):
-    if kind == "bar":
+def _chart_type(chart_ir: ChartSpec):
+    if chart_ir.kind == "bar" and chart_ir.orientation == "horizontal":
+        return XL_CHART_TYPE.BAR_CLUSTERED
+    if chart_ir.kind == "bar":
         return XL_CHART_TYPE.COLUMN_CLUSTERED
-    if kind == "line":
+    if chart_ir.kind == "line":
         return XL_CHART_TYPE.LINE_MARKERS
     return XL_CHART_TYPE.PIE
 
@@ -555,6 +608,11 @@ def _format_chart_axes(chart, chart_ir: ChartSpec, theme: dict) -> None:
     axis_size = theme["layouts"]["chart"]["axis_font_size_pt"]
     for axis in (chart.category_axis, chart.value_axis):
         _format_chart_font(axis.tick_labels.font, theme, size=axis_size, color_key="secondary")
+    minimum, maximum = _chart_value_range(chart_ir)
+    chart.value_axis.minimum_scale = minimum
+    chart.value_axis.maximum_scale = maximum
+    if chart_ir.kind == "bar" and chart_ir.orientation == "horizontal":
+        chart.category_axis.reverse_order = True
     chart.value_axis.has_major_gridlines = True
     gridline = chart.value_axis.major_gridlines.format.line
     gridline.color.rgb = _rgb(theme["colors"]["border"])
@@ -588,22 +646,49 @@ def _add_threshold_lines(slide, chart_ir: ChartSpec, chart_layout: dict, chart_s
     plot_bounds = _threshold_plot_bounds(chart_layout, threshold_layout)
     left = plot_bounds["left_in"]
     right = plot_bounds["right_in"]
+    top = plot_bounds["top_in"]
+    bottom = plot_bounds["bottom_in"]
+    horizontal_bar = chart_ir.kind == "bar" and chart_ir.orientation == "horizontal"
+    label_top = _snap_to_baseline_in(
+        chart_layout["top_in"] - threshold_layout["label_height_in"] - threshold_layout["label_gap_in"],
+        theme,
+    )
     for index, threshold in enumerate(chart_ir.thresholds, start=1):
         ratio = max(0, min(1, (threshold.value - minimum) / (maximum - minimum)))
-        y = plot_bounds["top_in"] + plot_bounds["height_in"] * (1 - ratio)
-        line = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(left), Inches(y), Inches(right), Inches(y))
+        if horizontal_bar:
+            x = left + plot_bounds["width_in"] * ratio
+            line = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x), Inches(top), Inches(x), Inches(bottom))
+        else:
+            y = top + plot_bounds["height_in"] * (1 - ratio)
+            line = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(left), Inches(y), Inches(right), Inches(y))
         line.name = f"HW_THRESHOLD_LINE_{index}"
         line.line.color.rgb = _rgb(theme["colors"]["hw_red"])
         line.line.width = Pt(threshold_layout["line_width_pt"])
         line.line.dash_style = MSO_LINE_DASH_STYLE.DASH
         _move_shape_behind(line, chart_shape)
-        fallback_left = min(right + threshold_layout["label_gap_in"], theme["slide"]["width_in"] - threshold_layout["label_width_in"] - theme["slide"]["margin_right_in"])
-        label = {
-            "left_in": threshold_layout.get("label_left_in", fallback_left),
-            "top_in": _snap_to_baseline_in(y + threshold_layout["label_top_offset_in"], theme),
-            "width_in": threshold_layout["label_width_in"],
-            "height_in": threshold_layout["label_height_in"],
-        }
+        if horizontal_bar:
+            label_left = _clamp(
+                x - threshold_layout["label_width_in"] / 2,
+                left,
+                right - threshold_layout["label_width_in"],
+            )
+            label = {
+                "left_in": label_left,
+                "top_in": label_top,
+                "width_in": threshold_layout["label_width_in"],
+                "height_in": threshold_layout["label_height_in"],
+            }
+        else:
+            fallback_left = min(
+                right + threshold_layout["label_gap_in"],
+                theme["slide"]["width_in"] - threshold_layout["label_width_in"] - theme["slide"]["margin_right_in"],
+            )
+            label = {
+                "left_in": threshold_layout.get("label_left_in", fallback_left),
+                "top_in": label_top,
+                "width_in": threshold_layout["label_width_in"],
+                "height_in": threshold_layout["label_height_in"],
+            }
         label_shape = _add_text_box(
             slide,
             _threshold_label_text(threshold, chart_ir),
@@ -614,6 +699,11 @@ def _add_threshold_lines(slide, chart_ir: ChartSpec, chart_layout: dict, chart_s
             color_key="hw_red",
         )
         label_shape.name = f"HW_THRESHOLD_LABEL:{index}"
+        label_margin = Inches(threshold_layout["label_margin_in"])
+        label_shape.text_frame.margin_left = label_margin
+        label_shape.text_frame.margin_right = label_margin
+        label_shape.text_frame.margin_top = label_margin
+        label_shape.text_frame.margin_bottom = label_margin
 
 
 def _threshold_plot_bounds(chart_layout: dict, threshold_layout: dict) -> dict[str, float]:
@@ -621,7 +711,14 @@ def _threshold_plot_bounds(chart_layout: dict, threshold_layout: dict) -> dict[s
     right = chart_layout["left_in"] + chart_layout["width_in"] - threshold_layout.get("plot_right_offset_in", 0)
     top = chart_layout["top_in"] + threshold_layout.get("plot_top_offset_in", 0)
     bottom = chart_layout["top_in"] + chart_layout["height_in"] - threshold_layout.get("plot_bottom_offset_in", 0)
-    return {"left_in": left, "right_in": right, "top_in": top, "height_in": max(bottom - top, 0.1)}
+    return {
+        "left_in": left,
+        "right_in": right,
+        "top_in": top,
+        "bottom_in": bottom,
+        "width_in": max(right - left, 0.1),
+        "height_in": max(bottom - top, 0.1),
+    }
 
 
 def _move_shape_behind(shape, reference_shape) -> None:
@@ -713,6 +810,253 @@ def _render_architecture_diagram(slide, slide_ir: ArchitectureDiagramSlide, them
     _render_architecture_edges(slide, slide_ir.edges, boxes, layers, layout, theme)
     for node in slide_ir.nodes:
         _render_architecture_node(slide, node, boxes[node.id], layout, theme)
+
+
+def _render_process_flow(slide, slide_ir: ProcessFlowSlide, theme: dict) -> None:
+    _title(slide, slide_ir.title, theme)
+    layout = theme["layouts"]["process_flow"]
+    boxes = _sequence_boxes(
+        len(slide_ir.steps),
+        slide_ir.orientation,
+        layout,
+        horizontal_height_key="horizontal_step_height_in",
+        vertical_width_key="vertical_step_width_in",
+    )
+    for index, (first, second) in enumerate(zip(boxes, boxes[1:]), start=1):
+        _render_sequence_connector(slide, first, second, slide_ir.orientation, index, layout, theme)
+    for step, box in zip(slide_ir.steps, boxes):
+        shape = _sequence_card(
+            slide,
+            box,
+            name=f"HW_PROCESS_STEP:{step.id}",
+            layout=layout,
+            theme=theme,
+            line_color_key="accent6",
+        )
+        _write_sequence_text(
+            shape,
+            heading=step.title,
+            detail=step.description,
+            label=None,
+            layout=layout,
+            theme=theme,
+        )
+
+
+def _render_timeline(slide, slide_ir: TimelineSlide, theme: dict) -> None:
+    _title(slide, slide_ir.title, theme)
+    layout = theme["layouts"]["timeline"]
+    boxes = _sequence_boxes(
+        len(slide_ir.milestones),
+        slide_ir.orientation,
+        layout,
+        horizontal_height_key="horizontal_card_height_in",
+        vertical_width_key="vertical_card_width_in",
+    )
+    marker_centers = _timeline_marker_centers(boxes, slide_ir.orientation, layout)
+    _render_timeline_axis(slide, marker_centers, slide_ir.orientation, layout, theme)
+    for index, (milestone, box, center) in enumerate(zip(slide_ir.milestones, boxes, marker_centers), start=1):
+        color_key = layout["status_colors"][milestone.status]
+        _render_timeline_marker(slide, center, index, color_key, layout, theme)
+        shape = _sequence_card(
+            slide,
+            box,
+            name=f"HW_TIMELINE_MILESTONE:{index}",
+            layout=layout,
+            theme=theme,
+            line_color_key=color_key,
+        )
+        _write_sequence_text(
+            shape,
+            heading=milestone.title,
+            detail=milestone.description,
+            label=milestone.label,
+            layout=layout,
+            theme=theme,
+            label_color_key="secondary",
+        )
+
+
+def _sequence_boxes(
+    count: int,
+    orientation: str,
+    layout: dict,
+    *,
+    horizontal_height_key: str,
+    vertical_width_key: str,
+) -> list[dict[str, float]]:
+    content = layout["content"]
+    gap = layout["gap_in"]
+    boxes: list[dict[str, float]] = []
+    if orientation == "horizontal":
+        width = (content["width_in"] - gap * (count - 1)) / count
+        height = layout[horizontal_height_key]
+        top = content["top_in"] + (content["height_in"] - height) / 2
+        for index in range(count):
+            boxes.append(
+                {
+                    "left_in": content["left_in"] + index * (width + gap),
+                    "top_in": top,
+                    "width_in": width,
+                    "height_in": height,
+                }
+            )
+        return boxes
+    height = (content["height_in"] - gap * (count - 1)) / count
+    width = layout[vertical_width_key]
+    left = content["left_in"] + (content["width_in"] - width) / 2
+    for index in range(count):
+        boxes.append(
+            {
+                "left_in": left,
+                "top_in": content["top_in"] + index * (height + gap),
+                "width_in": width,
+                "height_in": height,
+            }
+        )
+    return boxes
+
+
+def _render_sequence_connector(
+    slide,
+    first: dict[str, float],
+    second: dict[str, float],
+    orientation: str,
+    index: int,
+    layout: dict,
+    theme: dict,
+) -> None:
+    if orientation == "horizontal":
+        start = (first["left_in"] + first["width_in"], first["top_in"] + first["height_in"] / 2)
+        end = (second["left_in"], second["top_in"] + second["height_in"] / 2)
+    else:
+        start = (first["left_in"] + first["width_in"] / 2, first["top_in"] + first["height_in"])
+        end = (second["left_in"] + second["width_in"] / 2, second["top_in"])
+    connector = slide.shapes.add_connector(
+        MSO_CONNECTOR.STRAIGHT,
+        Inches(start[0]),
+        Inches(start[1]),
+        Inches(end[0]),
+        Inches(end[1]),
+    )
+    connector.name = f"HW_PROCESS_CONNECTOR:{index}"
+    connector.line.color.rgb = _rgb(theme["colors"]["secondary"])
+    connector.line.width = Pt(layout["connector_width_pt"])
+    _set_connector_arrowheads(connector, "forward")
+
+
+def _sequence_card(
+    slide,
+    box: dict[str, float],
+    *,
+    name: str,
+    layout: dict,
+    theme: dict,
+    line_color_key: str,
+):
+    shape = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE,
+        Inches(box["left_in"]),
+        Inches(box["top_in"]),
+        Inches(box["width_in"]),
+        Inches(box["height_in"]),
+    )
+    shape.name = name
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = _rgb(theme["colors"]["background"])
+    shape.line.color.rgb = _rgb(theme["colors"][line_color_key])
+    shape.line.width = Pt(layout["border_pt"])
+    text_frame = shape.text_frame
+    text_frame.clear()
+    _fit_text_frame(text_frame)
+    text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    padding = Inches(layout["step_padding_in"] if "step_padding_in" in layout else 0.1)
+    text_frame.margin_left = padding
+    text_frame.margin_right = padding
+    text_frame.margin_top = padding
+    text_frame.margin_bottom = padding
+    return shape
+
+
+def _write_sequence_text(
+    shape,
+    *,
+    heading: str,
+    detail: str | None,
+    label: str | None,
+    layout: dict,
+    theme: dict,
+    label_color_key: str = "secondary",
+) -> None:
+    text_frame = shape.text_frame
+    lines = []
+    if label:
+        lines.append((label, layout["label_font_size_pt"], True, label_color_key))
+    lines.append((heading, layout["title_font_size_pt"], True, "title"))
+    if detail:
+        lines.append((detail, layout["description_font_size_pt"], False, "body"))
+    for index, (text, size, bold, color_key) in enumerate(lines):
+        paragraph = text_frame.paragraphs[0] if index == 0 else text_frame.add_paragraph()
+        paragraph.alignment = PP_ALIGN.CENTER
+        _format_paragraph(paragraph, theme)
+        run = paragraph.add_run()
+        run.text = text
+        _format_run(run, theme, size=size, bold=bold, color_key=color_key)
+
+
+def _timeline_marker_centers(
+    boxes: list[dict[str, float]],
+    orientation: str,
+    layout: dict,
+) -> list[tuple[float, float]]:
+    marker_gap = layout["marker_size_in"]
+    if orientation == "horizontal":
+        y = boxes[0]["top_in"] + boxes[0]["height_in"] + marker_gap * 1.5
+        return [(box["left_in"] + box["width_in"] / 2, y) for box in boxes]
+    x = boxes[0]["left_in"] - marker_gap * 1.5
+    return [(x, box["top_in"] + box["height_in"] / 2) for box in boxes]
+
+
+def _render_timeline_axis(
+    slide,
+    centers: list[tuple[float, float]],
+    orientation: str,
+    layout: dict,
+    theme: dict,
+) -> None:
+    first, last = centers[0], centers[-1]
+    axis = slide.shapes.add_connector(
+        MSO_CONNECTOR.STRAIGHT,
+        Inches(first[0]),
+        Inches(first[1]),
+        Inches(last[0]),
+        Inches(last[1]),
+    )
+    axis.name = "HW_TIMELINE_AXIS"
+    axis.line.color.rgb = _rgb(theme["colors"]["border"])
+    axis.line.width = Pt(layout["axis_width_pt"])
+
+
+def _render_timeline_marker(
+    slide,
+    center: tuple[float, float],
+    index: int,
+    color_key: str,
+    layout: dict,
+    theme: dict,
+) -> None:
+    size = layout["marker_size_in"]
+    marker = slide.shapes.add_shape(
+        MSO_SHAPE.OVAL,
+        Inches(center[0] - size / 2),
+        Inches(center[1] - size / 2),
+        Inches(size),
+        Inches(size),
+    )
+    marker.name = f"HW_TIMELINE_MARKER:{index}"
+    marker.fill.solid()
+    marker.fill.fore_color.rgb = _rgb(theme["colors"][color_key])
+    marker.line.color.rgb = _rgb(theme["colors"][color_key])
 
 
 def _architecture_node_boxes(
@@ -1302,11 +1646,12 @@ def _render_image_placeholder(slide, slide_ir: ImageSlide, theme: dict) -> None:
         Inches(box["width_in"]),
         Inches(box["height_in"]),
     )
-    shape.name = "HW_RENDERED_TEXT"
+    shape.name = "HW_IMAGE_PLACEHOLDER"
     shape.fill.solid()
     shape.fill.fore_color.rgb = _rgb(theme["colors"]["surface"])
     shape.line.color.rgb = _rgb(theme["colors"]["muted"])
-    shape.text = f"图片占位\n{slide_ir.placeholder or slide_ir.image_ref or ''}".strip()
+    reference = slide_ir.placeholder or slide_ir.image_ref or ""
+    shape.text = f"16:9 图片占位\n{reference}\n等比放入，禁止随意裁切".strip()
     _fit_text_frame(shape.text_frame)
     for paragraph in shape.text_frame.paragraphs:
         _format_paragraph(paragraph, theme)

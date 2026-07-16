@@ -308,6 +308,16 @@
           "minLength": 1,
           "title": "Title",
           "type": "string"
+        },
+        "variant": {
+          "default": "default",
+          "description": "卡片视觉语义。default 为普通并列卡片；kpi 时 card.title 是指标名、card.desc 是核心数值、card.tag 是可选趋势或统计口径。",
+          "enum": [
+            "default",
+            "kpi"
+          ],
+          "title": "Variant",
+          "type": "string"
         }
       },
       "required": [
@@ -427,6 +437,16 @@
             "none"
           ],
           "title": "Legend Position",
+          "type": "string"
+        },
+        "orientation": {
+          "default": "vertical",
+          "description": "bar 的数据方向；horizontal 生成横向数据条，line/pie 只能使用默认 vertical。",
+          "enum": [
+            "vertical",
+            "horizontal"
+          ],
+          "title": "Orientation",
           "type": "string"
         },
         "series": {
@@ -961,6 +981,84 @@
       "title": "ListItem",
       "type": "object"
     },
+    "ProcessFlowSlide": {
+      "properties": {
+        "layout": {
+          "const": "process_flow",
+          "description": "固定为 process_flow，仅表达无分支的线性步骤。",
+          "title": "Layout",
+          "type": "string"
+        },
+        "orientation": {
+          "default": "horizontal",
+          "description": "步骤排列方向；密集纵向流程可能触发 HW-W03 人工拆分提示。",
+          "enum": [
+            "horizontal",
+            "vertical"
+          ],
+          "title": "Orientation",
+          "type": "string"
+        },
+        "steps": {
+          "description": "按执行顺序排列的 2-7 个步骤；存在分支时应改用 architecture_diagram。",
+          "items": {
+            "$ref": "#/$defs/ProcessStep"
+          },
+          "maxItems": 7,
+          "minItems": 2,
+          "title": "Steps",
+          "type": "array"
+        },
+        "title": {
+          "description": "结论式页面标题，说明该流程达成的结果。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "steps"
+      ],
+      "title": "ProcessFlowSlide",
+      "type": "object"
+    },
+    "ProcessStep": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选的步骤说明；不得补写输入中不存在的事实。",
+          "title": "Description"
+        },
+        "id": {
+          "description": "流程步骤的唯一稳定标识，供渲染对象命名和顺序复核使用。",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "description": "步骤名称，应直接来自输入材料中的顺序步骤。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "ProcessStep",
+      "type": "object"
+    },
     "SectionSlide": {
       "properties": {
         "index": {
@@ -1124,6 +1222,95 @@
       "title": "TableSlide",
       "type": "object"
     },
+    "TimelineMilestone": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选的里程碑说明；不得编造日期、状态或结果。",
+          "title": "Description"
+        },
+        "label": {
+          "description": "时间或里程碑标签，例如 2026 Q3、7月或 M1。",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "status": {
+          "default": "planned",
+          "description": "里程碑状态；数组内按 completed、current、planned 的时间顺序排列。",
+          "enum": [
+            "completed",
+            "current",
+            "planned"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "description": "该时间节点对应的事件或阶段名称。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "title"
+      ],
+      "title": "TimelineMilestone",
+      "type": "object"
+    },
+    "TimelineSlide": {
+      "properties": {
+        "layout": {
+          "const": "timeline",
+          "description": "固定为 timeline，仅表达带明确时间标签的阶段演进。",
+          "title": "Layout",
+          "type": "string"
+        },
+        "milestones": {
+          "description": "按时间顺序排列的 2-8 个里程碑；不用于表达精确 Gantt 的持续时间或依赖关系。",
+          "items": {
+            "$ref": "#/$defs/TimelineMilestone"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Milestones",
+          "type": "array"
+        },
+        "orientation": {
+          "default": "horizontal",
+          "description": "里程碑排列方向；密集纵向时间线可能触发 HW-W03 人工拆分提示。",
+          "enum": [
+            "horizontal",
+            "vertical"
+          ],
+          "title": "Orientation",
+          "type": "string"
+        },
+        "title": {
+          "description": "结论式页面标题，说明阶段演进带来的判断。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "milestones"
+      ],
+      "title": "TimelineSlide",
+      "type": "object"
+    },
     "TitleBulletsSlide": {
       "properties": {
         "bullets": {
@@ -1190,7 +1377,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "1.4",
+      "const": "1.6",
       "title": "Ir Version",
       "type": "string"
     },
@@ -1208,8 +1395,10 @@
             "conclusion": "#/$defs/ConclusionSlide",
             "cover": "#/$defs/CoverSlide",
             "image": "#/$defs/ImageSlide",
+            "process_flow": "#/$defs/ProcessFlowSlide",
             "section": "#/$defs/SectionSlide",
             "table": "#/$defs/TableSlide",
+            "timeline": "#/$defs/TimelineSlide",
             "title_bullets": "#/$defs/TitleBulletsSlide",
             "two_column": "#/$defs/TwoColumnSlide"
           },
@@ -1242,6 +1431,12 @@
           },
           {
             "$ref": "#/$defs/ArchitectureDiagramSlide"
+          },
+          {
+            "$ref": "#/$defs/ProcessFlowSlide"
+          },
+          {
+            "$ref": "#/$defs/TimelineSlide"
           },
           {
             "$ref": "#/$defs/ImageSlide"
