@@ -38,6 +38,12 @@ def test_load_hw_theme_contains_required_tokens() -> None:
     assert theme["font_sizes_pt"]["chart_label"] == 8
     assert theme["font_sizes_pt"]["copyright"] == 8
     assert theme["font_sizes_pt"]["minimum"] == 8
+    assert theme["ppt_typography"]["cover_title_candidates_pt"] == [40, 36, 32]
+    assert theme["ppt_typography"]["cover_subtitle_pt"] == 20
+    assert theme["ppt_typography"]["slide_title_candidates_pt"] == [28, 24, 20]
+    assert theme["ppt_typography"]["body_candidates_pt"] == [16, 14, 12, 10.5]
+    assert theme["ppt_typography"]["body_minimum_pt"] == 10.5
+    assert theme["ppt_typography"]["compact_minimum_pt"] == 8
     assert theme["typography"]["line_spacing"] == 1.3
     assert theme["strokes"]["card_border_pt"] == 0.5
     assert theme["slide"]["width_in"] == 13.34

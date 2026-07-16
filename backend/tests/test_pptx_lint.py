@@ -208,14 +208,64 @@ def test_check_pptx_accepts_three_font_size_kinds_per_slide(tmp_path: Path) -> N
     prs = _blank_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_required_footer(slide)
-    _add_textbox(slide, "主标题", 0.6, 120 / 72, _grid_width(3), 24 / 72, size=14)
-    _add_textbox(slide, "一级标题", 4.6, 120 / 72, _grid_width(3), 24 / 72, size=11)
-    _add_textbox(slide, "正文", 8.6, 120 / 72, _grid_width(3), 24 / 72, size=10)
+    _add_textbox(slide, "主标题", 0.6, 120 / 72, _grid_width(3), 24 / 72, size=28)
+    _add_textbox(slide, "一级标题", 4.6, 120 / 72, _grid_width(3), 24 / 72, size=18)
+    _add_textbox(slide, "正文", 8.6, 120 / 72, _grid_width(3), 24 / 72, size=16)
     prs.save(path)
 
     codes = _codes(check_pptx(path, classification="HUAWEI CONFIDENTIAL"))
 
     assert "HW-W01" not in codes
+
+
+def test_check_pptx_uses_body_minimum_without_rejecting_compact_components(tmp_path: Path) -> None:
+    from app.lint.pptx_lint import check_pptx
+
+    body_path = tmp_path / "small-body.pptx"
+    body_prs = _blank_presentation()
+    body_slide = body_prs.slides.add_slide(body_prs.slide_layouts[6])
+    _add_required_footer(body_slide)
+    _add_textbox(body_slide, "普通正文", 0.6, 120 / 72, _grid_width(4), 24 / 72, size=10)
+    body_prs.save(body_path)
+
+    compact_path = tmp_path / "compact-components.pptx"
+    compact_prs = _blank_presentation()
+    compact_slide = compact_prs.slides.add_slide(compact_prs.slide_layouts[6])
+    _add_required_footer(compact_slide)
+    compact = _add_textbox(compact_slide, "阈值标签", 0.6, 120 / 72, _grid_width(3), 24 / 72, size=8)
+    compact.name = "HW_THRESHOLD_LABEL:1"
+    table_shape = compact_slide.shapes.add_table(1, 1, Inches(4.6), Inches(120 / 72), Inches(3.0), Inches(0.5))
+    table_shape.table.cell(0, 0).text = "表格数据"
+    table_run = table_shape.table.cell(0, 0).text_frame.paragraphs[0].runs[0]
+    table_run.font.name = "Arial"
+    table_run.font.size = Pt(10)
+    compact_prs.save(compact_path)
+
+    body_report = check_pptx(body_path, classification="HUAWEI CONFIDENTIAL")
+    compact_report = check_pptx(compact_path, classification="HUAWEI CONFIDENTIAL")
+
+    assert any(item.code == "HW-W01" and "10.0pt" in item.message for item in body_report.items)
+    assert not any(item.code == "HW-W01" for item in compact_report.items)
+
+
+def test_check_pptx_excludes_compact_annotations_from_font_size_variety(tmp_path: Path) -> None:
+    from app.lint.pptx_lint import check_pptx
+
+    path = tmp_path / "compact-font-variety.pptx"
+    prs = _blank_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_required_footer(slide)
+    _add_textbox(slide, "页标题", 0.6, 120 / 72, _grid_width(3), 32 / 72, size=28)
+    _add_textbox(slide, "正文", 4.6, 120 / 72, _grid_width(3), 32 / 72, size=16)
+    node = _add_textbox(slide, "节点", 8.6, 120 / 72, _grid_width(2), 32 / 72, size=12)
+    node.name = "HW_ARCH_NODE:node"
+    edge = _add_textbox(slide, "边标签", 10.6, 120 / 72, _grid_width(1), 32 / 72, size=8)
+    edge.name = "HW_ARCH_EDGE_LABEL:1"
+    prs.save(path)
+
+    report = check_pptx(path, classification="HUAWEI CONFIDENTIAL")
+
+    assert not any(item.code == "HW-W01" and "字号种类" in item.message for item in report.items)
 
 
 def test_check_pptx_reports_more_than_three_font_size_kinds_per_slide(tmp_path: Path) -> None:
@@ -1209,7 +1259,7 @@ def test_check_pptx_warns_when_autofit_cannot_preserve_minimum_font_size(
     assert bool(overflow_warnings) is warns
     if warns:
         assert overflow_warnings[0].message == (
-            "内容超版面·自动缩字到主题可读字号下限 8pt 后仍无法容纳全部内容,建议人工拆分。"
+            "内容超版面·自动缩字到主题可读字号下限 10.5pt 后仍无法容纳全部内容,建议人工拆分。"
         )
         assert "人工拆分" in overflow_warnings[0].suggestion
         assert "不会截断" in overflow_warnings[0].suggestion

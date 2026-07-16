@@ -552,7 +552,7 @@ def test_render_deck_ir_applies_source_file_theme_font_footer_and_card_tokens(tm
         shape for shape in prs.slides[0].shapes if getattr(shape, "has_text_frame", False) and shape.text == "阶段一"
     )
     section_title_run = section_title.text_frame.paragraphs[0].runs[0]
-    assert section_title_run.font.size == Pt(14)
+    assert section_title_run.font.size == Pt(28)
     assert section_title.text_frame.paragraphs[0].line_spacing == 1.3
     assert "typeface=\"Arial\"" in section_title_run._r.xml
     assert "typeface=\"微软雅黑\"" in section_title_run._r.xml
@@ -577,6 +577,75 @@ def test_render_deck_ir_applies_source_file_theme_font_footer_and_card_tokens(tm
     assert "1/2" in all_text
     assert "2/2" in all_text
     assert theme["footer"]["copyright"] in all_text
+
+
+def test_render_ppt_typography_uses_large_semantic_hierarchy_and_compact_tables(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "字号层级", "classification": "HUAWEI CONFIDENTIAL"},
+            "slides": [
+                {"layout": "cover", "title": "暑期实践团打印签字材料说明", "subtitle": "活动前完成阅读与签署", "date": "2026年7月"},
+                {
+                    "layout": "title_bullets",
+                    "title": "本次签署材料覆盖保密、出行与现场安全三项要求",
+                    "bullets": [
+                        {"text": "保密承诺书明确活动纪律", "level": 1},
+                        {"text": "交通安全告知书明确出行要求", "level": 1},
+                        {"text": "安全生产告知书明确现场要求", "level": 1},
+                    ],
+                },
+                {
+                    "layout": "two_column",
+                    "title": "保密承诺要求落实到个人责任",
+                    "left": {"heading": "需作出的承诺", "bullets": [{"text": "遵守保密规定", "level": 1}]},
+                    "right": {"heading": "活动期间注意事项", "bullets": [{"text": "按要求管理电子设备", "level": 1}]},
+                },
+                {"layout": "table", "title": "紧凑表格保持实测字号", "table": {"header": ["材料", "状态"], "rows": [["承诺书", "待签署"]]}},
+                {
+                    "layout": "title_bullets",
+                    "title": "长" * 35,
+                    "bullets": [{"text": "长标题应降档但正文仍保持可读", "level": 1}],
+                },
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "typography.pptx")
+    prs = Presentation(str(output))
+
+    def font_size(shape) -> float:
+        return shape.text_frame.paragraphs[0].runs[0].font.size.pt
+
+    def named(slide, name: str):
+        return next(shape for shape in slide.shapes if shape.name == name)
+
+    cover = prs.slides[0]
+    assert font_size(named(cover, "HW_RENDERED_TEXT:COVER_TITLE")) == 40
+    assert font_size(named(cover, "HW_RENDERED_TEXT:COVER_SUBTITLE")) == 20
+    assert font_size(named(cover, "HW_RENDERED_TEXT:NOTE")) == 12
+
+    bullets = prs.slides[1]
+    assert font_size(named(bullets, "HW_RENDERED_TEXT:TITLE")) == 28
+    assert {font_size(shape) for shape in bullets.shapes if shape.name == "HW_RENDERED_TEXT:BODY"} == {16}
+
+    columns = prs.slides[2]
+    assert {font_size(shape) for shape in columns.shapes if shape.name == "HW_RENDERED_TEXT:SUBHEADING"} == {18}
+    assert {font_size(shape) for shape in columns.shapes if shape.name == "HW_RENDERED_TEXT:BODY"} == {16}
+
+    table = next(shape.table for shape in prs.slides[3].shapes if getattr(shape, "has_table", False))
+    assert table.cell(0, 0).text_frame.paragraphs[0].runs[0].font.size == Pt(11)
+    assert table.cell(1, 0).text_frame.paragraphs[0].runs[0].font.size == Pt(10)
+
+    long_title_slide = prs.slides[4]
+    long_title = named(long_title_slide, "HW_RENDERED_TEXT:TITLE")
+    title_bar = named(long_title_slide, "HW_DECORATION:RED_BAR")
+    assert font_size(long_title) == 24
+    assert long_title.top + long_title.height < title_bar.top
 
 
 def test_pptx_renderer_keeps_layout_dimensions_in_theme() -> None:

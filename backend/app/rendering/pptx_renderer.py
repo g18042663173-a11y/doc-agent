@@ -36,6 +36,7 @@ from app.ir.deck_ir import (
     TwoColumnSlide,
 )
 from app.rendering.theme import load_theme
+from app.rendering.typography import constrained_stack_heights, fit_text_stack
 
 
 def render_deck_ir(deck: DeckIR, output_path: Path) -> Path:
@@ -84,13 +85,43 @@ def render_deck_ir(deck: DeckIR, output_path: Path) -> Path:
 
 def _render_cover(slide, slide_ir: CoverSlide, theme: dict) -> None:
     layout = theme["layouts"]["cover"]
+    typography = theme["ppt_typography"]
     _red_bar(slide, theme, layout["red_bar"])
-    _add_text_box(slide, slide_ir.title, layout["title"], theme, size=theme["font_sizes_pt"]["cover_title"], bold=True)
+    title_size = _fit_ppt_text(
+        slide_ir.title,
+        typography["cover_title_candidates_pt"],
+        layout["title"],
+        theme,
+    )
+    _add_text_box(
+        slide,
+        slide_ir.title,
+        layout["title"],
+        theme,
+        size=title_size,
+        bold=True,
+        name="HW_RENDERED_TEXT:COVER_TITLE",
+    )
     if slide_ir.subtitle:
-        _add_text_box(slide, slide_ir.subtitle, layout["subtitle"], theme, size=theme["font_sizes_pt"]["cover_subtitle"])
+        _add_text_box(
+            slide,
+            slide_ir.subtitle,
+            layout["subtitle"],
+            theme,
+            size=typography["cover_subtitle_pt"],
+            name="HW_RENDERED_TEXT:COVER_SUBTITLE",
+        )
     meta = "  ".join(part for part in [slide_ir.presenter, slide_ir.date] if part)
     if meta:
-        _add_text_box(slide, meta, layout["meta"], theme, size=theme["font_sizes_pt"]["note"], color_key="secondary")
+        _add_text_box(
+            slide,
+            meta,
+            layout["meta"],
+            theme,
+            size=typography["secondary_pt"],
+            color_key="secondary",
+            name="HW_RENDERED_TEXT:NOTE",
+        )
 
 
 def _render_agenda(slide, slide_ir: AgendaSlide, theme: dict) -> None:
@@ -109,7 +140,7 @@ def _add_agenda_item(slide, index: int, item: str, box: dict, layout: dict, them
     shape = slide.shapes.add_textbox(
         Inches(box["left_in"]), Inches(box["top_in"]), Inches(box["width_in"]), Inches(box["height_in"])
     )
-    shape.name = "HW_RENDERED_TEXT"
+    shape.name = "HW_RENDERED_TEXT:AGENDA"
     text_frame = shape.text_frame
     text_frame.clear()
     _fit_text_frame(text_frame)
@@ -125,27 +156,73 @@ def _add_agenda_item(slide, index: int, item: str, box: dict, layout: dict, them
 
 def _render_section(slide, slide_ir: SectionSlide, theme: dict) -> None:
     layout = theme["layouts"]["section"]
-    _add_text_box(slide, f"{slide_ir.index:02d}", layout["index"], theme, size=layout["index"]["font_size_pt"], bold=True, color_key="hw_red", font_role="number")
-    _add_text_box(slide, slide_ir.title, layout["title"], theme, size=layout["title"]["font_size_pt"], bold=True)
+    _add_text_box(
+        slide,
+        f"{slide_ir.index:02d}",
+        layout["index"],
+        theme,
+        size=layout["index"]["font_size_pt"],
+        bold=True,
+        color_key="hw_red",
+        font_role="number",
+        name="HW_RENDERED_TEXT:SECTION_NUMBER",
+    )
+    _add_text_box(
+        slide,
+        slide_ir.title,
+        layout["title"],
+        theme,
+        size=_fit_ppt_text(
+            slide_ir.title,
+            theme["ppt_typography"]["slide_title_candidates_pt"],
+            layout["title"],
+            theme,
+        ),
+        bold=True,
+        name="HW_RENDERED_TEXT:SECTION_TITLE",
+    )
     if slide_ir.subtitle:
-        _add_text_box(slide, slide_ir.subtitle, layout["subtitle"], theme, size=layout["subtitle"]["font_size_pt"], color_key="secondary")
+        _add_text_box(
+            slide,
+            slide_ir.subtitle,
+            layout["subtitle"],
+            theme,
+            size=layout["subtitle"]["font_size_pt"],
+            color_key="secondary",
+            name="HW_RENDERED_TEXT:SUBHEADING",
+        )
     _red_bar(slide, theme, layout["red_bar"])
 
 
 def _render_title_bullets(slide, slide_ir: TitleBulletsSlide, theme: dict) -> None:
     _title(slide, slide_ir.title, theme)
     layout = theme["layouts"]["title_bullets"]
+    typography = theme["ppt_typography"]
     top = layout["top_in"]
-    for bullet in slide_ir.bullets:
-        mark = "    –" if bullet.level == 2 else "•"
+    texts = [f"{'    –' if bullet.level == 2 else '•'} {bullet.text}" for bullet in slide_ir.bullets]
+    available_height = typography["content_bottom_in"] - top
+    fit = _fit_body_stack(texts, layout["width_in"], available_height, theme)
+    heights = constrained_stack_heights(
+        fit,
+        height_in=available_height,
+        item_gap_in=typography["body_item_gap_in"],
+    )
+    for text, height in zip(texts, heights):
         box = {
             "left_in": layout["left_in"],
             "top_in": top,
             "width_in": layout["width_in"],
-            "height_in": layout["height_in"],
+            "height_in": height,
         }
-        _add_text_box(slide, f"{mark} {bullet.text}", box, theme, size=theme["font_sizes_pt"]["body"])
-        top += layout["row_gap_in"]
+        _add_text_box(
+            slide,
+            text,
+            box,
+            theme,
+            size=fit.font_size_pt,
+            name="HW_RENDERED_TEXT:BODY",
+        )
+        top += height + typography["body_item_gap_in"]
 
 
 def _render_table_slide(slide, slide_ir: TableSlide, theme: dict) -> None:
@@ -372,29 +449,94 @@ def _set_cell_border(cell, theme: dict) -> None:
 def _render_two_column(slide, slide_ir: TwoColumnSlide, theme: dict) -> None:
     _title(slide, slide_ir.title, theme)
     layout = theme["layouts"]["two_column"]
-    _render_column(slide, slide_ir.left, layout["left_column_left_in"], layout["top_in"], layout, theme)
-    _render_column(slide, slide_ir.right, layout["right_column_left_in"], layout["top_in"], layout, theme)
+    typography = theme["ppt_typography"]
+    column_fits = []
+    for content in (slide_ir.left, slide_ir.right):
+        texts = _column_texts(content)
+        body_top = layout["top_in"] + (layout["heading_gap_in"] if content.heading else 0)
+        column_fits.append(
+            _fit_body_stack(
+                texts,
+                layout["column_width_in"],
+                typography["content_bottom_in"] - body_top,
+                theme,
+            )
+        )
+    body_size = min(fit.font_size_pt for fit in column_fits)
+    _render_column(
+        slide,
+        slide_ir.left,
+        layout["left_column_left_in"],
+        layout["top_in"],
+        layout,
+        theme,
+        body_size,
+    )
+    _render_column(
+        slide,
+        slide_ir.right,
+        layout["right_column_left_in"],
+        layout["top_in"],
+        layout,
+        theme,
+        body_size,
+    )
 
 
-def _render_column(slide, content: ColumnContent, left: float, top: float, layout: dict, theme: dict) -> None:
+def _render_column(
+    slide,
+    content: ColumnContent,
+    left: float,
+    top: float,
+    layout: dict,
+    theme: dict,
+    body_size: float,
+) -> None:
     if content.heading:
         box = {"left_in": left, "top_in": top, "width_in": layout["column_width_in"], "height_in": layout["heading_height_in"]}
-        _add_text_box(slide, content.heading, box, theme, size=layout["heading_font_size_pt"], bold=True, color_key="hw_red")
+        _add_text_box(
+            slide,
+            content.heading,
+            box,
+            theme,
+            size=layout["heading_font_size_pt"],
+            bold=True,
+            color_key="hw_red",
+            name="HW_RENDERED_TEXT:SUBHEADING",
+        )
         top += layout["heading_gap_in"]
-    if content.text:
-        box = {"left_in": left, "top_in": top, "width_in": layout["column_width_in"], "height_in": layout["text_height_in"]}
-        _add_text_box(slide, content.text, box, theme, size=theme["font_sizes_pt"]["body"], color_key="body")
-        top += layout["text_gap_in"]
-    for bullet in content.bullets:
+    texts = _column_texts(content)
+    typography = theme["ppt_typography"]
+    available_height = typography["content_bottom_in"] - top
+    fit = _fit_body_stack(texts, layout["column_width_in"], available_height, theme, candidates=[body_size])
+    heights = constrained_stack_heights(
+        fit,
+        height_in=available_height,
+        item_gap_in=typography["body_item_gap_in"],
+    )
+    for text, height in zip(texts, heights):
         box = {
             "left_in": left,
             "top_in": top,
             "width_in": layout["column_width_in"],
-            "height_in": layout["bullet_height_in"],
+            "height_in": height,
         }
-        mark = "    –" if bullet.level == 2 else "•"
-        _add_text_box(slide, f"{mark} {bullet.text}", box, theme, size=theme["font_sizes_pt"]["body"], color_key="body")
-        top += layout["bullet_gap_in"]
+        _add_text_box(
+            slide,
+            text,
+            box,
+            theme,
+            size=body_size,
+            color_key="body",
+            name="HW_RENDERED_TEXT:BODY",
+        )
+        top += height + typography["body_item_gap_in"]
+
+
+def _column_texts(content: ColumnContent) -> list[str]:
+    texts = [content.text] if content.text else []
+    texts.extend(f"{'    –' if bullet.level == 2 else '•'} {bullet.text}" for bullet in content.bullets)
+    return texts
 
 
 def _render_cards(slide, slide_ir: CardsSlide, theme: dict) -> None:
@@ -506,11 +648,29 @@ def _card_box(
 def _render_conclusion(slide, slide_ir: ConclusionSlide, theme: dict) -> None:
     _title(slide, slide_ir.title, theme)
     layout = theme["layouts"]["conclusion"]
+    typography = theme["ppt_typography"]
     top = layout["top_in"]
-    for bullet in slide_ir.bullets:
-        box = {"left_in": layout["left_in"], "top_in": top, "width_in": layout["width_in"], "height_in": layout["height_in"]}
-        _add_text_box(slide, f"• {bullet}", box, theme, size=theme["font_sizes_pt"]["body"], color_key="body")
-        top += layout["row_gap_in"]
+    texts = [f"• {bullet}" for bullet in slide_ir.bullets]
+    body_bottom = min(typography["content_bottom_in"], layout["cta_top_in"] - typography["body_item_gap_in"])
+    available_height = body_bottom - top
+    fit = _fit_body_stack(texts, layout["width_in"], available_height, theme)
+    heights = constrained_stack_heights(
+        fit,
+        height_in=available_height,
+        item_gap_in=typography["body_item_gap_in"],
+    )
+    for text, height in zip(texts, heights):
+        box = {"left_in": layout["left_in"], "top_in": top, "width_in": layout["width_in"], "height_in": height}
+        _add_text_box(
+            slide,
+            text,
+            box,
+            theme,
+            size=fit.font_size_pt,
+            color_key="body",
+            name="HW_RENDERED_TEXT:BODY",
+        )
+        top += height + typography["body_item_gap_in"]
     if slide_ir.cta:
         cta_box = {
             "left_in": layout["left_in"],
@@ -518,7 +678,16 @@ def _render_conclusion(slide, slide_ir: ConclusionSlide, theme: dict) -> None:
             "width_in": layout["cta_width_in"],
             "height_in": layout["cta_height_in"],
         }
-        _add_text_box(slide, slide_ir.cta, cta_box, theme, size=layout["cta_font_size_pt"], bold=True, color_key="hw_red")
+        _add_text_box(
+            slide,
+            slide_ir.cta,
+            cta_box,
+            theme,
+            size=layout["cta_font_size_pt"],
+            bold=True,
+            color_key="hw_red",
+            name="HW_RENDERED_TEXT:SUBHEADING",
+        )
 
 
 def _render_chart_slide(slide, slide_ir: ChartSlide, theme: dict) -> None:
@@ -559,7 +728,9 @@ def _chart_type(chart_ir: ChartSpec):
 
 
 def _chart_title(slide, text: str, layout: dict, theme: dict) -> None:
-    _add_text_box(slide, text, layout.get("title", theme["layouts"]["title"]), theme, size=theme["font_sizes_pt"]["slide_title"], bold=True)
+    box = layout.get("title", theme["layouts"]["title"])
+    size = _fit_ppt_text(text, theme["ppt_typography"]["slide_title_candidates_pt"], box, theme)
+    _add_text_box(slide, text, box, theme, size=size, bold=True, name="HW_RENDERED_TEXT:TITLE")
     _red_bar(slide, theme, theme["layouts"]["title_bar"])
 
 
@@ -775,7 +946,16 @@ def _add_chart_side_content(slide, chart_ir: ChartSpec, layout: dict, theme: dic
             "width_in": side["width_in"],
             "height_in": side["conclusion_height_in"],
         }
-        _add_text_box(slide, chart_ir.side_conclusion, box, theme, size=side["font_size_pt"], bold=True, color_key="body")
+        _add_text_box(
+            slide,
+            chart_ir.side_conclusion,
+            box,
+            theme,
+            size=side["font_size_pt"],
+            bold=True,
+            color_key="body",
+            name="HW_RENDERED_TEXT:COMPACT",
+        )
         top += side["conclusion_height_in"] + side["gap_in"]
     if chart_ir.side_table:
         rows = len(chart_ir.side_table.rows) + 1
@@ -1658,18 +1838,73 @@ def _render_image_placeholder(slide, slide_ir: ImageSlide, theme: dict) -> None:
         for run in paragraph.runs:
             _format_run(run, theme, size=layout["placeholder_font_size_pt"], bold=True, color_key="body")
     if slide_ir.caption:
-        _add_text_box(slide, slide_ir.caption, layout["caption"], theme, size=layout["caption"]["font_size_pt"], color_key="secondary")
+        _add_text_box(
+            slide,
+            slide_ir.caption,
+            layout["caption"],
+            theme,
+            size=layout["caption"]["font_size_pt"],
+            color_key="secondary",
+            name="HW_RENDERED_TEXT:NOTE",
+        )
 
 
 def _render_placeholder(slide, layout: str, theme: dict) -> None:
     _title(slide, f"{layout} 待渲染", theme)
     placeholder = theme["layouts"]["placeholder"]
-    _add_text_box(slide, "该版式将在后续任务卡实现。", placeholder, theme, size=placeholder["font_size_pt"], color_key="secondary")
+    _add_text_box(
+        slide,
+        "该版式将在后续任务卡实现。",
+        placeholder,
+        theme,
+        size=placeholder["font_size_pt"],
+        color_key="secondary",
+        name="HW_RENDERED_TEXT:BODY",
+    )
 
 
 def _title(slide, text: str, theme: dict) -> None:
-    _add_text_box(slide, text, theme["layouts"]["title"], theme, size=theme["font_sizes_pt"]["slide_title"], bold=True)
+    box = theme["layouts"]["title"]
+    size = _fit_ppt_text(text, theme["ppt_typography"]["slide_title_candidates_pt"], box, theme)
+    _add_text_box(slide, text, box, theme, size=size, bold=True, name="HW_RENDERED_TEXT:TITLE")
     _red_bar(slide, theme, theme["layouts"]["title_bar"])
+
+
+def _fit_ppt_text(text: str, candidates: list[float], box: dict, theme: dict) -> float:
+    typography = theme["ppt_typography"]
+    return fit_text_stack(
+        [text],
+        candidates,
+        width_in=box["width_in"],
+        height_in=box["height_in"],
+        line_spacing=theme["typography"]["line_spacing"],
+        item_gap_in=0,
+        baseline_pt=theme["grid"]["baseline_pt"],
+        horizontal_margin_in=typography["text_horizontal_margin_in"],
+        vertical_margin_in=typography["text_vertical_margin_in"],
+    ).font_size_pt
+
+
+def _fit_body_stack(
+    texts: list[str],
+    width_in: float,
+    height_in: float,
+    theme: dict,
+    *,
+    candidates: list[float] | None = None,
+):
+    typography = theme["ppt_typography"]
+    return fit_text_stack(
+        texts,
+        candidates or typography["body_candidates_pt"],
+        width_in=width_in,
+        height_in=max(height_in, 0),
+        line_spacing=theme["typography"]["line_spacing"],
+        item_gap_in=typography["body_item_gap_in"],
+        baseline_pt=theme["grid"]["baseline_pt"],
+        horizontal_margin_in=typography["text_horizontal_margin_in"],
+        vertical_margin_in=typography["text_vertical_margin_in"],
+    )
 
 
 def _red_bar(slide, theme: dict, box: dict) -> None:
@@ -1724,8 +1959,22 @@ def _add_text_box(
     bold: bool = False,
     color_key: str = "title",
     font_role: str = "body",
+    name: str = "HW_RENDERED_TEXT",
 ):
-    return _add_text(slide, text, box["left_in"], box["top_in"], box["width_in"], box["height_in"], theme, size=size, bold=bold, color_key=color_key, font_role=font_role)
+    return _add_text(
+        slide,
+        text,
+        box["left_in"],
+        box["top_in"],
+        box["width_in"],
+        box["height_in"],
+        theme,
+        size=size,
+        bold=bold,
+        color_key=color_key,
+        font_role=font_role,
+        name=name,
+    )
 
 
 def _add_text(
@@ -1741,9 +1990,10 @@ def _add_text(
     bold: bool = False,
     color_key: str = "title",
     font_role: str = "body",
+    name: str = "HW_RENDERED_TEXT",
 ):
     shape = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
-    shape.name = "HW_RENDERED_TEXT"
+    shape.name = name
     text_frame = shape.text_frame
     text_frame.clear()
     _fit_text_frame(text_frame)

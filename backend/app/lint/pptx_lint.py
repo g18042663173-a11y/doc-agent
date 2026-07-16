@@ -6,13 +6,13 @@ import math
 from pathlib import Path
 import re
 from typing import Any
-import unicodedata
 
 from pptx import Presentation
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE
 
 from app.rendering.theme import load_theme
+from app.rendering.typography import text_units
 
 
 EMU_PER_INCH = 914400
@@ -131,11 +131,11 @@ def write_reports(report: PptxLintReport, output_dir: Path) -> tuple[Path, Path]
 def _font_items(slide, slide_index: int, theme: dict, expected_classification: str) -> list[PptxLintItem]:
     items: list[PptxLintItem] = []
     whitelist = set(theme["fonts"]["whitelist"])
-    minimum = theme["font_sizes_pt"]["minimum"]
     palette = {value.upper() for value in theme["colors"].values()}
     for shape, run, context in _iter_slide_runs(slide):
         if _is_footer_shape(shape, theme, expected_classification):
             continue
+        minimum = _minimum_font_size_for_shape(shape, theme)
         if run.font.name and run.font.name not in whitelist:
             items.append(_item("HW-E02", "Error", slide_index, f"{context}字体不在白名单: {run.font.name}", "改用主题字体白名单。"))
         if run.font.size and run.font.size.pt < minimum:
@@ -144,6 +144,25 @@ def _font_items(slide, slide_index: int, theme: dict, expected_classification: s
         if color is not None and color.upper() not in palette:
             items.append(_item("HW-W02", "Warning", slide_index, f"{context}颜色 {color} 不在主题色板。", "改用 hw_theme.json 色板。"))
     return items
+
+
+def _minimum_font_size_for_shape(shape, theme: dict) -> float:
+    typography = theme["ppt_typography"]
+    name = getattr(shape, "name", "")
+    if getattr(shape, "has_table", False) or _uses_compact_typography(shape):
+        return float(typography["compact_minimum_pt"])
+    if name.startswith("HW_RENDERED_TEXT:COVER_TITLE"):
+        return float(typography["cover_title_candidates_pt"][-1])
+    if name.startswith(("HW_RENDERED_TEXT:TITLE", "HW_RENDERED_TEXT:SECTION_TITLE")):
+        return float(typography["slide_title_candidates_pt"][-1])
+    return float(typography["body_minimum_pt"])
+
+
+def _uses_compact_typography(shape) -> bool:
+    name = getattr(shape, "name", "")
+    return name.startswith(
+        ("HW_THRESHOLD_", "HW_RENDERED_TEXT:COMPACT", "HW_ARCH_EDGE_LABEL:", "HW_ARCH_GROUP:")
+    )
 
 
 def _shape_color_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
@@ -277,7 +296,7 @@ def _chart_line_color(series) -> str | None:
 
 
 def _chart_font_items(chart, slide_index: int, theme: dict) -> list[PptxLintItem]:
-    minimum = theme["font_sizes_pt"]["minimum"]
+    minimum = theme["ppt_typography"]["compact_minimum_pt"]
     whitelist = set(theme["fonts"]["whitelist"])
     items: list[PptxLintItem] = []
     for context, font in _chart_fonts(chart):
@@ -613,7 +632,7 @@ def _font_size_variety_items(slide, slide_index: int, theme: dict, expected_clas
         return []
     sizes = set()
     for shape, run, _context in _iter_slide_runs(slide):
-        if _is_footer_shape(shape, theme, expected_classification):
+        if _is_footer_shape(shape, theme, expected_classification) or _uses_compact_typography(shape):
             continue
         if run.text.strip() and run.font.size is not None:
             sizes.add(round(run.font.size.pt, 1))
@@ -674,12 +693,13 @@ def _content_overflow_items(
 ) -> list[PptxLintItem]:
     for shape in slide.shapes:
         if getattr(shape, "has_text_frame", False):
+            minimum = _minimum_font_size_for_shape(shape, theme)
             if (
                 _has_visible_text(shape)
                 and not _is_footer_shape(shape, theme, expected_classification)
-                and _text_frame_exceeds_minimum(shape.text_frame, shape.width, shape.height, theme)
+                and _text_frame_exceeds_minimum(shape.text_frame, shape.width, shape.height, theme, minimum)
             ):
-                return [_overflow_warning(slide_index, theme)]
+                return [_overflow_warning(slide_index, minimum)]
         if not getattr(shape, "has_table", False):
             continue
         seen_cells: set[int] = set()
@@ -691,13 +711,13 @@ def _content_overflow_items(
                 seen_cells.add(cell_id)
                 width = shape.table.columns[column_index].width
                 height = shape.table.rows[row_index].height
-                if _text_frame_exceeds_minimum(cell.text_frame, width, height, theme):
-                    return [_overflow_warning(slide_index, theme)]
+                minimum = theme["ppt_typography"]["compact_minimum_pt"]
+                if _text_frame_exceeds_minimum(cell.text_frame, width, height, theme, minimum):
+                    return [_overflow_warning(slide_index, minimum)]
     return []
 
 
-def _overflow_warning(slide_index: int, theme: dict) -> PptxLintItem:
-    minimum = theme["font_sizes_pt"]["minimum"]
+def _overflow_warning(slide_index: int, minimum: float) -> PptxLintItem:
     return _item(
         "HW-W03",
         "Warning",
@@ -707,10 +727,16 @@ def _overflow_warning(slide_index: int, theme: dict) -> PptxLintItem:
     )
 
 
-def _text_frame_exceeds_minimum(text_frame, width_emu: int, height_emu: int, theme: dict) -> bool:
+def _text_frame_exceeds_minimum(
+    text_frame,
+    width_emu: int,
+    height_emu: int,
+    theme: dict,
+    minimum: float,
+) -> bool:
     if text_frame.auto_size != MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE:
         return False
-    minimum = float(theme["font_sizes_pt"]["minimum"])
+    minimum = float(minimum)
     line_spacing = float(theme["typography"]["line_spacing"])
     horizontal_margins = _emu_to_points(text_frame.margin_left) + _emu_to_points(text_frame.margin_right)
     vertical_margins = _emu_to_points(text_frame.margin_top) + _emu_to_points(text_frame.margin_bottom)
@@ -726,7 +752,7 @@ def _text_frame_exceeds_minimum(text_frame, width_emu: int, height_emu: int, the
 
 
 def _text_units(text: str) -> float:
-    return sum(1.0 if unicodedata.east_asian_width(char) in {"W", "F"} else 0.5 for char in text)
+    return text_units(text)
 
 
 def _emu_to_points(value: int | None) -> float:
@@ -982,7 +1008,10 @@ def _looks_like_slide_title(shape, theme: dict, expected_classification: str) ->
     top = _inches(shape.top)
     if top > theme["slide"]["body_top_in"]:
         return False
-    return _max_font_size(shape) >= theme["font_sizes_pt"]["slide_title"] - 1
+    if getattr(shape, "name", "").startswith(("HW_RENDERED_TEXT:TITLE", "HW_RENDERED_TEXT:SECTION_TITLE")):
+        return True
+    minimum_title = theme["ppt_typography"]["slide_title_candidates_pt"][-1]
+    return _max_font_size(shape) >= minimum_title - 1
 
 
 def _max_font_size(shape) -> float:
