@@ -710,7 +710,7 @@ def _render_architecture_diagram(slide, slide_ir: ArchitectureDiagramSlide, them
     layout = theme["layouts"]["architecture_diagram"]
     boxes, layers = _architecture_node_boxes(slide_ir, layout)
     _render_architecture_groups(slide, slide_ir, layers, layout, theme)
-    _render_architecture_edges(slide, slide_ir.edges, boxes, layout, theme)
+    _render_architecture_edges(slide, slide_ir.edges, boxes, layers, layout, theme)
     for node in slide_ir.nodes:
         _render_architecture_node(slide, node, boxes[node.id], layout, theme)
 
@@ -845,34 +845,46 @@ def _render_architecture_edges(
     slide,
     edges: list[ArchitectureEdge],
     boxes: dict[str, dict[str, float]],
+    layers: list[tuple[str | None, str | None, list[str], dict[str, float]]],
     layout: dict,
     theme: dict,
 ) -> None:
     occupied_boxes = list(boxes.values())
     for index, edge in enumerate(edges, start=1):
-        start_x, start_y, end_x, end_y = _architecture_connector_points(boxes[edge.from_node], boxes[edge.to])
-        connector = slide.shapes.add_connector(
-            MSO_CONNECTOR.STRAIGHT,
-            Inches(start_x),
-            Inches(start_y),
-            Inches(end_x),
-            Inches(end_y),
+        route = _architecture_edge_route(
+            edge,
+            index,
+            boxes,
+            layers,
+            layout,
         )
-        connector.name = f"HW_ARCH_EDGE:{index}:{edge.from_node}->{edge.to}"
-        connector.line.color.rgb = _rgb(theme["colors"]["secondary"])
-        connector.line.width = Pt(layout["edge_width_pt"])
-        if edge.style == "dashed":
-            connector.line.dash_style = MSO_LINE_DASH_STYLE.DASH
-        _set_connector_arrowheads(connector, edge.direction)
+        segments = list(zip(route, route[1:]))
+        for segment_index, (start, end) in enumerate(segments, start=1):
+            connector = slide.shapes.add_connector(
+                MSO_CONNECTOR.STRAIGHT,
+                Inches(start[0]),
+                Inches(start[1]),
+                Inches(end[0]),
+                Inches(end[1]),
+            )
+            if segment_index == len(segments):
+                connector.name = f"HW_ARCH_EDGE:{index}:{segment_index}:{edge.from_node}->{edge.to}"
+            else:
+                connector.name = f"HW_ARCH_EDGE_SEGMENT:{index}:{segment_index}:{edge.from_node}->{edge.to}"
+            connector.line.color.rgb = _rgb(theme["colors"]["secondary"])
+            connector.line.width = Pt(layout["edge_width_pt"])
+            if edge.style == "dashed":
+                connector.line.dash_style = MSO_LINE_DASH_STYLE.DASH
+            _set_connector_arrowheads(
+                connector,
+                _architecture_segment_direction(edge.direction, segment_index, len(segments)),
+            )
         if edge.label:
             label_box = _render_architecture_edge_label(
                 slide,
                 edge.label,
                 index,
-                start_x,
-                start_y,
-                end_x,
-                end_y,
+                segments,
                 occupied_boxes,
                 layout,
                 theme,
@@ -880,18 +892,218 @@ def _render_architecture_edges(
             occupied_boxes.append(label_box)
 
 
-def _architecture_connector_points(source: dict[str, float], target: dict[str, float]) -> tuple[float, float, float, float]:
+def _architecture_edge_route(
+    edge: ArchitectureEdge,
+    edge_index: int,
+    boxes: dict[str, dict[str, float]],
+    layers: list[tuple[str | None, str | None, list[str], dict[str, float]]],
+    layout: dict,
+) -> list[tuple[float, float]]:
+    source = boxes[edge.from_node]
+    target = boxes[edge.to]
+    layer_by_node = {
+        node_id: layer_index
+        for layer_index, (_group_id, _label, node_ids, _bounds) in enumerate(layers)
+        for node_id in node_ids
+    }
+    source_layer = layer_by_node[edge.from_node]
+    target_layer = layer_by_node[edge.to]
+    if source_layer == target_layer:
+        points = _architecture_same_layer_route(
+            source,
+            target,
+            edge.from_node,
+            edge.to,
+            edge_index,
+            boxes,
+            layers[source_layer],
+            layout,
+        )
+    else:
+        points = _architecture_cross_layer_route(
+            source,
+            target,
+            source_layer,
+            target_layer,
+            edge_index,
+            layers,
+            layout,
+        )
+    return _simplify_architecture_route(points, layout["edge_route_alignment_tolerance_in"])
+
+
+def _architecture_same_layer_route(
+    source: dict[str, float],
+    target: dict[str, float],
+    source_id: str,
+    target_id: str,
+    edge_index: int,
+    boxes: dict[str, dict[str, float]],
+    layer: tuple[str | None, str | None, list[str], dict[str, float]],
+    layout: dict,
+) -> list[tuple[float, float]]:
     source_x = source["left_in"] + source["width_in"] / 2
     source_y = source["top_in"] + source["height_in"] / 2
     target_x = target["left_in"] + target["width_in"] / 2
     target_y = target["top_in"] + target["height_in"] / 2
-    if abs(target_y - source_y) >= abs(target_x - source_x):
-        if target_y >= source_y:
-            return source_x, source["top_in"] + source["height_in"], target_x, target["top_in"]
-        return source_x, source["top_in"], target_x, target["top_in"] + target["height_in"]
+    aligned = abs(target_y - source_y) <= layout["edge_route_alignment_tolerance_in"]
     if target_x >= source_x:
-        return source["left_in"] + source["width_in"], source_y, target["left_in"], target_y
-    return source["left_in"], source_y, target["left_in"] + target["width_in"], target_y
+        start = (source["left_in"] + source["width_in"], source_y)
+        end = (target["left_in"], target_y)
+    else:
+        start = (source["left_in"], source_y)
+        end = (target["left_in"] + target["width_in"], target_y)
+    if aligned and _architecture_horizontal_route_is_clear(
+        start,
+        end,
+        boxes,
+        {source_id, target_id},
+        layout["edge_route_clearance_in"],
+    ):
+        return [start, end]
+
+    group_id, _label, node_ids, bounds = layer
+    layer_boxes = [boxes[node_id] for node_id in node_ids]
+    top_limit = bounds["top_in"] + (
+        layout["group_label_height_in"] if group_id is not None else layout["edge_route_clearance_in"]
+    )
+    top_limit += layout["edge_route_clearance_in"]
+    top_near_nodes = min(box["top_in"] for box in layer_boxes) - layout["edge_route_clearance_in"]
+    bottom_near_nodes = max(box["top_in"] + box["height_in"] for box in layer_boxes) + layout["edge_route_clearance_in"]
+    bottom_limit = bounds["top_in"] + bounds["height_in"] - layout["edge_route_clearance_in"]
+    use_top = edge_index % 2 == 1
+    if top_near_nodes < top_limit:
+        use_top = False
+    if bottom_near_nodes > bottom_limit:
+        use_top = True
+    lane_slot = ((edge_index - 1) // 2) % layout["edge_route_lane_count"]
+    lane_offset = lane_slot * layout["edge_route_lane_gap_in"]
+    if use_top:
+        lane_y = _clamp(top_near_nodes - lane_offset, top_limit, top_near_nodes)
+        source_anchor = (source_x, source["top_in"])
+        target_anchor = (target_x, target["top_in"])
+    else:
+        lane_y = _clamp(bottom_near_nodes + lane_offset, bottom_near_nodes, bottom_limit)
+        source_anchor = (source_x, source["top_in"] + source["height_in"])
+        target_anchor = (target_x, target["top_in"] + target["height_in"])
+    return [source_anchor, (source_x, lane_y), (target_x, lane_y), target_anchor]
+
+
+def _architecture_horizontal_route_is_clear(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    boxes: dict[str, dict[str, float]],
+    endpoint_ids: set[str],
+    clearance: float,
+) -> bool:
+    left, right = sorted((start[0], end[0]))
+    y = (start[1] + end[1]) / 2
+    for node_id, box in boxes.items():
+        if node_id in endpoint_ids:
+            continue
+        box_left = box["left_in"] - clearance
+        box_right = box["left_in"] + box["width_in"] + clearance
+        box_top = box["top_in"] - clearance
+        box_bottom = box["top_in"] + box["height_in"] + clearance
+        if box_left < right and left < box_right and box_top < y < box_bottom:
+            return False
+    return True
+
+
+def _architecture_cross_layer_route(
+    source: dict[str, float],
+    target: dict[str, float],
+    source_layer: int,
+    target_layer: int,
+    edge_index: int,
+    layers: list[tuple[str | None, str | None, list[str], dict[str, float]]],
+    layout: dict,
+) -> list[tuple[float, float]]:
+    source_x = source["left_in"] + source["width_in"] / 2
+    target_x = target["left_in"] + target["width_in"] / 2
+    moving_down = target_layer > source_layer
+    source_y = source["top_in"] + source["height_in"] if moving_down else source["top_in"]
+    target_y = target["top_in"] if moving_down else target["top_in"] + target["height_in"]
+    source_gap = _architecture_layer_gap_y(
+        source_layer if moving_down else source_layer - 1,
+        edge_index,
+        layers,
+        layout,
+    )
+    target_gap = _architecture_layer_gap_y(
+        target_layer - 1 if moving_down else target_layer,
+        edge_index,
+        layers,
+        layout,
+    )
+    if abs(source_layer - target_layer) == 1:
+        return [(source_x, source_y), (source_x, source_gap), (target_x, target_gap), (target_x, target_y)]
+
+    content = layout["content"]
+    left_lane = content["left_in"] + layout["edge_route_frame_margin_in"]
+    right_lane = content["left_in"] + content["width_in"] - layout["edge_route_frame_margin_in"]
+    left_cost = abs(source_x - left_lane) + abs(target_x - left_lane)
+    right_cost = abs(source_x - right_lane) + abs(target_x - right_lane)
+    side_lane = right_lane if right_cost <= left_cost else left_lane
+    return [
+        (source_x, source_y),
+        (source_x, source_gap),
+        (side_lane, source_gap),
+        (side_lane, target_gap),
+        (target_x, target_gap),
+        (target_x, target_y),
+    ]
+
+
+def _architecture_layer_gap_y(
+    upper_layer: int,
+    edge_index: int,
+    layers: list[tuple[str | None, str | None, list[str], dict[str, float]]],
+    layout: dict,
+) -> float:
+    upper_bounds = layers[upper_layer][3]
+    lower_bounds = layers[upper_layer + 1][3]
+    low = upper_bounds["top_in"] + upper_bounds["height_in"] + layout["edge_route_gap_margin_in"]
+    high = lower_bounds["top_in"] - layout["edge_route_gap_margin_in"]
+    lane_count = layout["edge_route_lane_count"]
+    lane_slot = (edge_index - 1) % lane_count
+    centered_slot = lane_slot - (lane_count - 1) / 2
+    return _clamp(
+        (low + high) / 2 + centered_slot * layout["edge_route_lane_gap_in"],
+        low,
+        high,
+    )
+
+
+def _simplify_architecture_route(
+    points: list[tuple[float, float]],
+    tolerance: float,
+) -> list[tuple[float, float]]:
+    simplified: list[tuple[float, float]] = []
+    for point in points:
+        if simplified and abs(point[0] - simplified[-1][0]) <= tolerance and abs(point[1] - simplified[-1][1]) <= tolerance:
+            continue
+        simplified.append(point)
+    index = 1
+    while index < len(simplified) - 1:
+        previous, current, following = simplified[index - 1 : index + 2]
+        same_x = abs(previous[0] - current[0]) <= tolerance and abs(current[0] - following[0]) <= tolerance
+        same_y = abs(previous[1] - current[1]) <= tolerance and abs(current[1] - following[1]) <= tolerance
+        if same_x or same_y:
+            simplified.pop(index)
+        else:
+            index += 1
+    return simplified
+
+
+def _architecture_segment_direction(direction: str, segment_index: int, segment_count: int) -> str:
+    if segment_count == 1:
+        return direction
+    if segment_index == 1 and direction in {"backward", "both"}:
+        return "backward"
+    if segment_index == segment_count and direction in {"forward", "both"}:
+        return "forward"
+    return "none"
 
 
 def _set_connector_arrowheads(connector, direction: str) -> None:
@@ -918,30 +1130,77 @@ def _render_architecture_edge_label(
     slide,
     text: str,
     index: int,
-    start_x: float,
-    start_y: float,
-    end_x: float,
-    end_y: float,
+    segments: list[tuple[tuple[float, float], tuple[float, float]]],
     occupied_boxes: list[dict[str, float]],
     layout: dict,
     theme: dict,
 ) -> dict[str, float]:
     content = layout["content"]
-    left = (start_x + end_x) / 2 - layout["edge_label_width_in"] / 2
-    top = (start_y + end_y) / 2 - layout["edge_label_height_in"] / 2
-    preferred_box = {
-        "left_in": _clamp(left, content["left_in"], content["left_in"] + content["width_in"] - layout["edge_label_width_in"]),
-        "top_in": _clamp(top, content["top_in"], content["top_in"] + content["height_in"] - layout["edge_label_height_in"]),
-        "width_in": layout["edge_label_width_in"],
-        "height_in": layout["edge_label_height_in"],
-    }
-    box = _place_architecture_label(preferred_box, occupied_boxes, content, theme["grid"]["min_gap_in"])
+    candidates = _architecture_label_candidates(segments, content, layout)
+    preferred_box = candidates[0]
+    box = next(
+        (
+            candidate
+            for candidate in candidates
+            if not any(_boxes_overlap(candidate, occupied, theme["grid"]["min_gap_in"]) for occupied in occupied_boxes)
+        ),
+        None,
+    )
+    if box is None:
+        box = _place_architecture_label(preferred_box, occupied_boxes, content, theme["grid"]["min_gap_in"])
     label = _add_text_box(slide, text, box, theme, size=layout["edge_label_font_size_pt"], color_key="secondary")
     label.name = f"HW_ARCH_EDGE_LABEL:{index}"
     label.fill.solid()
     label.fill.fore_color.rgb = _rgb(theme["colors"]["background"])
     label.line.fill.background()
     return box
+
+
+def _architecture_label_candidates(
+    segments: list[tuple[tuple[float, float], tuple[float, float]]],
+    content: dict[str, float],
+    layout: dict,
+) -> list[dict[str, float]]:
+    width = layout["edge_label_width_in"]
+    height = layout["edge_label_height_in"]
+    offset = layout["edge_label_offset_in"]
+    ordered = sorted(
+        segments,
+        key=lambda segment: (
+            segment[0][1] == segment[1][1],
+            abs(segment[1][0] - segment[0][0]) + abs(segment[1][1] - segment[0][1]),
+        ),
+        reverse=True,
+    )
+    steps = layout["edge_label_local_steps"]
+    fractions = [0.5]
+    for step in range(1, steps + 1):
+        delta = step / (2 * (steps + 1))
+        fractions.extend((0.5 - delta, 0.5 + delta))
+
+    candidates: list[dict[str, float]] = []
+    seen: set[tuple[float, float]] = set()
+    for start, end in ordered:
+        horizontal = start[1] == end[1]
+        for fraction in fractions:
+            x = start[0] + (end[0] - start[0]) * fraction
+            y = start[1] + (end[1] - start[1]) * fraction
+            if horizontal:
+                positions = ((x - width / 2, y - offset - height), (x - width / 2, y + offset))
+            else:
+                positions = ((x + offset, y - height / 2), (x - offset - width, y - height / 2))
+            for left, top in positions:
+                box = {
+                    "left_in": _clamp(left, content["left_in"], content["left_in"] + content["width_in"] - width),
+                    "top_in": _clamp(top, content["top_in"], content["top_in"] + content["height_in"] - height),
+                    "width_in": width,
+                    "height_in": height,
+                }
+                position = (round(box["left_in"], 6), round(box["top_in"], 6))
+                if position not in seen:
+                    seen.add(position)
+                    candidates.append(box)
+    return candidates
 
 
 def _place_architecture_label(

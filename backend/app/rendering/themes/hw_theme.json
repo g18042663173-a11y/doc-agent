@@ -310,9 +310,18 @@
       "node_font_size_pt": 9,
       "node_border_pt": 1.0,
       "edge_width_pt": 1.25,
+      "edge_route_alignment_tolerance_in": 0.04,
+      "edge_route_clearance_in": 0.08,
+      "edge_route_gap_margin_in": 0.02,
+      "edge_route_lane_gap_in": 0.025,
+      "edge_route_lane_count": 4,
+      "edge_route_frame_margin_in": 0.06,
       "edge_label_width_in": 1.2,
       "edge_label_height_in": 0.22,
-      "edge_label_font_size_pt": 8
+      "edge_label_font_size_pt": 8,
+      "edge_label_offset_in": 0.04,
+      "edge_label_local_steps": 3,
+      "edge_label_max_distance_in": 0.35
     },
     "image": {
       "box": {

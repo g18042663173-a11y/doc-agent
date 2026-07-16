@@ -8,7 +8,7 @@ from pathlib import Path
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE
-from pptx.util import Pt
+from pptx.util import Inches, Pt
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
@@ -276,6 +276,7 @@ def test_render_architecture_dense_edge_labels_do_not_overlap(tmp_path: Path) ->
     from itertools import combinations
 
     from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
     from app.rendering.pptx_renderer import render_deck_ir
 
     nodes = [{"id": f"n{index}", "text": f"节点 {index}", "type": "secondary"} for index in range(12)]
@@ -310,10 +311,25 @@ def test_render_architecture_dense_edge_labels_do_not_overlap(tmp_path: Path) ->
     slide = Presentation(str(output)).slides[0]
     labels = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_EDGE_LABEL:")]
     node_shapes = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_NODE:")]
+    edge_segments = _architecture_edge_segments(slide)
 
     assert len(labels) == 24
     assert not any(_overlap(first, second) for first, second in combinations(labels, 2))
     assert not any(_overlap(label, node) for label in labels for node in node_shapes)
+    assert all(_is_orthogonal_connector(segment) for segment in edge_segments)
+    assert not any(
+        _connector_crosses_unrelated_node(segment, node)
+        for segment in edge_segments
+        for node in node_shapes
+    )
+    density_warnings = [
+        item
+        for item in check_pptx(output, classification="公开").items
+        if item.code == "HW-W03" and item.message.startswith("架构图过密·")
+    ]
+    assert [item.message for item in density_warnings] == [
+        "架构图过密·边数 24 超过阈值 12,建议人工调整或拆分。"
+    ]
 
 
 def test_render_deck_ir_uses_16_by_9_page_size(tmp_path: Path) -> None:
@@ -667,7 +683,9 @@ def test_render_architecture_diagram_as_editable_shapes(tmp_path: Path) -> None:
     slide = prs.slides[0]
     nodes = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_NODE:")]
     edges = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_EDGE:")]
+    edge_segments = _architecture_edge_segments(slide)
     groups = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_GROUP:")]
+    labels = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_EDGE_LABEL:")]
 
     assert len(nodes) == 4
     assert len(edges) == 3
@@ -678,9 +696,21 @@ def test_render_architecture_diagram_as_editable_shapes(tmp_path: Path) -> None:
     assert {str(shape.fill.fore_color.rgb) for shape in nodes} == {"30B5C5", "FCC800", "C7000B", "61B230"}
     assert all("<p:cxnSp" in shape.element.xml for shape in edges)
     assert "<a:tailEnd" in edges[0].element.xml
-    assert "<a:headEnd" in edges[1].element.xml and "<a:tailEnd" in edges[1].element.xml
+    assert any("<a:headEnd" in shape.element.xml for shape in _architecture_edge_segments(slide, edge_index=2))
+    assert any("<a:tailEnd" in shape.element.xml for shape in _architecture_edge_segments(slide, edge_index=2))
     assert all("<a:prstDash" in shape.element.xml for shape in groups)
     assert all(not _overlap(first, second) for index, first in enumerate(nodes) for second in nodes[index + 1 :])
+    assert all(_is_orthogonal_connector(segment) for segment in edge_segments)
+    assert not any(
+        _connector_crosses_unrelated_node(segment, node)
+        for segment in edge_segments
+        for node in nodes
+    )
+    assert all(_label_is_near_own_edge(label, slide) for label in labels)
+
+    same_layer_segments = _architecture_edge_segments(slide, edge_index=2)
+    assert len(same_layer_segments) == 1
+    assert same_layer_segments[0].height == 0
 
 
 def _overlap(first, second) -> bool:
@@ -690,6 +720,74 @@ def _overlap(first, second) -> bool:
         and first.top < second.top + second.height
         and second.top < first.top + first.height
     )
+
+
+def _architecture_edge_segments(slide, *, edge_index: int | None = None) -> list:
+    prefixes = (
+        "HW_ARCH_EDGE:",
+        "HW_ARCH_EDGE_SEGMENT:",
+    )
+    segments = [shape for shape in slide.shapes if shape.name.startswith(prefixes)]
+    if edge_index is None:
+        return segments
+    return [shape for shape in segments if _architecture_edge_index(shape.name) == edge_index]
+
+
+def _architecture_edge_index(name: str) -> int:
+    parts = name.split(":")
+    return int(parts[1])
+
+
+def _architecture_edge_node_ids(name: str) -> set[str]:
+    route = name.rsplit(":", 1)[-1]
+    return set(route.split("->"))
+
+
+def _is_orthogonal_connector(shape) -> bool:
+    return shape.width == 0 or shape.height == 0
+
+
+def _connector_crosses_unrelated_node(connector, node) -> bool:
+    node_id = node.name.split(":", 1)[1]
+    if node_id in _architecture_edge_node_ids(connector.name):
+        return False
+    if connector.height == 0:
+        y = connector.top
+        return (
+            node.top < y < node.top + node.height
+            and connector.left < node.left + node.width
+            and node.left < connector.left + connector.width
+        )
+    if connector.width == 0:
+        x = connector.left
+        return (
+            node.left < x < node.left + node.width
+            and connector.top < node.top + node.height
+            and node.top < connector.top + connector.height
+        )
+    return True
+
+
+def _label_is_near_own_edge(label, slide) -> bool:
+    edge_index = int(label.name.rsplit(":", 1)[1])
+    center_x = label.left + label.width / 2
+    center_y = label.top + label.height / 2
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw_theme.json").read_text(encoding="utf-8"))
+    max_distance = Inches(theme["layouts"]["architecture_diagram"]["edge_label_max_distance_in"])
+    return any(
+        _point_to_connector_distance(center_x, center_y, segment) <= max_distance
+        for segment in _architecture_edge_segments(slide, edge_index=edge_index)
+    )
+
+
+def _point_to_connector_distance(x: float, y: float, connector) -> float:
+    if connector.height == 0:
+        nearest_x = min(max(x, connector.left), connector.left + connector.width)
+        return ((x - nearest_x) ** 2 + (y - connector.top) ** 2) ** 0.5
+    if connector.width == 0:
+        nearest_y = min(max(y, connector.top), connector.top + connector.height)
+        return ((x - connector.left) ** 2 + (y - nearest_y) ** 2) ** 0.5
+    return float("inf")
 
 
 def _cell_fill_hex(cell) -> str:
