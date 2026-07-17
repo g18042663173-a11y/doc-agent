@@ -192,7 +192,7 @@ def _parse_xlsx_with_hard_deadline(path: Path) -> DocumentIR:
         if not receive.poll(timeout):
             process.terminate()
             process.join()
-            return _hard_deadline_document(path, timeout)
+            raise _hard_deadline_failure(path, timeout)
         try:
             status, payload = receive.recv()
         except EOFError as exc:
@@ -237,24 +237,15 @@ def _xlsx_worker(path_value: str, send) -> None:
         send.close()
 
 
-def _hard_deadline_document(path: Path, timeout: float) -> DocumentIR:
-    return DocumentIR.model_validate(
-        {
-            "ir_type": "document",
-            "ir_version": "1.1",
-            "source": {
-                "filename": path.name,
-                "format": "xlsx",
-                "size_kb": round(path.stat().st_size / 1024, 2),
-                "parsed_at": deterministic_parsed_at(path),
-            },
-            "stats": {},
-            "warnings": [
-                f"W103: xlsx hard resource deadline reached after {timeout:.3f}s; "
-                "processed range: no worksheet content committed; rerun after splitting the workbook"
-            ],
-            "content": {"sheets": []},
-        }
+def _hard_deadline_failure(path: Path, timeout: float) -> ParseFailure:
+    return ParseFailure(
+        code="E001",
+        loc="source.resource",
+        message=(
+            f"xlsx hard resource deadline reached after {timeout:.3f}s; "
+            "no worksheet content was committed"
+        ),
+        suggestion="拆分工作簿、减少工作表中的数据量或在资源更充足的环境中重试。",
     )
 
 

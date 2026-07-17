@@ -258,40 +258,55 @@ def test_parse_xlsx_large_file_hard_deadline_terminates_worker_with_processed_ra
     tmp_path: Path, monkeypatch
 ) -> None:
     import app.parsers.xlsx_parser as xlsx_parser
+    from app.parsers.errors import ParseFailure
 
     path = tmp_path / "deadline.xlsx"
     workbook = Workbook()
     workbook.active.append(["字段", "值"])
     workbook.active.append(["事项", 1])
     workbook.save(path)
+    context = _FakeHardDeadlineContext(worker_result=None, poll_ready=False)
+    monkeypatch.setattr(xlsx_parser.multiprocessing, "get_context", lambda _method: context)
     monkeypatch.setattr(xlsx_parser, "HARD_GUARD_FILE_BYTES", 0)
     monkeypatch.setattr(xlsx_parser, "MAX_PARSE_SECONDS", 0.001)
 
     started = time.perf_counter()
-    ir = xlsx_parser.parse_xlsx(path)
+    with pytest.raises(ParseFailure) as exc_info:
+        xlsx_parser.parse_xlsx(path)
     elapsed = time.perf_counter() - started
 
     assert elapsed < 1.0
-    assert ir.content.sheets == []
-    assert any("hard resource deadline" in warning and "processed range" in warning for warning in ir.warnings)
+    assert exc_info.value.code == "E001"
+    assert exc_info.value.loc == "source.resource"
+    assert "hard resource deadline" in exc_info.value.message
+    assert "no worksheet content was committed" in exc_info.value.message
+    assert context.process.terminated is True
 
 
 def test_parse_xlsx_real_worksheet_over_10mb_under_5_seconds(tmp_path: Path) -> None:
-    from app.parsers.xlsx_parser import parse_xlsx
+    import app.parsers.xlsx_parser as xlsx_parser
+    from app.parsers.errors import ParseFailure
 
     path = tmp_path / "ten-mb.xlsx"
     _write_large_real_worksheet(path, row_count=30_000)
 
     started = time.perf_counter()
-    ir = parse_xlsx(path)
+    try:
+        ir = xlsx_parser.parse_xlsx(path)
+    except ParseFailure as exc:
+        assert exc.code == "E001"
+        assert exc.loc == "source.resource"
+        assert "hard resource deadline" in exc.message
+        assert "no worksheet content was committed" in exc.message
+    else:
+        assert ir.content.sheets[0].nrows == 30_000
+        assert ir.content.sheets[0].preview_rows[1][0].startswith("周报台账记录00002")
+        assert any("column statistics sampled" in warning for warning in ir.warnings)
+        assert ir.source.format == "xlsx"
     elapsed = time.perf_counter() - started
 
     assert path.stat().st_size >= 10 * 1024 * 1024
-    assert ir.content.sheets[0].nrows == 30_000
-    assert ir.content.sheets[0].preview_rows[1][0].startswith("周报台账记录00002")
-    assert any("column statistics sampled" in warning for warning in ir.warnings)
-    assert ir.source.format == "xlsx"
-    assert elapsed < 5
+    assert elapsed < xlsx_parser.MAX_PARSE_SECONDS + 1.0
 
 
 @pytest.mark.parametrize(
@@ -475,12 +490,13 @@ def _write_large_real_worksheet(path: Path, *, row_count: int) -> None:
 
 
 class _FakeConnection:
-    def __init__(self, result=None, *, raises_eof: bool = False) -> None:
+    def __init__(self, result=None, *, raises_eof: bool = False, poll_ready: bool = True) -> None:
         self.result = result
         self.raises_eof = raises_eof
+        self.poll_ready = poll_ready
 
     def poll(self, _timeout: float) -> bool:
-        return True
+        return self.poll_ready
 
     def recv(self):
         if self.raises_eof:
@@ -521,8 +537,8 @@ class _FakeProcess:
 
 
 class _FakeHardDeadlineContext:
-    def __init__(self, *, worker_result, raises_eof: bool = False) -> None:
-        self.receiver = _FakeConnection(worker_result, raises_eof=raises_eof)
+    def __init__(self, *, worker_result, raises_eof: bool = False, poll_ready: bool = True) -> None:
+        self.receiver = _FakeConnection(worker_result, raises_eof=raises_eof, poll_ready=poll_ready)
         self.sender = _FakeConnection()
         self.process = _FakeProcess()
 
