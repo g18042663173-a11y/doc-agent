@@ -44,10 +44,12 @@ def test_build_prompt_truncates_context_and_declares_it() -> None:
     )
 
     prompt = build_prompt(kind="deck", context=context, max_context_chars=300)
+    context_json = prompt.split("[输入 DocumentIR]", 1)[1].split("[字符估算]", 1)[0].strip()
 
     assert "DeckIR v1.6" in prompt
     assert "已截断说明" in prompt
-    assert len(prompt.split("[输入 DocumentIR]", 1)[1]) < 700
+    assert "最终 JSON 中禁止出现“原文未提供”" in prompt
+    assert len(context_json) <= 300
 
 
 def test_build_prompt_truncates_context_as_valid_json_by_priority() -> None:
@@ -80,7 +82,106 @@ def test_build_prompt_truncates_context_as_valid_json_by_priority() -> None:
 
     assert payload["content"]["outline"] == [{"level": 1, "text": "关键标题"}]
     assert len(json.dumps(payload, ensure_ascii=False)) <= 900
-    assert "按优先级" in prompt
+    assert "按事实密度优先保留" in prompt
+
+
+def test_build_prompt_truncation_prioritizes_method_metric_and_tradeoff_evidence() -> None:
+    import json
+
+    from app.ir.document_ir import DocumentIR
+    from app.prompting.builder import build_prompt
+
+    context = DocumentIR.model_validate(
+        {
+            "ir_type": "document",
+            "ir_version": "1.1",
+            "source": {
+                "filename": "超长技术报告.docx",
+                "format": "docx",
+                "size_kb": 2048,
+                "parsed_at": "2026-07-17T00:00:00Z",
+            },
+            "stats": {"headings": 60, "paragraphs": 84, "tables": 1, "images": 20},
+            "warnings": [
+                f"解析诊断 {index}: " + "嵌入对象路径 " * 80
+                for index in range(40)
+            ],
+            "content": {
+                "outline": [
+                    {"level": 2, "text": f"第 {index} 节常规背景"}
+                    for index in range(60)
+                ],
+                "blocks": [
+                    {"type": "heading", "level": 1, "text": "技术方案"},
+                    *[
+                        {
+                            "type": "paragraph",
+                            "text": f"背景材料 {index}：介绍研究范围和一般情况。" + "常规说明" * 20,
+                        }
+                        for index in range(80)
+                    ],
+                    {"type": "heading", "level": 2, "text": "预测方法与训练参数"},
+                    {
+                        "type": "paragraph",
+                        "text": (
+                            "方法采用 CNN-LSTM：四层卷积提取空间特征，两层 LSTM 建模时序；"
+                            "数据集 20,000 组，训练/测试/验证比例 8:1:1，迭代 600 次，学习率 0.001。"
+                        ),
+                    },
+                    {"type": "heading", "level": 2, "text": "性能对比"},
+                    {
+                        "type": "paragraph",
+                        "text": (
+                            "AR-SiamFDSC 全局准确率为 98.38%；在 JNR 0 dB 条件下，"
+                            "相对 CNN 基线提高 3.83%。"
+                        ),
+                    },
+                    {"type": "heading", "level": 2, "text": "方案取舍"},
+                    {
+                        "type": "paragraph",
+                        "text": (
+                            "星上算力受限时选择 edRVFL 而非 CNN-LSTM，因为 edRVFL 无需反向传播、"
+                            "训练开销更低且响应更快；其量化精度对比原文未提供，需作为风险保留。"
+                        ),
+                    },
+                    {
+                        "type": "table",
+                        "header": ["对象", "指标", "结果"],
+                        "rows": [
+                            ["LEO 信道预测", "轨道高度/NMSE", "1000 km / -10 dB"],
+                            ["地面验证", "带宽/速率", "100 MHz / 800 Mbps"],
+                        ],
+                    },
+                ],
+            },
+        }
+    )
+
+    prompt = build_prompt(kind="deck", context=context, max_context_chars=4200)
+    context_json = prompt.split("[输入 DocumentIR]", 1)[1].split("[字符估算]", 1)[0].strip()
+    payload = json.loads(context_json)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
+
+    assert len(encoded) <= 4200
+    assert len(payload["warnings"]) <= 5
+    assert len(payload["content"]["outline"]) <= 18
+    retained = json.dumps(payload["content"]["blocks"], ensure_ascii=False)
+    assert "CNN-LSTM" in retained and "20,000" in retained and "8:1:1" in retained
+    assert "98.38%" in retained and "3.83%" in retained and "JNR 0 dB" in retained
+    assert "edRVFL" in retained and "训练开销更低" in retained and "原文未提供" in retained
+    assert "1000 km / -10 dB" in retained and "100 MHz / 800 Mbps" in retained
+    assert "背景材料 79" not in retained
+
+
+def test_three_stage_workflow_is_adjacent_to_input_facts_for_recency() -> None:
+    from app.prompting.builder import build_prompt
+
+    prompt = build_prompt(kind="deck", context=None)
+
+    context_index = prompt.index("[输入 DocumentIR]")
+    workflow_index = prompt.index("[三阶段内容生成]")
+    final_check_index = prompt.index("[最后自检]")
+    assert context_index < workflow_index < final_check_index
 
 
 def test_build_deck_prompt_contains_weak_model_rules_and_few_shot() -> None:
@@ -106,6 +207,143 @@ def test_build_deck_prompt_contains_weak_model_rules_and_few_shot() -> None:
     assert compact_sample in prompt
     assert "est_chars=2" in prompt
     assert "```" not in prompt
+
+
+def test_prompt_uses_silent_fact_skeleton_draft_workflow_with_anti_ai_rules() -> None:
+    from app.prompting.builder import build_prompt
+
+    prompt = build_prompt(kind="deck", context=None)
+
+    assert "[三阶段内容生成]" in prompt
+    assert "第1阶段：抽取事实" in prompt
+    assert "方法/模型名称" in prompt
+    assert "关键参数" in prompt
+    assert "数据与指标" in prompt
+    assert "对比对象" in prompt
+    assert "取舍/权衡" in prompt
+    assert "适用条件" in prompt
+    assert "原文未提供" in prompt
+    assert "禁止写完整句子" in prompt
+    assert "第2阶段：排文体骨架" in prompt
+    assert "第3阶段：成文" in prompt
+    assert "阶段1和阶段2只在内部完成" in prompt
+    assert "不得把事实表或骨架写成 Schema 外字段" in prompt
+    for phrase in ("先进的", "有效的", "良好的", "显著的", "充分体现", "奠定基础", "具有重要意义"):
+        assert phrase in prompt
+    assert "每个论点必须挂一个具体支撑" in prompt
+    assert "为什么这么选" in prompt
+    assert "能用数据或对比表达的优先建表" in prompt
+    assert "截断摘录不等于原文缺失" in prompt
+    assert "当前输入摘录未包含" in prompt
+    assert "输入摘录中有明确缺失证据" in prompt
+    assert "文件名或正文明确标注“公开”" in prompt
+    assert "PUBLIC" in prompt
+
+
+def test_truncation_keeps_adjacent_parameter_table_with_selected_conclusion() -> None:
+    import json
+
+    from app.ir.document_ir import DocumentIR
+    from app.prompting.builder import build_prompt
+
+    context = DocumentIR.model_validate(
+        {
+            "ir_type": "document",
+            "ir_version": "1.1",
+            "source": {
+                "filename": "公开训练报告.docx",
+                "format": "docx",
+                "size_kb": 128,
+                "parsed_at": "2026-07-17T00:00:00Z",
+            },
+            "stats": {"headings": 2, "paragraphs": 31, "tables": 1, "images": 0},
+            "warnings": ["诊断信息 " * 200],
+            "content": {
+                "outline": [{"level": 1, "text": "训练分析"}],
+                "blocks": [
+                    {"type": "heading", "level": 1, "text": "背景"},
+                    *[
+                        {
+                            "type": "paragraph",
+                            "text": f"对比样本 {index}：模型 M{index} 在 10 dB 条件下准确率为 90%。",
+                        }
+                        for index in range(30)
+                    ],
+                    {"type": "heading", "level": 1, "text": "训练分析"},
+                    {
+                        "type": "table",
+                        "header": ["项目", "设置值"],
+                        "rows": [
+                            ["训练世代", "100"],
+                            ["早停的忍耐度", "20"],
+                            ["早停的最低门限", "0"],
+                            ["批尺寸", "16"],
+                        ],
+                    },
+                    {
+                        "type": "paragraph",
+                        "text": "验证集损失在第13世代最小，第15世代后振荡上升，因此采用早停终止训练。",
+                    },
+                ],
+            },
+        }
+    )
+
+    prompt = build_prompt(kind="deck", context=context, max_context_chars=2300)
+    context_json = prompt.split("[输入 DocumentIR]", 1)[1].split("[字符估算]", 1)[0].strip()
+    retained = json.loads(context_json)["content"]["blocks"]
+    retained_text = json.dumps(retained, ensure_ascii=False)
+
+    assert "第13世代最小" in retained_text
+    assert "早停的忍耐度" in retained_text and '"20"' in retained_text
+    assert "早停的最低门限" in retained_text and '"0"' in retained_text
+
+
+def test_default_genre_templates_define_deck_and_word_skeletons() -> None:
+    from app.prompting.builder import build_prompt
+
+    deck = build_prompt(kind="deck", context=None)
+    word = build_prompt(kind="word", context=None)
+
+    assert "技术方案评审稿" in deck
+    assert "问题/现状 → 方案（挂具体方法） → 数据支撑 → 结论" in deck
+    assert "观点提到标题" in deck
+    assert "two_column 每栏最多 3 条" in deck
+    assert "全页最多 6 条" in deck
+    assert "architecture_diagram 最多 4 个节点、4 条边" in deck
+    assert "技术方案文档" in word
+    assert "概述 → 方案设计（模块/接口/数据流/关键算法） → 关键取舍与风险 → 结论" in word
+
+
+def test_genre_template_is_file_configurable_without_builder_code_change(tmp_path: Path, monkeypatch) -> None:
+    import app.prompting.builder as builder
+
+    genre_dir = tmp_path / "genres"
+    genre_dir.mkdir()
+    (genre_dir / "decision_memo.txt").write_text(
+        "决策备忘录：候选方案 → 证据 → 取舍 → 决策。",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(builder, "GENRE_TEMPLATE_DIR", genre_dir)
+
+    prompt = builder.build_prompt(kind="deck", context=None, genre="decision_memo")
+
+    assert "决策备忘录：候选方案 → 证据 → 取舍 → 决策。" in prompt
+    with pytest.raises(ValueError, match="genre"):
+        builder.build_prompt(kind="deck", context=None, genre="../escape")
+
+
+def test_prompt_has_replaceable_huawei_style_example_slot() -> None:
+    from app.prompting.builder import build_prompt
+
+    prompt = build_prompt(kind="word", context=None)
+
+    assert "[文体范例插槽]" in prompt
+    assert "面向实现" in prompt
+    assert "重技术细节、轻背景铺垫" in prompt
+    assert "陈述事实与权衡" in prompt
+    assert "真实华为详设/概设" in prompt
+    assert "替换模板文件即可升级" in prompt
 
 
 def test_build_prompt_output_budget_controls_page_and_block_limits() -> None:
@@ -262,7 +500,7 @@ def test_deck_prompt_optional_depth_rules_keep_default_path_deterministic() -> N
     detailed = build_prompt(kind="deck", context=context, depth="详细", pages=16)
 
     assert hashlib.sha256(legacy.encode("utf-8")).hexdigest() == (
-        "cddb37d18e3ba090edf509d1d409ba6746243f55d0e9340cd739abe91eac998e"
+        "ca16a590e5fb6caa9ade95066703e974d549f9ae23f670aeb1e05df7a3dbac05"
     )
     from app.generators.stub import StubGenerator
 

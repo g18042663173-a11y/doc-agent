@@ -19,4 +19,5 @@
 {context_json}
 [字符估算] est_chars={context_est_chars}（归一化并按需截断后的输入上下文字符数）
 {truncation_notice}
+{generation_workflow}
 [最后自检] 若预算不足，删减低价值内容并保持 IR 完整；不要输出错误对象、半截 JSON 或 Schema 外字段。
