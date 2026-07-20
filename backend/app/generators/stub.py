@@ -267,7 +267,7 @@ def _deck_payload(context: dict[str, Any] | None) -> dict[str, Any]:
     )
     return {
         "ir_type": "deck",
-        "ir_version": "1.6",
+        "ir_version": "1.8",
         "meta": {"title": title, "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
         "slides": slides,
     }

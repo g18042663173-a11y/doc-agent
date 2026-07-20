@@ -29,6 +29,8 @@ from app.ir.deck_ir import (
     ChartSideTable,
     ChartSpec,
     ChartThreshold,
+    CompositeRegion,
+    CompositeSlide,
     ConclusionSlide,
     CoverSlide,
     DeckTable,
@@ -80,6 +82,7 @@ DECK_SLIDE_MODELS: dict[str, Type[BaseModel]] = {
     "timeline": TimelineSlide,
     "image": ImageSlide,
     "conclusion": ConclusionSlide,
+    "composite": CompositeSlide,
 }
 
 
@@ -188,6 +191,29 @@ def _collect_deck_unknowns(data: Mapping[str, Any]) -> list[ValidationItem]:
                 continue
             slide_prefix = f"slides[{index}]"
             warnings.extend(_unknown_fields(slide, set(model.model_fields), slide_prefix))
+            if layout == "composite":
+                regions = slide.get("regions")
+                if isinstance(regions, list):
+                    for region_index, region in enumerate(regions):
+                        if not isinstance(region, Mapping):
+                            continue
+                        region_prefix = f"{slide_prefix}.regions[{region_index}]"
+                        warnings.extend(_unknown_fields(region, set(CompositeRegion.model_fields), region_prefix))
+                        components = region.get("components")
+                        if not isinstance(components, list):
+                            continue
+                        for component_index, component in enumerate(components):
+                            if not isinstance(component, Mapping):
+                                continue
+                            component_model = DECK_SLIDE_MODELS.get(str(component.get("layout")))
+                            if component_model in {TableSlide, ArchitectureDiagramSlide, TitleBulletsSlide, CardsSlide}:
+                                warnings.extend(
+                                    _unknown_fields(
+                                        component,
+                                        set(component_model.model_fields),
+                                        f"{region_prefix}.components[{component_index}]",
+                                    )
+                                )
             table = slide.get("table")
             if layout == "table" and isinstance(table, Mapping):
                 warnings.extend(_unknown_fields(table, set(DeckTable.model_fields), f"{slide_prefix}.table"))
@@ -605,8 +631,8 @@ def validate_deck_ir(raw: str | Mapping[str, Any]) -> ValidationResult[DeckIR]:
             _warning(
                 "D004",
                 "ir_version",
-                f"DeckIR {migrated_from} 已在内存中兼容迁移到 1.6，并按 1.6 契约重新校验。",
-                f"重新生成或序列化为 1.6 可消除该兼容提示；原始 {migrated_from} 文件不会被覆写。",
+                f"DeckIR {migrated_from} 已在内存中兼容迁移到 1.8，并按 1.8 契约重新校验。",
+                f"重新生成或序列化为 1.8 可消除该兼容提示；原始 {migrated_from} 文件不会被覆写。",
             )
         )
     data, normalization_warnings = _normalize_deck_data(data)

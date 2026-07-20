@@ -14,8 +14,20 @@
       "path": "samples/ir/deck_invalid_d003_unknown_layout.json"
     },
     {
+      "code": "D003",
+      "path": "samples/ir/deck_invalid_d003_composite_unsupported_component.json"
+    },
+    {
       "code": "D004",
       "path": "samples/ir/deck_invalid_d004_architecture_missing_node.json"
+    },
+    {
+      "code": "D004",
+      "path": "samples/ir/deck_invalid_d004_composite_duplicate_slot.json"
+    },
+    {
+      "code": "D004",
+      "path": "samples/ir/deck_invalid_d004_composite_too_many_components.json"
     },
     {
       "code": "D005",

@@ -3,7 +3,8 @@
     8
   ],
   "editable_table_slides": [
-    6
+    6,
+    13
   ],
   "layouts": [
     "cover",
@@ -18,17 +19,18 @@
     "process_flow",
     "timeline",
     "image",
+    "composite",
     "conclusion"
   ],
   "lint": {
     "errors": 0,
     "infos": 1,
     "pass": true,
-    "warnings": 0
+    "warnings": 1
   },
-  "slide_count": 13,
+  "slide_count": 14,
   "titles": [
-    "十三版式样例",
+    "十四版式样例",
     null,
     "核心内容",
     "关键进展",
@@ -40,6 +42,7 @@
     "确定性处理流程",
     "交付路线",
     "图片占位",
+    "方案状态与数据流可以在一页联读",
     "结论"
   ]
 }

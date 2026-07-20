@@ -11,9 +11,9 @@
       "sha256": "fe45b40336b38f21dda47c36d92a43e1bdd67acdc1f97ebba85b926b7cc6398a"
     },
     {
-      "bytes": 707,
+      "bytes": 785,
       "path": "samples/expected/deck_valid_full.expected.json",
-      "sha256": "3ff9ae1195944f9bc684e18913fc5c069a7ecc170614ceac8adda21af5852450"
+      "sha256": "313cab71372b4a55aa621380e23ebf9eb8701bb6fb39cf29cad9fc84d1a7ef74"
     },
     {
       "bytes": 1653,

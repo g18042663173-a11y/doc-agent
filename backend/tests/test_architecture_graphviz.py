@@ -29,7 +29,7 @@ def _architecture_slide(*, positioned: bool = False, with_edge: bool = False):
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "Graphviz failure tests", "theme": "hw_v1"},
             "slides": [
                 {

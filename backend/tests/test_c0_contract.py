@@ -80,7 +80,7 @@ def test_deck_ir_validates_minimal_deck() -> None:
     ir = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "C0 契约冻结", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {"layout": "cover", "title": "C0 契约冻结", "subtitle": "IR / Schema / Stub"},
@@ -352,7 +352,7 @@ def test_deck_schema_exposes_decision_matrix_table_contract() -> None:
     schema = load_schema("deck_ir")
     table_props = schema["$defs"]["DeckTable"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "1.6"
+    assert schema["properties"]["ir_version"]["const"] == "1.8"
     assert {"column_groups", "row_groups", "cell_spans", "conclusion_col", "col_widths"} <= set(table_props)
     assert table_props["rows"]["maxItems"] == 12
     assert table_props["header"]["maxItems"] == 8
@@ -368,11 +368,11 @@ def test_deck_schema_exposes_performance_chart_contract() -> None:
     assert "emphasis" in series_props
 
 
-def test_deck_schema_v16_exposes_kpi_card_variant() -> None:
+def test_deck_schema_v18_exposes_kpi_card_variant() -> None:
     schema = load_schema("deck_ir")
     cards_props = schema["$defs"]["CardsSlide"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "1.6"
+    assert schema["properties"]["ir_version"]["const"] == "1.8"
     assert cards_props["variant"]["default"] == "default"
     assert set(cards_props["variant"]["enum"]) == {"default", "kpi"}
 
@@ -384,7 +384,7 @@ def test_deck_schema_exposes_architecture_diagram_contract() -> None:
     edge_props = schema["$defs"]["ArchitectureEdge"]["properties"]
     group_props = schema["$defs"]["ArchitectureGroup"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "1.6"
+    assert schema["properties"]["ir_version"]["const"] == "1.8"
     assert {"nodes", "edges", "groups", "manual_hints"} <= set(slide_props)
     assert {"layout", "title", "nodes", "edges", "groups"} <= set(schema["$defs"]["ArchitectureDiagramSlide"]["required"])
     assert {"id", "text", "type", "group", "position", "size"} <= set(node_props)
@@ -392,14 +392,14 @@ def test_deck_schema_exposes_architecture_diagram_contract() -> None:
     assert {"id", "label", "node_ids"} <= set(group_props)
 
 
-def test_deck_schema_v16_exposes_process_flow_and_timeline_contracts() -> None:
+def test_deck_schema_v18_exposes_process_flow_and_timeline_contracts() -> None:
     schema = load_schema("deck_ir")
     process_props = schema["$defs"]["ProcessFlowSlide"]["properties"]
     step_props = schema["$defs"]["ProcessStep"]["properties"]
     timeline_props = schema["$defs"]["TimelineSlide"]["properties"]
     milestone_props = schema["$defs"]["TimelineMilestone"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "1.6"
+    assert schema["properties"]["ir_version"]["const"] == "1.8"
     assert {"layout", "title", "steps", "orientation"} <= set(process_props)
     assert process_props["steps"]["minItems"] == 2
     assert process_props["steps"]["maxItems"] == 7
@@ -409,6 +409,29 @@ def test_deck_schema_v16_exposes_process_flow_and_timeline_contracts() -> None:
     assert timeline_props["milestones"]["maxItems"] == 8
     assert {"label", "title", "description", "status"} <= set(milestone_props)
     assert set(milestone_props["status"]["enum"]) == {"completed", "current", "planned"}
+
+
+def test_deck_schema_v18_exposes_stacked_composite_as_existing_component_union() -> None:
+    schema = load_schema("deck_ir")
+    composite_props = schema["$defs"]["CompositeSlide"]["properties"]
+    region_props = schema["$defs"]["CompositeRegion"]["properties"]
+
+    assert schema["properties"]["ir_version"]["const"] == "1.8"
+    assert composite_props["regions"]["minItems"] == 2
+    assert composite_props["regions"]["maxItems"] == 2
+    assert set(region_props["slot"]["enum"]) == {"left", "right"}
+    component_refs = {
+        item["$ref"]
+        for item in region_props["components"]["items"]["oneOf"]
+    }
+    assert component_refs == {
+        "#/$defs/TableSlide",
+        "#/$defs/ArchitectureDiagramSlide",
+        "#/$defs/TitleBulletsSlide",
+        "#/$defs/CardsSlide",
+    }
+    assert region_props["components"]["minItems"] == 1
+    assert region_props["components"]["maxItems"] == 3
 
 
 def test_schema_describes_model_facing_table_chart_and_architecture_semantics() -> None:

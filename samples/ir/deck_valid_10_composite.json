@@ -1,0 +1,46 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "组合页试点",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "composite",
+      "title": "方案结论与数据流可以在一页联读",
+      "regions": [
+        {
+          "slot": "left",
+          "component": {
+            "layout": "table",
+            "title": "方案对比",
+            "table": {
+              "header": ["方案", "时延", "结论"],
+              "rows": [["方案A", "57ms", "推荐"], ["方案B", "72ms", "备选"]],
+              "conclusion_col": 2
+            }
+          }
+        },
+        {
+          "slot": "right",
+          "component": {
+            "layout": "architecture_diagram",
+            "title": "数据流骨架",
+            "nodes": [
+              {"id": "input", "text": "输入材料", "type": "primary"},
+              {"id": "gate", "text": "质量闸门", "type": "emphasis"},
+              {"id": "output", "text": "可编辑输出", "type": "data"}
+            ],
+            "edges": [
+              {"from": "input", "to": "gate", "label": "校验"},
+              {"from": "gate", "to": "output", "label": "通过"}
+            ],
+            "groups": []
+          }
+        }
+      ]
+    }
+  ]
+}

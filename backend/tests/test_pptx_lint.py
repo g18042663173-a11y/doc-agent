@@ -29,7 +29,7 @@ def test_check_pptx_rendered_deck_has_no_errors(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "合规", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "cover", "title": "合规"}],
         }
@@ -80,7 +80,7 @@ def test_check_pptx_accepts_theme_key_frame_coordinates(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "关键框", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "title_bullets", "title": "关键框", "bullets": [{"text": "坐标合规"}]}],
         }
@@ -448,7 +448,7 @@ def test_check_pptx_accepts_chart_accent_series_and_threshold_line(tmp_path: Pat
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "性能图表", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
@@ -497,7 +497,7 @@ def test_check_pptx_accepts_image_placeholder_contrast(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "图片占位", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [{"layout": "image", "title": "图片占位", "placeholder": "系统架构截图", "caption": "图1: 架构截图待补齐"}],
         }
@@ -718,7 +718,7 @@ def test_check_pptx_reports_renderer_text_coordinate_regression(tmp_path: Path) 
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "坐标回归", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "title_bullets", "title": "坐标回归", "bullets": [{"text": "正文要点"}]}],
         }
@@ -744,7 +744,7 @@ def test_check_pptx_reports_renderer_text_inside_forbidden_page_margin(tmp_path:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "页边距回归", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "title_bullets", "title": "页边距回归", "bullets": [{"text": "正文要点"}]}],
         }
@@ -905,7 +905,7 @@ def test_check_pptx_accepts_matching_agenda_and_section_counts(tmp_path: Path) -
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "结构一致", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {"layout": "cover", "title": "结构一致"},
@@ -930,7 +930,7 @@ def test_check_pptx_infos_when_agenda_and_section_counts_differ(tmp_path: Path) 
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "结构不一致", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {"layout": "cover", "title": "结构不一致"},
@@ -954,7 +954,7 @@ def test_check_pptx_architecture_uses_dedicated_layout_checks(tmp_path: Path) ->
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "架构 lint", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
@@ -1014,7 +1014,7 @@ def test_check_pptx_sequence_layouts_use_actual_geometry_and_theme_tokens(tmp_pa
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": layout, "classification": "公开"},
             "slides": [slide],
         }
@@ -1041,7 +1041,7 @@ def test_check_pptx_warns_when_dense_process_flow_cannot_fit_minimum_text(tmp_pa
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "密集流程", "classification": "公开"},
             "slides": [
                 {
@@ -1096,7 +1096,7 @@ def test_check_pptx_warns_for_dense_vertical_sequence_layouts(
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "密度", "classification": "公开"},
             "slides": [slide],
         }
@@ -1115,7 +1115,7 @@ def test_check_pptx_detects_tampered_kpi_and_image_slot(tmp_path: Path) -> None:
 
     payload = {
         "ir_type": "deck",
-        "ir_version": "1.6",
+        "ir_version": "1.7",
         "meta": {"title": "增强 lint", "classification": "公开"},
         "slides": [
             {
@@ -1167,7 +1167,7 @@ def test_check_pptx_reports_specific_kpi_and_image_slot_tampering(
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "增强 lint 负例", "classification": "公开"},
             "slides": [
                 {
@@ -1235,6 +1235,273 @@ def test_check_pptx_architecture_density_warning_boundary(
         assert density_warnings[0].message == "架构图过密·边数 13 超过阈值 12,建议人工调整或拆分。"
 
 
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
+def test_composite_architecture_keeps_existing_density_lint(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    nodes = [{"id": f"n{index}", "text": f"节点{index}"} for index in range(7)]
+    edge_pairs = [
+        (0, 1), (0, 2), (0, 3), (1, 3), (1, 4), (2, 3), (2, 4),
+        (2, 5), (3, 4), (3, 5), (3, 6), (4, 6), (5, 6),
+    ]
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.7",
+            "meta": {"title": "组合页密度", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "composite",
+                    "title": "组合页不豁免嵌入组件的合规检查",
+                    "regions": [
+                        {
+                            "slot": "left",
+                            "component": {
+                                "layout": "title_bullets",
+                                "title": "检查原则",
+                                "bullets": [{"text": "容器只负责分区", "level": 1}],
+                            },
+                        },
+                        {
+                            "slot": "right",
+                            "component": {
+                                "layout": "architecture_diagram",
+                                "title": "超密架构",
+                                "nodes": nodes,
+                                "edges": [
+                                    {"from": f"n{source}", "to": f"n{target}"}
+                                    for source, target in edge_pairs
+                                ],
+                                "groups": [],
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    path = render_deck_ir(deck, tmp_path / "composite-dense-architecture.pptx")
+    report = check_pptx(path, classification="公开")
+
+    density_warnings = [
+        item for item in report.items if item.code == "HW-W03" and item.message.startswith("架构图过密·")
+    ]
+    assert density_warnings
+    assert "超过阈值 12" in density_warnings[0].message
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_code", "message_fragment"),
+    [
+        ("table_color", "HW-W02", "表格单元格"),
+        ("bullets_overflow", "HW-W03", "要点超限"),
+        ("kpi_missing", "HW-W03", "KPI 指标缺少"),
+    ],
+)
+def test_composite_embedded_components_keep_existing_product_lint(
+    tmp_path: Path,
+    scenario: str,
+    expected_code: str,
+    message_fragment: str,
+) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    left_component = (
+        {
+            "layout": "table",
+            "title": "方案表",
+            "table": {"header": ["项", "值"], "rows": [["状态", "通过"]]},
+        }
+        if scenario == "table_color"
+        else {
+            "layout": "title_bullets",
+            "title": "检查项",
+            "bullets": [{"text": f"第{index}条", "level": 1} for index in range(1, 8)],
+        }
+    )
+    right_component = {
+        "layout": "cards",
+        "title": "指标",
+        "variant": "kpi" if scenario == "kpi_missing" else "default",
+        "cards": [
+            {"title": "通过率", "desc": "96%"},
+            {"title": "版式数", "desc": "14"},
+        ],
+    }
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.7",
+            "meta": {"title": "递归 lint", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "composite",
+                    "title": "容器不豁免嵌入组件规则",
+                    "regions": [
+                        {"slot": "left", "component": left_component},
+                        {"slot": "right", "component": right_component},
+                    ],
+                }
+            ],
+        }
+    )
+
+    path = render_deck_ir(deck, tmp_path / f"composite-{scenario}.pptx")
+    presentation = Presentation(str(path))
+    slide = presentation.slides[0]
+    if scenario == "table_color":
+        table = next(shape.table for shape in slide.shapes if getattr(shape, "has_table", False))
+        table.cell(1, 0).fill.solid()
+        table.cell(1, 0).fill.fore_color.rgb = RGBColor(0x12, 0x34, 0x56)
+    elif scenario == "bullets_overflow":
+        body = next(shape for shape in slide.shapes if shape.name == "HW_RENDERED_TEXT:BODY")
+        paragraph = body.text_frame.add_paragraph()
+        paragraph.text = "• 第八条"
+    else:
+        kpi = next(shape for shape in slide.shapes if shape.name.startswith("HW_RENDERED_TEXT:KPI_CARD:"))
+        kpi.text = "96%"
+    presentation.save(path)
+
+    report = check_pptx(path, classification="公开")
+
+    assert any(item.code == expected_code and message_fragment in item.message for item in report.items)
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
+def test_stacked_composite_architecture_keeps_existing_density_lint(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    nodes = [{"id": f"n{index}", "text": f"节点{index}"} for index in range(7)]
+    edge_pairs = [
+        (0, 1), (0, 2), (0, 3), (1, 3), (1, 4), (2, 3), (2, 4),
+        (2, 5), (3, 4), (3, 5), (3, 6), (4, 6), (5, 6),
+    ]
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.8",
+            "meta": {"title": "堆叠密度", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "composite",
+                    "title": "堆叠容器不豁免架构图边数检查",
+                    "regions": [
+                        {
+                            "slot": "left",
+                            "components": [
+                                {
+                                    "layout": "title_bullets",
+                                    "title": "检查原则",
+                                    "bullets": [{"text": "组件规则继续执行", "level": 1}],
+                                },
+                                {
+                                    "layout": "architecture_diagram",
+                                    "title": "超密架构",
+                                    "nodes": nodes,
+                                    "edges": [{"from": f"n{source}", "to": f"n{target}"} for source, target in edge_pairs],
+                                    "groups": [],
+                                },
+                            ],
+                        },
+                        {
+                            "slot": "right",
+                            "components": [
+                                {
+                                    "layout": "cards",
+                                    "title": "依据",
+                                    "cards": [{"title": "边数", "desc": "13"}, {"title": "阈值", "desc": "12"}],
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    report = check_pptx(render_deck_ir(deck, tmp_path / "stacked-dense.pptx"), classification="公开")
+
+    assert any(item.code == "HW-W03" and item.message.startswith("架构图过密·边数 13") for item in report.items)
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
+def test_stacked_composite_reports_column_overflow_from_real_block_geometry(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.8",
+            "meta": {"title": "栏高预警", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "composite",
+                    "title": "内容过多时必须提示人工拆分",
+                    "regions": [
+                        {
+                            "slot": "left",
+                            "components": [
+                                {
+                                    "layout": "table",
+                                    "title": "阶段表",
+                                    "table": {
+                                        "header": ["阶段", "状态"],
+                                        "rows": [["解析", "通过"], ["生成", "通过"]],
+                                    },
+                                },
+                                {
+                                    "layout": "architecture_diagram",
+                                    "title": "处理链路",
+                                    "nodes": [
+                                        {"id": "input", "text": "输入", "type": "primary"},
+                                        {"id": "gate", "text": "校验", "type": "emphasis"},
+                                        {"id": "output", "text": "输出", "type": "data"},
+                                    ],
+                                    "edges": [{"from": "input", "to": "gate"}, {"from": "gate", "to": "output"}],
+                                    "groups": [],
+                                },
+                                {
+                                    "layout": "title_bullets",
+                                    "title": "补充结论",
+                                    "bullets": [
+                                        {"text": "该栏以较长的可读说明保留完整事实，不自动截断也不自动缩到不可读字号以下。", "level": 1},
+                                        {"text": "当累计高度不足时，应明确交给人工拆分页面。", "level": 1},
+                                        {"text": "该样例故意逼近并超过单栏可用高度。", "level": 1},
+                                    ],
+                                },
+                            ],
+                        },
+                        {
+                            "slot": "right",
+                            "components": [
+                                {
+                                    "layout": "title_bullets",
+                                    "title": "右栏",
+                                    "bullets": [{"text": "保持正常", "level": 1}],
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    report = check_pptx(render_deck_ir(deck, tmp_path / "stacked-overflow.pptx"), classification="公开")
+    overflow_messages = [item.message for item in report.items if item.code == "HW-W03" and item.message.startswith("组合页该栏内容过多·")]
+
+    assert any("left 栏" in message and "建议人工拆分" in message for message in overflow_messages)
+
+
 @pytest.mark.parametrize(("text", "width", "height", "warns"), [("短文本", 3.0, 0.8, False), ("超长内容" * 200, 1.0, 0.3, True)])
 def test_check_pptx_warns_when_autofit_cannot_preserve_minimum_font_size(
     tmp_path: Path,
@@ -1273,7 +1540,7 @@ def test_check_pptx_architecture_reports_node_fill_outside_accent_palette(tmp_pa
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "架构配色", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
@@ -1307,7 +1574,7 @@ def test_check_cli_writes_json_and_markdown_reports(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "报告", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "cover", "title": "报告"}],
         }

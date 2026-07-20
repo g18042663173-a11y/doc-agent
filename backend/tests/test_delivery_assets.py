@@ -75,7 +75,8 @@ def test_deck_invalid_manifest_covers_d001_through_d006() -> None:
     from app.ir.shell import validate_deck_ir_text
 
     manifest = _json("samples/ir/deck_invalid_manifest.json")
-    assert [case["code"] for case in manifest["cases"]] == [f"D00{index}" for index in range(1, 7)]
+    assert {case["code"] for case in manifest["cases"]} == {f"D00{index}" for index in range(1, 7)}
+    assert len({case["path"] for case in manifest["cases"]}) == len(manifest["cases"])
     for case in manifest["cases"]:
         path = ROOT / case["path"]
         result = validate_deck_ir_text(path.read_text(encoding="utf-8"))

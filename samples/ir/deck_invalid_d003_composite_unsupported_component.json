@@ -1,0 +1,29 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {"title": "非法组件"},
+  "slides": [
+    {
+      "layout": "composite",
+      "title": "首版不嵌入流程页",
+      "regions": [
+        {
+          "slot": "left",
+          "component": {
+            "layout": "process_flow",
+            "title": "暂缓组件",
+            "steps": [{"id": "a", "title": "A"}, {"id": "b", "title": "B"}]
+          }
+        },
+        {
+          "slot": "right",
+          "component": {
+            "layout": "title_bullets",
+            "title": "右栏",
+            "bullets": [{"text": "等待组合架构验证", "level": 1}]
+          }
+        }
+      ]
+    }
+  ]
+}

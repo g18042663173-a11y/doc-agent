@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import warnings
 
@@ -24,6 +25,7 @@ from app.ir.deck_ir import (
     ChartSlide,
     ChartSpec,
     ColumnContent,
+    CompositeSlide,
     ConclusionSlide,
     CoverSlide,
     DeckTableCell,
@@ -43,6 +45,22 @@ from app.rendering.architecture_graphviz import (
 )
 from app.rendering.theme import load_theme
 from app.rendering.typography import constrained_stack_heights, fit_text_stack
+
+
+@dataclass(frozen=True)
+class _RenderRegion:
+    left_in: float
+    top_in: float
+    width_in: float
+    height_in: float
+
+    def as_box(self) -> dict[str, float]:
+        return {
+            "left_in": self.left_in,
+            "top_in": self.top_in,
+            "width_in": self.width_in,
+            "height_in": self.height_in,
+        }
 
 
 def render_deck_ir(deck: DeckIR, output_path: Path) -> Path:
@@ -80,6 +98,8 @@ def render_deck_ir(deck: DeckIR, output_path: Path) -> Path:
             _render_timeline(slide, slide_ir, theme)
         elif isinstance(slide_ir, ImageSlide):
             _render_image_placeholder(slide, slide_ir, theme)
+        elif isinstance(slide_ir, CompositeSlide):
+            _render_composite(slide, slide_ir, theme)
         else:
             _render_placeholder(slide, slide_ir.layout, theme)
         _add_footer(slide, deck.meta.classification, slide_number, total_slides, theme)
@@ -200,13 +220,23 @@ def _render_section(slide, slide_ir: SectionSlide, theme: dict) -> None:
     _red_bar(slide, theme, layout["red_bar"])
 
 
-def _render_title_bullets(slide, slide_ir: TitleBulletsSlide, theme: dict) -> None:
-    _title(slide, slide_ir.title, theme)
-    layout = theme["layouts"]["title_bullets"]
+def _render_title_bullets(
+    slide,
+    slide_ir: TitleBulletsSlide,
+    theme: dict,
+    *,
+    region: _RenderRegion | None = None,
+    include_page_title: bool = True,
+) -> None:
+    if include_page_title:
+        _title(slide, slide_ir.title, theme)
+    layout = dict(theme["layouts"]["title_bullets"])
+    if region is not None:
+        layout.update(region.as_box())
     typography = theme["ppt_typography"]
     top = layout["top_in"]
     texts = [f"{'    –' if bullet.level == 2 else '•'} {bullet.text}" for bullet in slide_ir.bullets]
-    available_height = typography["content_bottom_in"] - top
+    available_height = region.height_in if region is not None else typography["content_bottom_in"] - top
     fit = _fit_body_stack(texts, layout["width_in"], available_height, theme)
     heights = constrained_stack_heights(
         fit,
@@ -231,9 +261,19 @@ def _render_title_bullets(slide, slide_ir: TitleBulletsSlide, theme: dict) -> No
         top += height + typography["body_item_gap_in"]
 
 
-def _render_table_slide(slide, slide_ir: TableSlide, theme: dict) -> None:
-    _title(slide, slide_ir.title, theme)
-    layout = theme["layouts"]["table"]
+def _render_table_slide(
+    slide,
+    slide_ir: TableSlide,
+    theme: dict,
+    *,
+    region: _RenderRegion | None = None,
+    include_page_title: bool = True,
+) -> None:
+    if include_page_title:
+        _title(slide, slide_ir.title, theme)
+    layout = dict(theme["layouts"]["table"])
+    if region is not None:
+        layout.update(region.as_box())
     table_ir = slide_ir.table
     has_column_groups = bool(table_ir.column_groups)
     row_group_starts = {group.start_row: group for group in table_ir.row_groups}
@@ -243,11 +283,16 @@ def _render_table_slide(slide, slide_ir: TableSlide, theme: dict) -> None:
     cols = len(slide_ir.table.header)
     col_widths = _table_col_widths(table_ir.col_widths, cols, layout, theme)
     row_heights = _table_row_heights(table_ir, rows, header_row_index, data_start_index, layout)
-    row_heights = _fit_table_row_heights(row_heights, layout, theme)
+    row_heights = _fit_table_row_heights(
+        row_heights,
+        layout,
+        theme,
+        max_height_in=region.height_in if region is not None else None,
+    )
     shape = slide.shapes.add_table(
         rows,
         cols,
-        Inches(_table_left_in(col_widths, layout, theme)),
+        Inches(_table_left_in(col_widths, layout, theme, align_left=region is not None)),
         Inches(layout["top_in"]),
         Inches(sum(col_widths)),
         Inches(sum(row_heights)),
@@ -327,7 +372,15 @@ def _table_col_widths(custom_widths: list[float] | None, cols: int, layout: dict
     return widths
 
 
-def _table_left_in(col_widths: list[float], layout: dict, theme: dict) -> float:
+def _table_left_in(
+    col_widths: list[float],
+    layout: dict,
+    theme: dict,
+    *,
+    align_left: bool = False,
+) -> float:
+    if align_left:
+        return layout["left_in"]
     table_width = sum(col_widths)
     centered = (theme["slide"]["width_in"] - table_width) / 2
     return max(layout["left_in"], centered)
@@ -348,8 +401,18 @@ def _table_row_heights(table_ir, rows: int, header_row_index: int, data_start_in
     return heights
 
 
-def _fit_table_row_heights(row_heights: list[float], layout: dict, theme: dict) -> list[float]:
-    max_height = theme["slide"]["footer_top_in"] - theme["grid"]["min_gap_in"] - layout["top_in"]
+def _fit_table_row_heights(
+    row_heights: list[float],
+    layout: dict,
+    theme: dict,
+    *,
+    max_height_in: float | None = None,
+) -> list[float]:
+    max_height = (
+        max_height_in
+        if max_height_in is not None
+        else theme["slide"]["footer_top_in"] - theme["grid"]["min_gap_in"] - layout["top_in"]
+    )
     current_height = sum(row_heights)
     if current_height <= max_height:
         return row_heights
@@ -545,22 +608,36 @@ def _column_texts(content: ColumnContent) -> list[str]:
     return texts
 
 
-def _render_cards(slide, slide_ir: CardsSlide, theme: dict) -> None:
-    _title(slide, slide_ir.title, theme)
+def _render_cards(
+    slide,
+    slide_ir: CardsSlide,
+    theme: dict,
+    *,
+    region: _RenderRegion | None = None,
+    include_page_title: bool = True,
+) -> None:
+    if include_page_title:
+        _title(slide, slide_ir.title, theme)
     layout = theme["layouts"]["cards"]
     count = len(slide_ir.cards)
-    span = int(layout["grid_span_by_count"][str(count)])
-    gap = int(layout["grid_gap_columns"])
-    used_columns = count * span + (count - 1) * gap
-    start_column = max(0, (theme["grid"]["columns"] - used_columns) // 2)
-    for index, card in enumerate(slide_ir.cards):
-        left, card_width = _grid_horizontal_box(theme, start_column + index * (span + gap), span)
+    boxes = _region_card_boxes(region, count, theme) if region is not None else None
+    if boxes is None:
+        span = int(layout["grid_span_by_count"][str(count)])
+        gap = int(layout["grid_gap_columns"])
+        used_columns = count * span + (count - 1) * gap
+        start_column = max(0, (theme["grid"]["columns"] - used_columns) // 2)
+        boxes = [
+            (*_grid_horizontal_box(theme, start_column + index * (span + gap), span), layout["top_in"], layout["height_in"])
+            for index in range(count)
+        ]
+    for index, (left, card_width, top, card_height) in enumerate(boxes):
+        card = slide_ir.cards[index]
         card_shape = _card_box(
             slide,
             left,
-            layout["top_in"],
+            top,
             card_width,
-            layout["height_in"],
+            card_height,
             layout,
             theme,
             fill_color_key="background" if slide_ir.variant == "kpi" else "surface",
@@ -569,6 +646,16 @@ def _render_cards(slide, slide_ir: CardsSlide, theme: dict) -> None:
             _kpi_card_content(card_shape, card, index, layout, theme)
         else:
             _card_content(card_shape, card, layout, theme)
+
+
+def _region_card_boxes(region: _RenderRegion, count: int, theme: dict) -> list[tuple[float, float, float, float]]:
+    layout = theme["layouts"]["composite"]["cards"]
+    height = float(layout["height_by_count_in"][str(count)])
+    gap = float(layout["gap_by_count_in"][str(count)])
+    return [
+        (region.left_in, region.width_in, region.top_in + index * (height + gap), height)
+        for index in range(count)
+    ]
 
 
 def _grid_horizontal_box(theme: dict, start_column: int, span: int) -> tuple[float, float]:
@@ -988,9 +1075,19 @@ def _add_chart_side_content(slide, chart_ir: ChartSpec, layout: dict, theme: dic
                 _set_cell_border(cell, theme)
 
 
-def _render_architecture_diagram(slide, slide_ir: ArchitectureDiagramSlide, theme: dict) -> None:
-    _title(slide, slide_ir.title, theme)
-    layout = theme["layouts"]["architecture_diagram"]
+def _render_architecture_diagram(
+    slide,
+    slide_ir: ArchitectureDiagramSlide,
+    theme: dict,
+    *,
+    region: _RenderRegion | None = None,
+    include_page_title: bool = True,
+) -> None:
+    if include_page_title:
+        _title(slide, slide_ir.title, theme)
+    layout = dict(theme["layouts"]["architecture_diagram"])
+    if region is not None:
+        layout["content"] = region.as_box()
     try:
         graphviz_layout = layout_architecture_with_graphviz(slide_ir, layout, theme)
     except GraphvizLayoutUnavailable as exc:
@@ -1015,6 +1112,164 @@ def _render_architecture_diagram(slide, slide_ir: ArchitectureDiagramSlide, them
             font_size_pt=graphviz_layout.node_font_size_pt,
         )
     _render_graphviz_architecture_labels(slide, graphviz_layout.edges, layout, theme)
+
+
+def _render_composite(slide, slide_ir: CompositeSlide, theme: dict) -> None:
+    _title(slide, slide_ir.title, theme)
+    layout = theme["layouts"]["composite"]
+    outer_regions = _composite_outer_regions(layout, theme)
+    for region_ir in sorted(slide_ir.regions, key=lambda item: item.slot):
+        outer = outer_regions[region_ir.slot]
+        if len(region_ir.components) == 1:
+            _render_composite_single_component(slide, region_ir.slot, outer, region_ir.components[0], layout, theme)
+        else:
+            _render_composite_component_stack(slide, region_ir.slot, outer, region_ir.components, layout, theme)
+
+
+def _composite_outer_regions(layout: dict, theme: dict) -> dict[str, _RenderRegion]:
+    content = layout["content"]
+    slide_layout = theme["slide"]
+    column_width = (
+        slide_layout["width_in"] - slide_layout["margin_left_in"] - slide_layout["margin_right_in"]
+    ) / theme["grid"]["columns"]
+    left_width = layout["left_span_columns"] * column_width
+    right_left = content["left_in"] + (layout["left_span_columns"] + layout["gap_columns"]) * column_width
+    return {
+        "left": _RenderRegion(content["left_in"], content["top_in"], left_width, content["height_in"]),
+        "right": _RenderRegion(
+            right_left,
+            content["top_in"],
+            layout["right_span_columns"] * column_width,
+            content["height_in"],
+        ),
+    }
+
+
+def _render_composite_single_component(slide, slot: str, outer: _RenderRegion, component, layout: dict, theme: dict) -> None:
+    """Preserve the v1.7 single-component composite geometry exactly."""
+    _add_text_box(
+        slide,
+        component.title,
+        {
+            "left_in": outer.left_in,
+            "top_in": outer.top_in,
+            "width_in": outer.width_in,
+            "height_in": layout["region_title_height_in"],
+        },
+        theme,
+        size=layout["region_title_font_size_pt"],
+        bold=True,
+        color_key="hw_red",
+        name=f"HW_RENDERED_TEXT:COMPOSITE_REGION_TITLE:{slot}",
+    )
+    padding = layout["region_padding_in"]
+    component_top = outer.top_in + layout["region_title_height_in"] + layout["region_title_gap_in"]
+    component_region = _RenderRegion(
+        outer.left_in + padding,
+        component_top,
+        outer.width_in - padding * 2,
+        outer.top_in + outer.height_in - component_top - padding,
+    )
+    _render_composite_component(slide, component, component_region, theme)
+
+
+def _render_composite_component_stack(slide, slot: str, outer: _RenderRegion, components: list, layout: dict, theme: dict) -> None:
+    padding = layout["region_padding_in"]
+    cursor = outer.top_in + padding
+    width = outer.width_in - padding * 2
+    for index, component in enumerate(components, start=1):
+        title_height = layout["stack_region_title_height_in"]
+        title_gap = layout["stack_region_title_gap_in"]
+        probe_region = _RenderRegion(outer.left_in + padding, cursor + title_height + title_gap, width, 1.0)
+        body_height = _composite_component_preferred_height(component, probe_region, layout, theme)
+        block_height = title_height + title_gap + body_height
+        _add_composite_block_boundary(slide, slot, index, outer.left_in + padding, cursor, width, block_height)
+        _add_text_box(
+            slide,
+            component.title,
+            {
+                "left_in": outer.left_in + padding,
+                "top_in": cursor,
+                "width_in": width,
+                "height_in": title_height,
+            },
+            theme,
+            size=layout["region_title_font_size_pt"],
+            bold=True,
+            color_key="hw_red",
+            name=f"HW_RENDERED_TEXT:COMPOSITE_BLOCK_TITLE:{slot}:{index}",
+        )
+        component_region = _RenderRegion(outer.left_in + padding, cursor + title_height + title_gap, width, body_height)
+        _render_composite_component(slide, component, component_region, theme)
+        if index < len(components):
+            cursor = _snap_to_baseline_in(cursor + block_height + layout["stack_gap_in"], theme)
+
+
+def _render_composite_component(slide, component, region: _RenderRegion, theme: dict) -> None:
+    if isinstance(component, TableSlide):
+        _render_table_slide(slide, component, theme, region=region, include_page_title=False)
+    elif isinstance(component, ArchitectureDiagramSlide):
+        _render_architecture_diagram(slide, component, theme, region=region, include_page_title=False)
+    elif isinstance(component, TitleBulletsSlide):
+        _render_title_bullets(slide, component, theme, region=region, include_page_title=False)
+    elif isinstance(component, CardsSlide):
+        _render_cards(slide, component, theme, region=region, include_page_title=False)
+
+
+def _add_composite_block_boundary(slide, slot: str, index: int, left: float, top: float, width: float, height: float) -> None:
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
+    shape.name = f"HW_COMPOSITE_BLOCK:{slot}:{index}"
+    shape.fill.background()
+    shape.line.fill.background()
+
+
+def _composite_component_preferred_height(component, region: _RenderRegion, layout: dict, theme: dict) -> float:
+    if isinstance(component, TableSlide):
+        table_ir = component.table
+        header_row_index = 1 if table_ir.column_groups else 0
+        data_start_index = header_row_index + 1
+        rows = data_start_index + len(table_ir.rows) + len(table_ir.row_groups)
+        table_layout = theme["layouts"]["table"]
+        return sum(_table_row_heights(table_ir, rows, header_row_index, data_start_index, table_layout))
+    if isinstance(component, TitleBulletsSlide):
+        texts = [f"{'    –' if bullet.level == 2 else '•'} {bullet.text}" for bullet in component.bullets]
+        fit = _fit_body_stack(texts, region.width_in, layout["stack_architecture_probe_height_in"], theme)
+        return sum(fit.item_heights_in) + theme["ppt_typography"]["body_item_gap_in"] * max(len(texts) - 1, 0)
+    if isinstance(component, CardsSlide):
+        cards_layout = layout["cards"]
+        count = len(component.cards)
+        return float(cards_layout["height_by_count_in"][str(count)]) * count + float(cards_layout["gap_by_count_in"][str(count)]) * (count - 1)
+    if isinstance(component, ArchitectureDiagramSlide):
+        return _composite_architecture_preferred_height(component, region, layout, theme)
+    raise TypeError(f"unsupported composite component: {type(component).__name__}")
+
+
+def _composite_architecture_preferred_height(component: ArchitectureDiagramSlide, region: _RenderRegion, layout: dict, theme: dict) -> float:
+    architecture_layout = dict(theme["layouts"]["architecture_diagram"])
+    architecture_layout["content"] = {
+        "left_in": region.left_in,
+        "top_in": 0.0,
+        "width_in": region.width_in,
+        "height_in": layout["stack_architecture_probe_height_in"],
+    }
+    try:
+        graphviz_layout = layout_architecture_with_graphviz(component, architecture_layout, theme)
+    except GraphvizLayoutUnavailable:
+        return _composite_architecture_fallback_height(component, layout, theme)
+    boxes = list(graphviz_layout.node_boxes.values())
+    boxes.extend(box for _group_id, _label, _node_ids, box in graphviz_layout.group_layers)
+    boxes.extend(edge.label_box for edge in graphviz_layout.edges if edge.label_box is not None)
+    if not boxes:
+        return layout["stack_architecture_min_height_in"]
+    top = min(box["top_in"] for box in boxes)
+    bottom = max(box["top_in"] + box["height_in"] for box in boxes)
+    return max(layout["stack_architecture_min_height_in"], bottom - top + layout["stack_block_padding_in"] * 2)
+
+
+def _composite_architecture_fallback_height(component: ArchitectureDiagramSlide, layout: dict, theme: dict) -> float:
+    node_height = theme["layouts"]["architecture_diagram"]["node_min_height_in"]
+    rows = max(1, (len(component.nodes) + 2) // 3)
+    return max(layout["stack_architecture_min_height_in"], rows * node_height + layout["stack_block_padding_in"] * 2)
 
 
 def _render_architecture_diagram_fallback(

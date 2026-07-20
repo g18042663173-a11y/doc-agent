@@ -573,6 +573,91 @@
       "title": "ColumnContent",
       "type": "object"
     },
+    "CompositeRegion": {
+      "properties": {
+        "components": {
+          "description": "栏内从上到下堆叠的既有组件，首版最多 3 块。单块列表与 v1.7 的单 component 语义一致；超过栏高时渲染后由 HW-W03 提示人工拆分。",
+          "items": {
+            "description": "嵌入区域复用的既有组件；首版仅允许 table、architecture_diagram、title_bullets、cards，并继续执行对应组件的全部字段校验。",
+            "discriminator": {
+              "mapping": {
+                "architecture_diagram": "#/$defs/ArchitectureDiagramSlide",
+                "cards": "#/$defs/CardsSlide",
+                "table": "#/$defs/TableSlide",
+                "title_bullets": "#/$defs/TitleBulletsSlide"
+              },
+              "propertyName": "layout"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TableSlide"
+              },
+              {
+                "$ref": "#/$defs/ArchitectureDiagramSlide"
+              },
+              {
+                "$ref": "#/$defs/TitleBulletsSlide"
+              },
+              {
+                "$ref": "#/$defs/CardsSlide"
+              }
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Components",
+          "type": "array"
+        },
+        "slot": {
+          "description": "区域位置；固定为 left 或 right。",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "title": "Slot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot",
+        "components"
+      ],
+      "title": "CompositeRegion",
+      "type": "object"
+    },
+    "CompositeSlide": {
+      "properties": {
+        "layout": {
+          "const": "composite",
+          "description": "固定为 composite，表达左右栏内多个既有组件的联读关系。",
+          "title": "Layout",
+          "type": "string"
+        },
+        "regions": {
+          "description": "恰好两个区域，必须各包含一个 left 和 right；区域坐标和栏内堆叠坐标由主题确定，模型不提供任意坐标。",
+          "items": {
+            "$ref": "#/$defs/CompositeRegion"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Regions",
+          "type": "array"
+        },
+        "title": {
+          "description": "整页结论式标题；每个嵌入组件仍保留自己的区域小标题。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "regions"
+      ],
+      "title": "CompositeSlide",
+      "type": "object"
+    },
     "ConclusionSlide": {
       "properties": {
         "bullets": {
@@ -1377,7 +1462,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "1.6",
+      "const": "1.8",
       "title": "Ir Version",
       "type": "string"
     },
@@ -1392,6 +1477,7 @@
             "architecture_diagram": "#/$defs/ArchitectureDiagramSlide",
             "cards": "#/$defs/CardsSlide",
             "chart": "#/$defs/ChartSlide",
+            "composite": "#/$defs/CompositeSlide",
             "conclusion": "#/$defs/ConclusionSlide",
             "cover": "#/$defs/CoverSlide",
             "image": "#/$defs/ImageSlide",
@@ -1443,6 +1529,9 @@
           },
           {
             "$ref": "#/$defs/ConclusionSlide"
+          },
+          {
+            "$ref": "#/$defs/CompositeSlide"
           }
         ]
       },

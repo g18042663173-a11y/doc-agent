@@ -202,7 +202,7 @@ def test_validate_deck_ir_maps_unknown_layout_to_d003() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+                "ir_version": "1.8",
             "meta": {"title": "未知版式"},
             "slides": [{"layout": "mystery", "title": "无法渲染"}],
         }
@@ -212,8 +212,8 @@ def test_validate_deck_ir_maps_unknown_layout_to_d003() -> None:
     assert result.errors[0].code == "D003"
 
 
-@pytest.mark.parametrize("source_version", ["1.4", "1.5"])
-def test_validate_deck_ir_migrates_v14_and_v15_without_mutating_input(source_version: str) -> None:
+@pytest.mark.parametrize("source_version", ["1.4", "1.5", "1.6", "1.7"])
+def test_validate_deck_ir_migrates_legacy_versions_without_mutating_input(source_version: str) -> None:
     import copy
 
     from app.ir.deck_ir import DeckIR
@@ -230,16 +230,290 @@ def test_validate_deck_ir_migrates_v14_and_v15_without_mutating_input(source_ver
     direct = DeckIR.model_validate(payload)
 
     assert result.ok and result.value is not None
-    assert result.value.ir_version == "1.6"
-    assert direct.ir_version == "1.6"
+    assert result.value.ir_version == "1.8"
+    assert direct.ir_version == "1.8"
     assert payload == original
     assert any(
         item.code == "D004"
         and item.loc == "ir_version"
         and source_version in item.message
-        and "1.6" in item.message
+        and "1.8" in item.message
         for item in result.warnings
     )
+
+
+def test_validate_deck_ir_accepts_composite_with_existing_component_models() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.8",
+            "meta": {"title": "组合页"},
+            "slides": [
+                {
+                    "layout": "composite",
+                    "title": "方案结论与数据流可在一页联读",
+                    "regions": [
+                        {
+                            "slot": "left",
+                            "components": [{
+                                "layout": "table",
+                                "title": "方案对比",
+                                "table": {"header": ["方案", "结论"], "rows": [["A", "推荐"]]},
+                            }],
+                        },
+                        {
+                            "slot": "right",
+                            "components": [{
+                                "layout": "architecture_diagram",
+                                "title": "数据流",
+                                "nodes": [
+                                    {"id": "input", "text": "输入", "type": "primary"},
+                                    {"id": "output", "text": "输出", "type": "data"},
+                                ],
+                                "edges": [{"from": "input", "to": "output"}],
+                                "groups": [],
+                            }],
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert result.ok and result.value is not None
+    slide = result.value.slides[0]
+    assert slide.layout == "composite"
+    assert [region.slot for region in slide.regions] == ["left", "right"]
+    assert [region.components[0].layout for region in slide.regions] == ["table", "architecture_diagram"]
+
+
+def test_validate_deck_ir_migrates_v17_single_composite_component_without_mutating_input() -> None:
+    import copy
+
+    from app.ir.validation import validate_deck_ir
+
+    payload = {
+        "ir_type": "deck",
+            "ir_version": "1.7",
+        "meta": {"title": "旧组合页"},
+        "slides": [
+            {
+                "layout": "composite",
+                "title": "单组件组合页",
+                "regions": [
+                    {
+                        "slot": "left",
+                        "component": {
+                            "layout": "title_bullets",
+                            "title": "左栏",
+                            "bullets": [{"text": "旧字段", "level": 1}],
+                        },
+                    },
+                    {
+                        "slot": "right",
+                        "component": {
+                            "layout": "cards",
+                            "title": "右栏",
+                            "cards": [{"title": "A", "desc": "一"}, {"title": "B", "desc": "二"}],
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+    original = copy.deepcopy(payload)
+
+    result = validate_deck_ir(payload)
+
+    assert result.ok and result.value is not None
+    assert result.value.ir_version == "1.8"
+    assert [len(region.components) for region in result.value.slides[0].regions] == [1, 1]
+    assert payload == original
+    assert any(item.code == "D004" and "1.7" in item.message and "1.8" in item.message for item in result.warnings)
+
+
+def test_validate_deck_ir_accepts_three_stacked_components_and_rejects_fourth() -> None:
+    import copy
+
+    from app.ir.validation import validate_deck_ir
+
+    component = {"layout": "title_bullets", "title": "块", "bullets": [{"text": "内容", "level": 1}]}
+    valid = {
+        "ir_type": "deck",
+        "ir_version": "1.8",
+        "meta": {"title": "堆叠"},
+        "slides": [
+            {
+                "layout": "composite",
+                "title": "堆叠合法",
+                "regions": [
+                    {"slot": "left", "components": [component, component, component]},
+                    {"slot": "right", "components": [component]},
+                ],
+            }
+        ],
+    }
+    invalid = copy.deepcopy(valid)
+    invalid["slides"][0]["regions"][0]["components"].append(component)
+
+    assert validate_deck_ir(valid).ok
+    invalid_result = validate_deck_ir(invalid)
+    assert invalid_result.value is None
+    assert invalid_result.errors[0].code == "D004"
+
+
+@pytest.mark.parametrize(
+    ("regions", "expected_code"),
+    [
+        (
+            [
+                {
+                    "slot": "left",
+                    "component": {
+                        "layout": "title_bullets",
+                        "title": "左侧",
+                        "bullets": [{"text": "要点", "level": 1}],
+                    },
+                },
+                {
+                    "slot": "left",
+                    "component": {
+                        "layout": "cards",
+                        "title": "重复左栏",
+                        "cards": [{"title": "A", "desc": "一"}, {"title": "B", "desc": "二"}],
+                    },
+                },
+            ],
+            "D004",
+        ),
+        (
+            [
+                {
+                    "slot": "left",
+                    "component": {
+                        "layout": "chart",
+                        "title": "暂不允许",
+                        "chart": {"kind": "bar", "categories": ["A"], "series": [{"name": "值", "values": [1]}]},
+                    },
+                },
+                {
+                    "slot": "right",
+                    "component": {
+                        "layout": "title_bullets",
+                        "title": "右侧",
+                        "bullets": [{"text": "要点", "level": 1}],
+                    },
+                },
+            ],
+            "D003",
+        ),
+        (
+            [
+                {
+                    "slot": "left",
+                    "component": {
+                        "layout": "table",
+                        "title": "非法表格",
+                        "table": {"header": ["A", "B"], "rows": [["只有一列"]]},
+                    },
+                },
+                {
+                    "slot": "right",
+                    "component": {
+                        "layout": "title_bullets",
+                        "title": "右侧",
+                        "bullets": [{"text": "要点", "level": 1}],
+                    },
+                },
+            ],
+            "D005",
+        ),
+        (
+            [
+                {
+                    "slot": "left",
+                    "component": {
+                        "layout": "cards",
+                        "title": "左侧",
+                        "cards": [{"title": "A", "desc": "一"}, {"title": "B", "desc": "二"}],
+                    },
+                },
+                {
+                    "slot": "right",
+                    "component": {
+                        "layout": "architecture_diagram",
+                        "title": "非法架构",
+                        "nodes": [{"id": "known", "text": "已知节点"}],
+                        "edges": [{"from": "known", "to": "missing"}],
+                        "groups": [],
+                    },
+                },
+            ],
+            "D004",
+        ),
+        (
+            [
+                {
+                    "slot": "left",
+                    "component": {
+                        "layout": "title_bullets",
+                        "title": "空要点",
+                        "bullets": [],
+                    },
+                },
+                {
+                    "slot": "right",
+                    "component": {
+                        "layout": "cards",
+                        "title": "右侧",
+                        "cards": [{"title": "A", "desc": "一"}, {"title": "B", "desc": "二"}],
+                    },
+                },
+            ],
+            "D006",
+        ),
+        (
+            [
+                {
+                    "slot": "left",
+                    "component": {
+                        "layout": "title_bullets",
+                        "title": "左侧",
+                        "bullets": [{"text": "要点", "level": 1}],
+                    },
+                },
+                {
+                    "slot": "right",
+                    "component": {
+                        "layout": "cards",
+                        "title": "卡片不足",
+                        "cards": [{"title": "只有一张", "desc": "非法"}],
+                    },
+                },
+            ],
+            "D004",
+        ),
+    ],
+)
+def test_validate_deck_ir_composite_recursively_enforces_component_contracts(
+    regions: list[dict],
+    expected_code: str,
+) -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.7",
+            "meta": {"title": "非法组合页"},
+            "slides": [{"layout": "composite", "title": "非法组合页", "regions": regions}],
+        }
+    )
+
+    assert not result.ok
+    assert result.errors[0].code == expected_code
 
 
 def test_validate_deck_ir_revalidates_v14_and_rejects_older_versions() -> None:
@@ -265,7 +539,7 @@ def test_validate_deck_ir_revalidates_v14_and_rejects_older_versions() -> None:
 def test_validate_deck_ir_maps_missing_title_to_d002() -> None:
     from app.ir.validation import validate_deck_ir
 
-    result = validate_deck_ir({"ir_type": "deck", "ir_version": "1.6", "meta": {}, "slides": [{"layout": "cover", "title": "封面"}]})
+    result = validate_deck_ir({"ir_type": "deck", "ir_version": "1.7", "meta": {}, "slides": [{"layout": "cover", "title": "封面"}]})
 
     assert result.value is None
     assert result.errors[0].code == "D002"
@@ -274,7 +548,7 @@ def test_validate_deck_ir_maps_missing_title_to_d002() -> None:
 def test_validate_deck_ir_maps_missing_layout_field_to_d004() -> None:
     from app.ir.validation import validate_deck_ir
 
-    result = validate_deck_ir({"ir_type": "deck", "ir_version": "1.6", "meta": {"title": "缺字段"}, "slides": [{"layout": "cover"}]})
+    result = validate_deck_ir({"ir_type": "deck", "ir_version": "1.7", "meta": {"title": "缺字段"}, "slides": [{"layout": "cover"}]})
 
     assert result.value is None
     assert result.errors[0].code == "D004"
@@ -286,7 +560,7 @@ def test_validate_deck_ir_maps_ragged_or_oversized_table_to_d005() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "表格错误"},
             "slides": [{"layout": "table", "title": "表格", "table": {"header": ["A", "B"], "rows": [["only one"]]}}],
         }
@@ -302,7 +576,7 @@ def test_validate_deck_ir_accepts_decision_matrix_table_v12() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "方案对比", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -352,7 +626,7 @@ def test_validate_deck_ir_normalizes_clear_one_based_conclusion_column() -> None
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "索引防呆"},
             "slides": [
                 {
@@ -379,7 +653,7 @@ def test_validate_deck_ir_normalizes_clear_one_based_span_indexes_only() -> None
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "合并索引防呆"},
             "slides": [
                 {
@@ -410,7 +684,7 @@ def test_validate_deck_ir_keeps_valid_zero_based_table_indexes_without_warning()
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "零起始索引"},
             "slides": [
                 {
@@ -437,7 +711,7 @@ def test_validate_deck_ir_does_not_guess_when_table_indexes_are_mixed() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "混合索引"},
             "slides": [
                 {
@@ -465,7 +739,7 @@ def test_validate_deck_ir_maps_invalid_decision_matrix_span_to_d005() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "非法表格"},
             "slides": [
                 {
@@ -528,7 +802,7 @@ def test_validate_deck_ir_maps_enhanced_table_contract_errors_to_d005(table_patc
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "非法增强表格"},
             "slides": [{"layout": "table", "title": "非法增强表格", "table": table}],
         }
@@ -544,7 +818,7 @@ def test_validate_deck_ir_maps_too_many_bullets_to_d006() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "要点过多"},
             "slides": [
                 {
@@ -566,7 +840,7 @@ def test_validate_deck_ir_accepts_performance_chart_v13() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "性能图表", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -606,7 +880,7 @@ def test_validate_deck_ir_rejects_contradictory_chart_side_conclusion() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "矛盾结论", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -635,7 +909,7 @@ def test_validate_deck_ir_maps_invalid_chart_threshold_to_d004() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "非法阈值线"},
             "slides": [
                 {
@@ -663,7 +937,7 @@ def test_validate_deck_ir_rejects_horizontal_non_bar_chart(kind: str) -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "非法横向图表"},
             "slides": [
                 {
@@ -690,7 +964,7 @@ def test_validate_deck_ir_preserves_default_chart_and_cards_behavior() -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "默认兼容"},
             "slides": [
                 {
@@ -735,7 +1009,7 @@ def test_validate_deck_ir_maps_chart_contract_errors(chart_patch: dict, expected
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "非法图表"},
             "slides": [{"layout": "chart", "title": "非法图表", "chart": chart}],
         }
@@ -751,7 +1025,7 @@ def test_validate_deck_ir_ignores_unknown_fields_and_warns() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.8",
             "unknown_top": "ignored",
             "meta": {"title": "未知字段", "unknown_meta": "ignored"},
             "slides": [{"layout": "cover", "title": "封面", "unknown_slide": "ignored"}],
@@ -769,7 +1043,7 @@ def test_validate_deck_ir_accepts_architecture_diagram_v14() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.8",
             "meta": {"title": "技术架构"},
             "slides": [
                 {
@@ -812,7 +1086,7 @@ def test_validate_deck_ir_rejects_architecture_edge_to_unknown_node() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "非法架构"},
             "slides": [
                 {
@@ -837,7 +1111,7 @@ def test_validate_deck_ir_warns_for_nested_architecture_unknown_fields_only() ->
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.8",
             "meta": {"title": "架构未知字段"},
             "slides": [
                 {
@@ -922,7 +1196,7 @@ def test_validate_deck_ir_rejects_semantically_empty_layout_content(slide: dict,
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "内容合理性"},
             "slides": [slide],
         }
@@ -938,7 +1212,7 @@ def test_validate_deck_ir_accepts_non_empty_content_for_guarded_layouts() -> Non
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "内容合理性正例"},
             "slides": [
                 {"layout": "agenda", "items": ["现状", "方案"]},
@@ -969,7 +1243,7 @@ def test_validate_deck_ir_rejects_conflicting_content_inside_merged_table_cells(
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "合并冲突"},
             "slides": [
                 {
@@ -1012,7 +1286,7 @@ def test_validate_deck_ir_rejects_duplicate_chart_dimensions(chart_patch: dict) 
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "重复图表维度"},
             "slides": [{"layout": "chart", "title": "趋势", "chart": chart}],
         }
@@ -1047,7 +1321,7 @@ def test_validate_deck_ir_rejects_non_finite_or_ambiguous_chart_values(chart_pat
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "非法图表语义"},
             "slides": [{"layout": "chart", "title": "趋势", "chart": chart}],
         }
@@ -1062,7 +1336,7 @@ def test_validate_deck_ir_checks_month_start_threshold_claim() -> None:
 
     base = {
         "ir_type": "deck",
-        "ir_version": "1.6",
+        "ir_version": "1.7",
         "meta": {"title": "阈值结论"},
         "slides": [
             {
@@ -1095,7 +1369,7 @@ def test_validate_deck_ir_rejects_ambiguous_threshold_conclusion_target() -> Non
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "歧义结论"},
             "slides": [
                 {
@@ -1127,7 +1401,7 @@ def test_validate_deck_ir_rejects_architecture_self_loop() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "自环架构"},
             "slides": [
                 {
@@ -1152,7 +1426,7 @@ def test_validate_deck_ir_accepts_process_flow_and_timeline_v15() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "方案推进"},
             "slides": [
                 {
@@ -1229,7 +1503,7 @@ def test_validate_deck_ir_rejects_invalid_process_flow_and_timeline(slide: dict)
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "非法新版式"},
             "slides": [slide],
         }
@@ -1245,7 +1519,7 @@ def test_validate_deck_ir_warns_for_nested_process_and_timeline_unknown_fields()
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.8",
             "meta": {"title": "未知字段"},
             "slides": [
                 {

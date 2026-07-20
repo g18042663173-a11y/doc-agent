@@ -88,6 +88,7 @@ def check_pptx(path: Path, *, classification: str | None = None, theme_name: str
         items.extend(_chart_items(slide, slide_index, theme))
         items.extend(_threshold_line_items(slide, slide_index, theme))
         items.extend(_architecture_items(slide, slide_index, theme))
+        items.extend(_composite_items(slide, slide_index, theme))
         items.extend(_sequence_layout_items(slide, slide_index, theme))
         items.extend(_kpi_items(slide, slide_index, theme))
         items.extend(_image_placeholder_items(slide, slide_index, theme))
@@ -430,6 +431,39 @@ def _architecture_items(slide, slide_index: int, theme: dict) -> list[PptxLintIt
                         )
                     ]
     return items
+
+
+def _composite_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
+    layout = theme["layouts"].get("composite", {})
+    content = layout.get("content", {})
+    if not content:
+        return []
+    content_top = float(content["top_in"])
+    content_bottom = content_top + float(content["height_in"])
+    overflow_by_slot: dict[str, float] = {}
+    for shape in slide.shapes:
+        name = getattr(shape, "name", "")
+        if not name.startswith("HW_COMPOSITE_BLOCK:"):
+            continue
+        parts = name.split(":")
+        if len(parts) != 3 or parts[1] not in {"left", "right"}:
+            continue
+        bottom = (shape.top + shape.height) / EMU_PER_INCH
+        if bottom > content_bottom + 0.01:
+            overflow_by_slot[parts[1]] = max(overflow_by_slot.get(parts[1], content_top), bottom)
+    return [
+        _item(
+            "HW-W03",
+            "Warning",
+            slide_index,
+            (
+                f"组合页该栏内容过多·{slot} 栏累计高度 {bottom - content_top:.2f}\" "
+                f"超过可用高度 {content_bottom - content_top:.2f}\",建议人工拆分。"
+            ),
+            "该栏内容过多,建议人工拆分；系统不会平均压缩、截断内容或自动拆页。",
+        )
+        for slot, bottom in sorted(overflow_by_slot.items())
+    ]
 
 
 def _sequence_layout_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
@@ -852,6 +886,7 @@ def _layout_shapes(slide, prs, theme: dict, expected_classification: str) -> lis
         if (
             _is_footer_shape(shape, theme, expected_classification)
             or name.startswith("HW_DECORATION:")
+            or name.startswith("HW_COMPOSITE_BLOCK:")
             or _is_architecture_shape(shape)
             or _is_threshold_shape(shape)
             or _is_sequence_shape(shape)

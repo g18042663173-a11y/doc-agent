@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+
 import math
 import re
 from typing import Annotated, Any, Literal, Union
@@ -683,6 +685,49 @@ class ConclusionSlide(ContractModel):
         return non_empty(value) if value is not None else None
 
 
+CompositeComponent = Annotated[
+    Union[TableSlide, ArchitectureDiagramSlide, TitleBulletsSlide, CardsSlide],
+    Field(
+        discriminator="layout",
+        description=(
+            "嵌入区域复用的既有组件；首版仅允许 table、architecture_diagram、"
+            "title_bullets、cards，并继续执行对应组件的全部字段校验。"
+        ),
+    ),
+]
+
+
+class CompositeRegion(ContractModel):
+    slot: Literal["left", "right"] = Field(description="区域位置；固定为 left 或 right。")
+    components: list[CompositeComponent] = Field(
+        min_length=1,
+        max_length=3,
+        description=(
+            "栏内从上到下堆叠的既有组件，首版最多 3 块。单块列表与 v1.7 的单 component"
+            " 语义一致；超过栏高时渲染后由 HW-W03 提示人工拆分。"
+        ),
+    )
+
+
+class CompositeSlide(ContractModel):
+    layout: Literal["composite"] = Field(description="固定为 composite，表达左右栏内多个既有组件的联读关系。")
+    title: str = Field(min_length=1, description="整页结论式标题；每个嵌入组件仍保留自己的区域小标题。")
+    regions: list[CompositeRegion] = Field(
+        min_length=2,
+        max_length=2,
+        description="恰好两个区域，必须各包含一个 left 和 right；区域坐标和栏内堆叠坐标由主题确定，模型不提供任意坐标。",
+    )
+
+    _title_not_blank = field_validator("title")(non_empty)
+
+    @model_validator(mode="after")
+    def validate_region_slots(self) -> "CompositeSlide":
+        slots = [region.slot for region in self.regions]
+        if slots.count("left") != 1 or slots.count("right") != 1:
+            raise ValueError("composite regions must contain exactly one left and one right slot")
+        return self
+
+
 DeckSlide = Annotated[
     Union[
         CoverSlide,
@@ -698,28 +743,42 @@ DeckSlide = Annotated[
         TimelineSlide,
         ImageSlide,
         ConclusionSlide,
+        CompositeSlide,
     ],
     Field(discriminator="layout"),
 ]
 
 
-def migrate_deck_payload(value: Any, *, target_version: str = "1.6") -> tuple[Any, str | None]:
-    if not isinstance(value, dict) or value.get("ir_version") not in {"1.4", "1.5"} or target_version != "1.6":
+def migrate_deck_payload(value: Any, *, target_version: str = "1.8") -> tuple[Any, str | None]:
+    if not isinstance(value, dict) or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7"} or target_version != "1.8":
         return value, None
     source_version = value["ir_version"]
-    migrated = dict(value)
-    migrated["ir_version"] = "1.6"
+    migrated = copy.deepcopy(value)
+    if source_version == "1.7":
+        slides = migrated.get("slides")
+        if isinstance(slides, list):
+            for slide in slides:
+                if not isinstance(slide, dict) or slide.get("layout") != "composite":
+                    continue
+                regions = slide.get("regions")
+                if not isinstance(regions, list):
+                    continue
+                for region in regions:
+                    if not isinstance(region, dict) or "components" in region or "component" not in region:
+                        continue
+                    region["components"] = [region.pop("component")]
+    migrated["ir_version"] = "1.8"
     return migrated, source_version
 
 
 class DeckIR(ContractModel):
     ir_type: Literal["deck"]
-    ir_version: Literal["1.6"]
+    ir_version: Literal["1.8"]
     meta: DeckMeta
     slides: list[DeckSlide] = Field(min_length=1, max_length=30)
 
     @model_validator(mode="before")
     @classmethod
-    def migrate_v14_payload(cls, value: Any) -> Any:
+    def migrate_legacy_payload(cls, value: Any) -> Any:
         migrated, _source_version = migrate_deck_payload(value)
         return migrated

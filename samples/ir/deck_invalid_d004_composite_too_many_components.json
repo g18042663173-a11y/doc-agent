@@ -1,0 +1,28 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.8",
+  "meta": {"title": "组合页块数非法", "theme": "hw_v1"},
+  "slides": [
+    {
+      "layout": "composite",
+      "title": "单栏不能超过三个组件",
+      "regions": [
+        {
+          "slot": "left",
+          "components": [
+            {"layout": "title_bullets", "title": "一", "bullets": [{"text": "一", "level": 1}]},
+            {"layout": "title_bullets", "title": "二", "bullets": [{"text": "二", "level": 1}]},
+            {"layout": "title_bullets", "title": "三", "bullets": [{"text": "三", "level": 1}]},
+            {"layout": "title_bullets", "title": "四", "bullets": [{"text": "四", "level": 1}]}
+          ]
+        },
+        {
+          "slot": "right",
+          "components": [
+            {"layout": "title_bullets", "title": "右栏", "bullets": [{"text": "合法", "level": 1}]}
+          ]
+        }
+      ]
+    }
+  ]
+}

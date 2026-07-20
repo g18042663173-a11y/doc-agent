@@ -134,3 +134,24 @@
 - `VERIFY_RUNNING` bypass is removed. Direct positive main testing plus external-env failure and low-coverage negatives replace the recursive verify test.
 - `P0_REVIEW.md` and `TASKBOOK_GAP_PLAN.md` now record 34/34 P0 rows as independently satisfied with current file/test evidence.
 - Final full pytest: `288 passed in 31.30s`. Final verify: parsers 93.30%, IR 93.37%, lint 92.88%, overall 89.58%; four-format multi-fact E2E and C0 pass. Schema snapshots/history and ruff are green; no skip/xfail.
+
+## 2026-07-20 Composite 组合页版式
+
+- 从提交 `fb0cd24` 的干净基线开始；设计报告为 `COMPOSITE_LAYOUT_DESIGN.md`。
+- 用户确认首版仅嵌入 table / architecture_diagram / title_bullets / cards；process_flow 暂缓但保留后续扩展。
+- 先补回归测试，初始红灯为 `8 failed, 2 passed`，失败均来自尚未实现的 DeckIR 1.7 / composite。
+- DeckIR 已升到 1.7，1.4 / 1.5 / 1.6 可在内存迁移；CompositeRegion 复用四种既有 slide model，非法 table / architecture / bullets / cards 会递归返回原 D003-D006。
+- 左右区域由主题 12 栏网格定义为 5 栏 + 1 栏间距 + 6 栏；表格、Graphviz 架构、要点、卡片复用原绘制函数，旧整页调用默认参数不变。
+- 嵌入架构图超过 12 条边的真实 PPTX 仍由现有 lint 报 `HW-W03`，未新增 composite lint 豁免。
+- 过程错误：planning-with-files 要求的 `progress.md` 在 macOS 大小写不敏感文件系统上指向了本文件，曾短暂覆盖历史内容；已从 HEAD 完整恢复后追加本节。
+- 最终全量测试 `411 passed in 30.14s`；`verify.py` 通过，覆盖率 parsers 93.75%、IR 93.83%、lint 94.44%、overall 88.72%；ruff 与 schema 快照均通过。
+- 试点产物为 `output/composite_layout_review/deck_composite_table_architecture.pptx`，中文 WPS PDF 为 `output/deck_composite_table_architecture_wps_preview.pdf`；视觉检查无重叠、裁切或标签压节点。
+
+## 2026-07-20 Composite v1.8 栏内堆叠
+
+- DeckIR 从 1.7 升至 1.8：`CompositeRegion.component` 演进为 `components[1..3]`；1.4/1.5/1.6/1.7 在内存深拷贝迁移到 1.8，1.7 的单 component 自动包为单元素列表，原输入对象不会被修改。
+- 单元素 components 继续走 v1.7 整栏渲染路径；回读测试比较 v1.7 与等价 v1.8 的原生 PPTX shape 名称、文本和几何，结果一致。
+- 多块区域按主题 token 从上到下堆叠：表格使用主题行高、要点使用最大正文候选字号测量、卡片使用原有卡片高度、架构图以 Graphviz 实际包围盒测量；累计超出栏高时，lint 从透明块边界的真实几何输出 `HW-W03`，不缩到不可读、不截断、不自动拆页。
+- 递归 lint 已覆盖：堆叠内 13 条边 architecture_diagram 仍报既有密度 `HW-W03`；三块累计超高时新增 `组合页该栏内容过多` `HW-W03`。table、要点和 KPI 的原有产物规则继续通过原 lint 路径执行。
+- 视觉样例为 `samples/ir/deck_valid_11_composite_stacked.json`，产物 `output/composite_stacked_venus_review/deck_composite_stacked_venus.pptx`，中文 PDF `output/composite_stacked_venus_review/deck_composite_stacked_venus.pdf`。左栏表格、架构图、要点顺序清楚且无重叠/裁切；该混合密度页仍有 1 条真实 `HW-W01`（全页 7 种字号超过主题上限 3 种），未做豁免。
+- 相关回归 `268 passed`，全量 pytest 在新增 v1.8 兼容几何测试前为 `417 passed`；最终门禁待本轮结束时再次运行。

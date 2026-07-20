@@ -1,0 +1,29 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {"title": "重复区域"},
+  "slides": [
+    {
+      "layout": "composite",
+      "title": "左右区域必须唯一",
+      "regions": [
+        {
+          "slot": "left",
+          "component": {
+            "layout": "title_bullets",
+            "title": "左栏一",
+            "bullets": [{"text": "要点一", "level": 1}]
+          }
+        },
+        {
+          "slot": "left",
+          "component": {
+            "layout": "cards",
+            "title": "左栏二",
+            "cards": [{"title": "A", "desc": "一"}, {"title": "B", "desc": "二"}]
+          }
+        }
+      ]
+    }
+  ]
+}

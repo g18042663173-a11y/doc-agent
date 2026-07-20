@@ -1,16 +1,16 @@
 {
   "ir_type": "deck",
-  "ir_version": "1.6",
+  "ir_version": "1.7",
   "meta": {
-    "title": "十三版式样例",
+    "title": "十四版式样例",
     "classification": "HUAWEI CONFIDENTIAL",
     "theme": "hw_v1"
   },
   "slides": [
     {
       "layout": "cover",
-      "title": "十三版式样例",
-      "subtitle": "覆盖 DeckIR v1.6"
+      "title": "十四版式样例",
+      "subtitle": "覆盖 DeckIR v1.7"
     },
     {
       "layout": "agenda",
@@ -245,10 +245,45 @@
       "caption": "外网阶段不搬运图片二进制"
     },
     {
+      "layout": "composite",
+      "title": "方案状态与数据流可以在一页联读",
+      "regions": [
+        {
+          "slot": "left",
+          "component": {
+            "layout": "table",
+            "title": "方案状态",
+            "table": {
+              "header": ["方案", "状态"],
+              "rows": [["主方案", "推荐"], ["备选方案", "保留"]],
+              "conclusion_col": 1
+            }
+          }
+        },
+        {
+          "slot": "right",
+          "component": {
+            "layout": "architecture_diagram",
+            "title": "数据流",
+            "nodes": [
+              {"id": "source", "text": "输入", "type": "primary"},
+              {"id": "gate", "text": "校验", "type": "emphasis"},
+              {"id": "artifact", "text": "产物", "type": "data"}
+            ],
+            "edges": [
+              {"from": "source", "to": "gate"},
+              {"from": "gate", "to": "artifact"}
+            ],
+            "groups": []
+          }
+        }
+      ]
+    },
+    {
       "layout": "conclusion",
       "title": "结论",
       "bullets": [
-        "十三版式均可渲染"
+        "十四版式均可渲染"
       ],
       "cta": "进入人工视觉终审"
     }

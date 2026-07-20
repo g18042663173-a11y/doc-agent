@@ -38,6 +38,7 @@ LayoutName = Literal[
     "timeline",
     "image",
     "conclusion",
+    "composite",
 ]
 
 
@@ -306,6 +307,7 @@ def _stub_layout_reason(layout: LayoutName) -> str:
         "timeline": "时间线适合阶段演进",
         "image": "图文页保留证据位置",
         "conclusion": "结论页收束行动",
+        "composite": "组合页适合两个半页组件联读",
     }[layout]
 
 
@@ -315,7 +317,7 @@ def stub_chunk_payload(chunk: dict[str, Any]) -> dict[str, Any]:
     slides = [_stub_slide(page, title=title, total_pages=int(chunk.get("global_target_pages", len(pages)))) for page in pages]
     return {
         "ir_type": "deck",
-        "ir_version": "1.6",
+        "ir_version": "1.8",
         "meta": {"title": title, "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
         "slides": slides,
     }
@@ -802,6 +804,32 @@ def _stub_slide(page: dict[str, Any], *, title: str, total_pages: int) -> dict[s
         return {"layout": "image", "title": page_title, "placeholder": focus, "caption": bullets[0]}
     if layout == "conclusion":
         return {"layout": "conclusion", "title": page_title, "bullets": bullets[:3], "cta": "结合原文完成终审"}
+    if layout == "composite":
+        return {
+            "layout": "composite",
+            "title": page_title,
+            "regions": [
+                {
+                    "slot": "left",
+                    "components": [{
+                        "layout": "title_bullets",
+                        "title": "方法",
+                        "bullets": [{"text": focus, "level": 1}],
+                    }],
+                },
+                {
+                    "slot": "right",
+                    "components": [{
+                        "layout": "cards",
+                        "title": "依据",
+                        "cards": [
+                            {"title": "证据一", "desc": bullets[0]},
+                            {"title": "证据二", "desc": bullets[-1]},
+                        ],
+                    }],
+                },
+            ],
+        }
     return {
         "layout": "title_bullets",
         "title": page_title,

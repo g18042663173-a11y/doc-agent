@@ -26,7 +26,7 @@ def test_render_deck_ir_p0_layouts_are_editable(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "Q3 业务汇报", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {"layout": "cover", "title": "Q3 业务汇报", "subtitle": "命令行文档工具链", "presenter": "张三"},
@@ -66,7 +66,7 @@ def test_render_deck_ir_p0_layouts_lint_with_zero_errors(tmp_path: Path) -> None
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "P0 五版式", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {"layout": "cover", "title": "P0 五版式"},
@@ -91,7 +91,7 @@ def test_render_deck_ir_decision_matrix_table_matches_source_spec(tmp_path: Path
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "方案对比", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -171,7 +171,7 @@ def test_render_deck_ir_wide_table_widths_fill_content_area(tmp_path: Path) -> N
         deck = DeckIR.model_validate(
             {
                 "ir_type": "deck",
-                "ir_version": "1.6",
+                "ir_version": "1.7",
                 "meta": {"title": "宽表回归", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
                 "slides": [{"layout": "table", "title": "研究目标必须由可量化指标约束", "table": table_data}],
             }
@@ -244,7 +244,7 @@ def test_render_deck_ir_legal_extremes_stay_in_page_and_shrink_text(tmp_path: Pa
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "极端版式", "classification": "公开", "theme": "hw_v1"},
             "slides": slides,
         }
@@ -296,7 +296,7 @@ def test_render_architecture_dense_edge_labels_do_not_overlap(tmp_path: Path) ->
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "密集架构图", "classification": "公开", "theme": "hw_v1"},
             "slides": [
                 {
@@ -342,7 +342,7 @@ def test_render_deck_ir_uses_16_by_9_page_size(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "尺寸"},
             "slides": [{"layout": "cover", "title": "尺寸"}],
         }
@@ -367,7 +367,7 @@ def test_render_process_flow_as_equal_editable_shapes_in_both_orientations(tmp_p
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "流程", "classification": "公开"},
             "slides": [
                 {"layout": "process_flow", "title": "横向流程", "orientation": "horizontal", "steps": steps},
@@ -402,7 +402,7 @@ def test_render_timeline_as_equal_editable_milestones_in_both_orientations(tmp_p
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "时间线", "classification": "公开"},
             "slides": [
                 {"layout": "timeline", "title": "横向路线", "orientation": "horizontal", "milestones": milestones},
@@ -497,7 +497,7 @@ def test_render_deck_ir_uses_theme_layout_coordinates(tmp_path: Path, monkeypatc
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "主题坐标", "theme": "custom"},
             "slides": [{"layout": "title_bullets", "title": "可校准标题", "bullets": [{"text": "坐标来自 theme", "level": 1}]}],
         }
@@ -523,7 +523,7 @@ def test_render_deck_ir_applies_source_file_theme_font_footer_and_card_tokens(tm
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "主题映射", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {"layout": "section", "index": 1, "title": "阶段一", "subtitle": "技术评审"},
@@ -587,7 +587,7 @@ def test_render_ppt_typography_uses_large_semantic_hierarchy_and_compact_tables(
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "字号层级", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {"layout": "cover", "title": "暑期实践团打印签字材料说明", "subtitle": "活动前完成阅读与签署", "date": "2026年7月"},
@@ -662,7 +662,7 @@ def test_title_decoration_tracks_wrapped_title_and_preserves_single_line_positio
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "标题装饰线回归", "classification": "PUBLIC"},
             "slides": [
                 {"layout": "title_bullets", "title": short_title, "bullets": [{"text": "短标题基线", "level": 1}]},
@@ -717,7 +717,7 @@ def test_render_deck_ir_p1_layouts_and_downgrades(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "P1 版式"},
             "slides": [
                 {
@@ -766,7 +766,7 @@ def test_render_deck_ir_performance_chart_matches_source_spec(tmp_path: Path) ->
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "性能图表", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -825,7 +825,7 @@ def test_render_deck_ir_threshold_label_expands_short_label_with_series_and_unit
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "阈值标签", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -857,7 +857,7 @@ def test_render_deck_ir_threshold_line_stays_inside_plot_area(tmp_path: Path) ->
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "阈值线位置", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -891,7 +891,7 @@ def test_render_architecture_diagram_as_editable_shapes(tmp_path: Path) -> None:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "架构骨架", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -966,7 +966,7 @@ def test_render_graphviz_architecture_long_text_stays_inside_editable_node(tmp_p
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "长文字节点", "classification": "公开", "theme": "hw_v1"},
             "slides": [
                 {
@@ -1023,7 +1023,7 @@ def test_render_architecture_falls_back_with_warning_when_graphviz_is_unavailabl
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.6",
+            "ir_version": "1.7",
             "meta": {"title": "fallback", "classification": "公开", "theme": "hw_v1"},
             "slides": [
                 {
@@ -1073,6 +1073,288 @@ def test_render_architecture_falls_back_with_warning_when_graphviz_is_unavailabl
     assert all(_is_orthogonal_connector(shape) for shape in edge_segments)
     assert not any(_connector_crosses_unrelated_node(segment, node) for segment in edge_segments for node in nodes)
     assert all(_label_is_near_own_edge(label, slide) for label in labels)
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
+def test_render_composite_table_and_architecture_as_editable_region_bound_shapes(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.7",
+            "meta": {"title": "组合页", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "composite",
+                    "title": "方案结论与数据流可以在一页联读",
+                    "regions": [
+                        {
+                            "slot": "left",
+                            "component": {
+                                "layout": "table",
+                                "title": "方案对比",
+                                "table": {
+                                    "header": ["方案", "时延", "结论"],
+                                    "rows": [["方案A", "57ms", "推荐"], ["方案B", "72ms", "备选"]],
+                                    "conclusion_col": 2,
+                                },
+                            },
+                        },
+                        {
+                            "slot": "right",
+                            "component": {
+                                "layout": "architecture_diagram",
+                                "title": "数据流骨架",
+                                "nodes": [
+                                    {"id": "input", "text": "输入材料", "type": "primary"},
+                                    {"id": "gate", "text": "质量闸门", "type": "emphasis"},
+                                    {"id": "output", "text": "可编辑输出", "type": "data"},
+                                ],
+                                "edges": [
+                                    {"from": "input", "to": "gate", "label": "校验"},
+                                    {"from": "gate", "to": "output", "label": "通过"},
+                                ],
+                                "groups": [],
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "composite-table-architecture.pptx")
+    slide = Presentation(str(output)).slides[0]
+    table_shape = next(shape for shape in slide.shapes if getattr(shape, "has_table", False))
+    nodes = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_NODE:")]
+    edges = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_EDGE:")]
+    region_titles = [
+        shape for shape in slide.shapes if shape.name.startswith("HW_RENDERED_TEXT:COMPOSITE_REGION_TITLE:")
+    ]
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw_theme.json").read_text(encoding="utf-8"))
+    composite = theme["layouts"]["composite"]
+    column_width = (
+        theme["slide"]["width_in"] - theme["slide"]["margin_left_in"] - theme["slide"]["margin_right_in"]
+    ) / theme["grid"]["columns"]
+    left_box = (
+        composite["content"]["left_in"],
+        composite["content"]["left_in"] + composite["left_span_columns"] * column_width,
+    )
+    right_left = left_box[1] + composite["gap_columns"] * column_width
+    right_box = (right_left, right_left + composite["right_span_columns"] * column_width)
+
+    assert len(region_titles) == 2
+    assert table_shape.left / 914400 >= left_box[0] - 0.01
+    assert (table_shape.left + table_shape.width) / 914400 <= left_box[1] + 0.01
+    assert len(nodes) == 3
+    assert edges
+    architecture_shapes = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_")]
+    assert all(shape.left / 914400 >= right_box[0] - 0.01 for shape in architecture_shapes)
+    assert all((shape.left + shape.width) / 914400 <= right_box[1] + 0.01 for shape in architecture_shapes)
+    assert (table_shape.top + table_shape.height) / 914400 <= composite["content"]["top_in"] + composite["content"]["height_in"]
+    assert any(shape.has_table for shape in slide.shapes)
+    assert all("<p:sp" in shape.element.xml for shape in nodes)
+    assert all("<p:cxnSp" in shape.element.xml for shape in edges)
+
+
+def test_render_composite_title_bullets_and_cards_reuses_component_shapes_without_grid_warnings(
+    tmp_path: Path,
+) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.7",
+            "meta": {"title": "文字与卡片组合", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "composite",
+                    "title": "结论与依据可以分区联读",
+                    "regions": [
+                        {
+                            "slot": "left",
+                            "component": {
+                                "layout": "title_bullets",
+                                "title": "核心结论",
+                                "bullets": [
+                                    {"text": "组合页只负责区域编排", "level": 1},
+                                    {"text": "组件仍保持原有语义", "level": 1},
+                                ],
+                            },
+                        },
+                        {
+                            "slot": "right",
+                            "component": {
+                                "layout": "cards",
+                                "title": "验证依据",
+                                "cards": [
+                                    {"title": "契约", "desc": "递归校验"},
+                                    {"title": "产物", "desc": "原生可编辑"},
+                                ],
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "composite-bullets-cards.pptx")
+    slide = Presentation(str(output)).slides[0]
+    body_text = [shape.text for shape in slide.shapes if shape.name == "HW_RENDERED_TEXT:BODY"]
+    cards = [shape for shape in slide.shapes if shape.name == "HW_RENDERED_TEXT:CARD"]
+    report = check_pptx(output, classification="公开")
+
+    assert body_text == ["• 组合页只负责区域编排", "• 组件仍保持原有语义"]
+    assert len(cards) == 2
+    assert {shape.text.replace("\x0b", "\n") for shape in cards} == {
+        "契约\n递归校验",
+        "产物\n原生可编辑",
+    }
+    assert not {"HW-W06", "HW-W07"} & {item.code for item in report.items}
+
+
+def test_v17_single_component_composite_keeps_v18_single_component_geometry(tmp_path: Path) -> None:
+    import copy
+
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    legacy_payload = {
+        "ir_type": "deck",
+        "ir_version": "1.7",
+        "meta": {"title": "单块兼容", "classification": "公开", "theme": "hw_v1"},
+        "slides": [
+            {
+                "layout": "composite",
+                "title": "单组件区域保持既有几何",
+                "regions": [
+                    {
+                        "slot": "left",
+                        "component": {
+                            "layout": "title_bullets",
+                            "title": "左栏",
+                            "bullets": [{"text": "原有单块区域", "level": 1}],
+                        },
+                    },
+                    {
+                        "slot": "right",
+                        "component": {
+                            "layout": "cards",
+                            "title": "右栏",
+                            "cards": [{"title": "契约", "desc": "兼容"}, {"title": "渲染", "desc": "不变"}],
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+    current_payload = copy.deepcopy(legacy_payload)
+    current_payload["ir_version"] = "1.8"
+    for region in current_payload["slides"][0]["regions"]:
+        region["components"] = [region.pop("component")]
+
+    legacy = DeckIR.model_validate(legacy_payload)
+    current = DeckIR.model_validate(current_payload)
+    legacy_slide = Presentation(str(render_deck_ir(legacy, tmp_path / "legacy-single.pptx"))).slides[0]
+    current_slide = Presentation(str(render_deck_ir(current, tmp_path / "current-single.pptx"))).slides[0]
+
+    def geometry(slide) -> list[tuple[str, str, int, int, int, int]]:
+        return [
+            (
+                shape.name,
+                getattr(shape, "text", ""),
+                int(shape.left),
+                int(shape.top),
+                int(shape.width),
+                int(shape.height),
+            )
+            for shape in slide.shapes
+        ]
+
+    assert geometry(legacy_slide) == geometry(current_slide)
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
+def test_render_composite_stacks_table_architecture_and_bullets_inside_left_region(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.8",
+            "meta": {"title": "堆叠组合页", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "composite",
+                    "title": "左栏可按证据链堆叠多个组件",
+                    "regions": [
+                        {
+                            "slot": "left",
+                            "components": [
+                                {
+                                    "layout": "table",
+                                    "title": "阶段状态",
+                                    "table": {"header": ["阶段", "状态"], "rows": [["校验", "通过"]]},
+                                },
+                                {
+                                    "layout": "architecture_diagram",
+                                    "title": "质量链路",
+                                    "nodes": [
+                                        {"id": "input", "text": "输入", "type": "primary"},
+                                        {"id": "output", "text": "产物", "type": "data"},
+                                    ],
+                                    "edges": [{"from": "input", "to": "output"}],
+                                    "groups": [],
+                                },
+                                {
+                                    "layout": "title_bullets",
+                                    "title": "结论",
+                                    "bullets": [{"text": "按顺序保留证据链", "level": 1}],
+                                },
+                            ],
+                        },
+                        {
+                            "slot": "right",
+                            "components": [
+                                {
+                                    "layout": "cards",
+                                    "title": "交付依据",
+                                    "cards": [{"title": "契约", "desc": "Schema"}, {"title": "产物", "desc": "可编辑"}],
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "composite-stacked.pptx")
+    slide = Presentation(str(output)).slides[0]
+    blocks = sorted(
+        [shape for shape in slide.shapes if shape.name.startswith("HW_COMPOSITE_BLOCK:left:")],
+        key=lambda shape: shape.top,
+    )
+    table = next(shape for shape in slide.shapes if getattr(shape, "has_table", False))
+    nodes = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_NODE:")]
+    bullet = next(shape for shape in slide.shapes if shape.name == "HW_RENDERED_TEXT:BODY")
+    report = check_pptx(output, classification="公开")
+
+    assert len(blocks) == 3
+    assert all(blocks[index].top + blocks[index].height <= blocks[index + 1].top for index in range(2))
+    tolerance_emu = 2
+    assert blocks[0].top <= table.top and table.top + table.height <= blocks[0].top + blocks[0].height + tolerance_emu
+    assert nodes and all(blocks[1].top <= node.top and node.top + node.height <= blocks[1].top + blocks[1].height + tolerance_emu for node in nodes)
+    assert blocks[2].top <= bullet.top and bullet.top + bullet.height <= blocks[2].top + blocks[2].height + tolerance_emu
+    assert not {"HW-W06", "HW-W07"} & {item.code for item in report.items}
 
 
 def _overlap(first, second) -> bool:

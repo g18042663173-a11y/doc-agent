@@ -59,7 +59,7 @@
 | A2 | AICoding 输出形态:基本能稳定输出一个 json 代码块,但可能夹带解释文字,必须经“剥壳 + Schema 校验”后方可进入渲染。 |
 | A3 | 密级文案默认:DOCX 页脚为“内部公开”,PPTX 页脚为“HUAWEI CONFIDENTIAL”,均在配置中可改。 |
 | A4 | 中文字体:外网以微软雅黑为主选,HarmonyOS Sans 作为内网目标字体;不追求与母版逐像素一致,字体集中在主题配置,内网只改一处。 |
-| A5 | DeckIR v1.6 已定稿:本文 3.3 节给出的字段表为权威版;1.4/1.5 输入先做兼容读取,再按本表校验。 |
+| A5 | DeckIR v1.8 已定稿:本文 3.3 节给出的字段表为权威版;1.4/1.5/1.6/1.7 输入先做兼容读取,再按本表校验。 |
 | A6 | 主界面为 CLI + 本地文件目录(input/ 放输入、output/ 取产物);Web 工作台为可选项(P2),如需可复用现有 Flask,不作为核心交付。 |
 | A7 | AICoding 输入约束:单次输入按 8K–16K 字符规划(Prompt 截断上限据此设定);以“把内容贴进 Prompt”为准,不假设 AICoding 能直接读取本地文件路径。 |
 
@@ -279,9 +279,9 @@ class IRGenerator(Protocol):
 | PPT 图表 | 只取图表标题与类型,不反解数据(P2 再议)。 |
 | 嵌入图片(全格式) | 记录存在与尺寸,不搬运二进制(DOCX 图片透传列为 P2)。 |
 
-### 3.3  DeckIR v1.6(PPT 输出契约,Step 3 核心)
+### 3.3  DeckIR v1.8(PPT 输出契约,Step 3 核心)
 
-meta 字段:title(必填)、subtitle、author、date、classification(默认 HUAWEI CONFIDENTIAL)、theme(默认 hw_v1)。slides[].layout 枚举 13 种,覆盖 v1.0 要求并受控新增流程与时间线:
+meta 字段:title(必填)、subtitle、author、date、classification(默认 HUAWEI CONFIDENTIAL)、theme(默认 hw_v1)。slides[].layout 枚举 14 种,覆盖 v1.0 要求并受控新增流程、时间线与左右组合页:
 
 | layout | 必填字段(可选项加问号) | 渲染要点 |
 | --- | --- | --- |
@@ -294,6 +294,7 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 | cards | title, cards[2..4]{ title, desc, tag? };variant:default\|kpi | 等宽卡片;KPI 模式中 title/desc/tag 分别表示指标名、核心数值、趋势或口径。 |
 | chart | title, chart{ kind: bar\|line\|pie, orientation:vertical\|horizontal, categories, series; unit?, thresholds?, show_data_labels?, legend_position?, side_conclusion?, side_table? } | 指标 / 性能图表页;horizontal 仅适用于 bar 并生成原生横向数据条;阈值线方向跟随数值轴;line/pie 保持 vertical。 |
 | architecture_diagram | title, nodes[{id,text,type,group?,position?,size?}], edges[{from,to,label?,style,direction}], groups[{id,label,node_ids}], manual_hints? | 架构图可编辑骨架;节点、连接符、虚线分组框均为独立 PPT 对象;默认只承诺确定性分层布局和人工可调,不承诺一键成品。 |
+| composite | title, regions[2]{slot:left\|right, components[1..3]};每块为 table / architecture_diagram / title_bullets / cards 之一 | 左右组合页;一栏从上到下堆叠 1-3 块,区域与块坐标由主题确定,嵌入组件复用原字段、渲染与合规检查;累计超高触发 HW-W03 建议人工拆分;process_flow 等待组合架构稳定后再纳入。 |
 | process_flow | title, steps[2..7]{id,title,description?}, orientation:horizontal\|vertical | 线性流程;按数组顺序连接,步骤框与箭头均为独立可编辑对象;分支流程继续使用 architecture_diagram。 |
 | timeline | title, milestones[2..8]{label,title,description?,status}, orientation:horizontal\|vertical | 时间线 / 简化路线图;status 限 completed/current/planned;不表达精确 Gantt。 |
 | image | title;image_ref 或 placeholder, caption? | 外网使用 16:9 灰底占位框 + 题注,明确等比放入且禁止随意裁切;真实图片透传仍为 P2。 |
@@ -303,7 +304,7 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 
 ```
 {
-  "ir_type": "deck", "ir_version": "1.6",
+  "ir_type": "deck", "ir_version": "1.8",
   "meta": { "title": "Q3 业务汇报", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1" },
   "slides": [
     { "layout": "cover", "title": "Q3 业务汇报", "subtitle": "命令行文档工具链",
@@ -357,7 +358,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 ```
 [角色] 你是企业文档结构化助手。
-[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.0(或 DeckIR v1.6)Schema。
+[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.0(或 DeckIR v1.8)Schema。
 [输出纪律] 只输出一个裸 JSON 对象,不得使用代码围栏或附加文字;不得新增 Schema 之外的字段;
           表格不超过 <上限>;要点每页不超过 7 条。
 [目标 Schema 摘要] <内嵌字段说明或精简 JSON Schema,由 ir 包自动生成,禁止手抄>
@@ -557,7 +558,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 3. 四个输入解析器(md / docx / xlsx / pptx)与配套样例、warnings 降级清单。
 4. Prompt 模板库与组装器:四段式模板、截断策略、确定性输出。
 5. DOCX 渲染器:样式表集中、失败提示齐全、3 个官方样例。
-6. 华为风格主题(hw_theme.json)+ PPTX 渲染器:13 版式(chart 为原生图表,image 允许占位降级,process_flow / timeline 为原生可编辑形状)。
+6. 华为风格主题(hw_theme.json)+ PPTX 渲染器:14 版式(chart 为原生图表,image 允许占位降级,process_flow / timeline / composite 为原生可编辑形状)。
 7. 合规检查器与双格式报告,支持外部 PPTX 复检。
 8. 测试套件与覆盖率报告:单元 + 契约 + 端到端,一键 verify 脚本。
 9. 文档四件:README、使用说明、内网接入说明、验收手册(含全部验收命令)。
@@ -593,7 +594,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 
 已决事项:
 
-1. DeckIR 以当前 v1.6 Schema 与本文 3.3 节为权威;1.4/1.5 在校验入口确定性迁移到 1.6,更早数据如需长期保存须显式迁移,renderer 不暗自兼容非法 IR。
+1. DeckIR 以当前 v1.8 Schema 与本文 3.3 节为权威;1.4/1.5/1.6/1.7 在校验入口确定性迁移到 1.8,其中 1.7 composite 的单 component 会转换为单元素 components 列表;更早数据如需长期保存须显式迁移,renderer 不暗自兼容非法 IR。
 2. chart 版式使用 python-pptx 原生可编辑图表;bar/line 增强和基础 pie 已落地,不再作为未决项。
 
 仍需导师 / 内网确认:
@@ -613,7 +614,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 | samples/input/real/(各 ≥ 3,脱敏) | 真实 docx / xlsx / pptx 语料,覆盖 §5.4 边界情况;文档无法替代,须人工收集 |
 | samples/ir/word_valid_01_plain.json 等 3 个 | Step 1 官方正样例:纯文本报告 / 带列表方案 / 带表格业务说明 |
 | samples/ir/word_invalid_*.json(10 个) | 覆盖 E001-E006 与 W 系全部错误码的回归集 |
-| samples/ir/deck_valid_full.json | DeckIR 十三版式全覆盖演示样例 |
+| samples/ir/deck_valid_full.json | DeckIR 十四版式全覆盖演示样例 |
 | samples/ir/deck_invalid_*.json(6 个) | DeckIR 校验错误码回归集 |
 | samples/ir/deck_lint_violation.json | 人工注入合规违规,用于演示 lint 命中 |
 | samples/expected/ | golden 基线:回读断言所需的结构性事实(JSON 描述,不比二进制) |
