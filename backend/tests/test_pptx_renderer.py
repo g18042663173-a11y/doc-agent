@@ -1076,6 +1076,54 @@ def test_render_architecture_falls_back_with_warning_when_graphviz_is_unavailabl
 
 
 @pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
+def test_render_architecture_node_colors_follow_theme_type_mapping_and_default(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.9",
+            "meta": {"title": "语义配色", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "type 决定节点颜色",
+                    "nodes": [
+                        {"id": "job", "text": "Job", "type": "job"},
+                        {"id": "module", "text": "Module", "type": "module"},
+                        {"id": "data", "text": "Data", "type": "data"},
+                        {"id": "unknown", "text": "Unknown", "type": "unregistered_type"},
+                    ],
+                    "edges": [
+                        {"from": "job", "to": "module"},
+                        {"from": "module", "to": "data"},
+                        {"from": "unknown", "to": "module"},
+                    ],
+                    "groups": [],
+                }
+            ],
+        }
+    )
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw_theme.json").read_text(encoding="utf-8"))
+    color_map = theme["layouts"]["architecture_diagram"]["node_type_colors"]
+
+    slide = Presentation(str(render_deck_ir(deck, tmp_path / "semantic-colors.pptx"))).slides[0]
+    fills = {
+        shape.name.removeprefix("HW_ARCH_NODE:"): str(shape.fill.fore_color.rgb)
+        for shape in slide.shapes
+        if shape.name.startswith("HW_ARCH_NODE:")
+    }
+
+    assert fills == {
+        "job": theme["colors"][color_map["job"]].removeprefix("#"),
+        "module": theme["colors"][color_map["module"]].removeprefix("#"),
+        "data": theme["colors"][color_map["data"]].removeprefix("#"),
+        "unknown": theme["colors"][color_map["default"]].removeprefix("#"),
+    }
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
 def test_render_composite_table_and_architecture_as_editable_region_bound_shapes(tmp_path: Path) -> None:
     from app.ir.deck_ir import DeckIR
     from app.rendering.pptx_renderer import render_deck_ir
@@ -1289,7 +1337,7 @@ def test_render_composite_stacks_table_architecture_and_bullets_inside_left_regi
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.8",
+            "ir_version": "1.9",
             "meta": {"title": "堆叠组合页", "classification": "公开", "theme": "hw_v1"},
             "slides": [
                 {

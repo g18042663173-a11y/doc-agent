@@ -1386,7 +1386,7 @@ def test_stacked_composite_architecture_keeps_existing_density_lint(tmp_path: Pa
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.8",
+            "ir_version": "1.9",
             "meta": {"title": "堆叠密度", "classification": "公开", "theme": "hw_v1"},
             "slides": [
                 {
@@ -1440,7 +1440,7 @@ def test_stacked_composite_reports_column_overflow_from_real_block_geometry(tmp_
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "1.8",
+            "ir_version": "1.9",
             "meta": {"title": "栏高预警", "classification": "公开", "theme": "hw_v1"},
             "slides": [
                 {
@@ -1562,6 +1562,38 @@ def test_check_pptx_architecture_reports_node_fill_outside_accent_palette(tmp_pa
     report = check_pptx(path, classification=deck.meta.classification)
 
     assert any(item.code == "HW-W02" and "架构节点" in item.message for item in report.items)
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
+def test_check_pptx_accepts_registered_and_default_semantic_node_colors(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.9",
+            "meta": {"title": "语义颜色 lint", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "语义 type 应通过主题颜色检查",
+                    "nodes": [
+                        {"id": "job", "text": "Job", "type": "job"},
+                        {"id": "module", "text": "Module", "type": "module"},
+                        {"id": "unknown", "text": "Unknown", "type": "unregistered_type"},
+                    ],
+                    "edges": [{"from": "job", "to": "module"}, {"from": "unknown", "to": "module"}],
+                    "groups": [],
+                }
+            ],
+        }
+    )
+
+    report = check_pptx(render_deck_ir(deck, tmp_path / "semantic-color-lint.pptx"), classification="公开")
+
+    assert not any(item.code == "HW-W02" and "架构节点填充色" in item.message for item in report.items)
 
 
 def test_check_cli_writes_json_and_markdown_reports(tmp_path: Path) -> None:

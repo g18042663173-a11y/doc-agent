@@ -66,7 +66,7 @@ TARGETS = {
         "model": WordIR,
     },
     "deck": {
-        "label": "DeckIR v1.8",
+        "label": "DeckIR v1.9",
         "description": "华为风格 PPTX 演示文稿",
         "model": DeckIR,
     },
@@ -127,13 +127,14 @@ def _contract_guide(kind: Kind) -> str:
         )
     return (
         "顶层只能有 ir_type、ir_version、meta、slides。"
-        "ir_type 固定为 deck，ir_version 固定为 1.8，meta.title 必填且非空，slides 至少 1 页。\n"
+        "ir_type 固定为 deck，ir_version 固定为 1.9，meta.title 必填且非空，slides 至少 1 页。\n"
         "slides[].layout 只能是 cover、agenda、section、title_bullets、two_column、table、cards、chart、"
         "architecture_diagram、process_flow、timeline、image、conclusion、composite；每种 layout 只填写 Schema 为它定义的字段。\n"
         "agenda.items 为 2-8 条；title_bullets.bullets 至少 1 条；table.rows 每行列数等于 header；"
         "chart.series[].values 数量等于 categories；architecture_diagram 的 edge.from/to 必须引用已有 node.id；"
         "process_flow.steps 为 2-7 个且 id 唯一；timeline.milestones 为 2-8 个；"
         "chart.orientation=horizontal 只允许 kind=bar；cards.variant=kpi 时 title/desc/tag 分别表示指标名/数值/口径；"
+        "architecture_diagram.nodes[].type 可使用 primary/secondary/emphasis/data/job/module；未知 type 使用主题 default 配色；"
         "composite.regions 必须恰含 left/right，components 为 1-3 块从上到下堆叠，首版仅允许 table/architecture_diagram/title_bullets/cards。"
     )
 

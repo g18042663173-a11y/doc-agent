@@ -317,7 +317,7 @@ def stub_chunk_payload(chunk: dict[str, Any]) -> dict[str, Any]:
     slides = [_stub_slide(page, title=title, total_pages=int(chunk.get("global_target_pages", len(pages)))) for page in pages]
     return {
         "ir_type": "deck",
-        "ir_version": "1.8",
+        "ir_version": "1.9",
         "meta": {"title": title, "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
         "slides": slides,
     }

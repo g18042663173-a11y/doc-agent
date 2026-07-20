@@ -2177,12 +2177,7 @@ def _render_architecture_node(
         Inches(box["height_in"]),
     )
     shape.name = f"HW_ARCH_NODE:{node.id}"
-    color_key = {
-        "primary": "accent6",
-        "secondary": "accent4",
-        "emphasis": "hw_red",
-        "data": "accent5",
-    }[node.type]
+    color_key = layout["node_type_colors"].get(node.type, layout["node_type_colors"]["default"])
     shape.fill.solid()
     shape.fill.fore_color.rgb = _rgb(theme["colors"][color_key])
     shape.line.color.rgb = _rgb(theme["colors"][color_key])
@@ -2200,7 +2195,7 @@ def _render_architecture_node(
     _format_paragraph(paragraph, theme)
     run = paragraph.add_run()
     run.text = node.text if text is None else text
-    text_color = "background" if node.type == "emphasis" else "body"
+    text_color = "background" if color_key == "hw_red" else "body"
     _format_run(
         run,
         theme,

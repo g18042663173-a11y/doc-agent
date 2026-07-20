@@ -239,12 +239,8 @@
         },
         "type": {
           "default": "secondary",
-          "enum": [
-            "primary",
-            "secondary",
-            "emphasis",
-            "data"
-          ],
+          "description": "节点业务语义类型。主题已注册 primary、secondary、emphasis、data、job、module；其它非空值回退到 theme 的 default 配色，renderer 不根据节点文本猜测业务语义。",
+          "minLength": 1,
           "title": "Type",
           "type": "string"
         }
@@ -1462,7 +1458,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "1.8",
+      "const": "1.9",
       "title": "Ir Version",
       "type": "string"
     },

@@ -378,8 +378,8 @@ def _architecture_items(slide, slide_index: int, theme: dict) -> list[PptxLintIt
     items: list[PptxLintItem] = []
     layout = theme["layouts"]["architecture_diagram"]
     allowed_node_fills = {
-        theme["colors"][key].upper()
-        for key in ("hw_red", "accent4", "accent5", "accent6")
+        theme["colors"][color_key].upper()
+        for color_key in layout["node_type_colors"].values()
     }
     expected_sizes = {
         "HW_ARCH_NODE:": layout["node_font_size_pt"],
@@ -413,7 +413,7 @@ def _architecture_items(slide, slide_index: int, theme: dict) -> list[PptxLintIt
                         "Warning",
                         slide_index,
                         f"架构节点填充色 {fill or '未设置'} 不在规定 accent 色板。",
-                        "节点类型仅使用 hw_red、accent4、accent5、accent6 对应主题色。",
+                        "节点填充色必须来自 layouts.architecture_diagram.node_type_colors 对应主题色。",
                     )
                 ]
         for prefix, expected_size in expected_sizes.items():

@@ -389,13 +389,21 @@ class DiagramSize(ContractModel):
 class ArchitectureNode(ContractModel):
     id: str = Field(min_length=1)
     text: str = Field(min_length=1)
-    type: Literal["primary", "secondary", "emphasis", "data"] = "secondary"
+    type: str = Field(
+        default="secondary",
+        min_length=1,
+        description=(
+            "节点业务语义类型。主题已注册 primary、secondary、emphasis、data、job、module；"
+            "其它非空值回退到 theme 的 default 配色，renderer 不根据节点文本猜测业务语义。"
+        ),
+    )
     group: str | None = None
     position: DiagramPosition | None = Field(default=None, description="可选节点中心位置；坐标相对架构图内容区归一化。")
     size: DiagramSize | None = Field(default=None, description="可选节点尺寸；宽高分别是架构图内容区宽高的比例。")
 
     _id_not_blank = field_validator("id")(non_empty)
     _text_not_blank = field_validator("text")(non_empty)
+    _type_not_blank = field_validator("type")(non_empty)
 
     @field_validator("group")
     @classmethod
@@ -749,8 +757,8 @@ DeckSlide = Annotated[
 ]
 
 
-def migrate_deck_payload(value: Any, *, target_version: str = "1.8") -> tuple[Any, str | None]:
-    if not isinstance(value, dict) or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7"} or target_version != "1.8":
+def migrate_deck_payload(value: Any, *, target_version: str = "1.9") -> tuple[Any, str | None]:
+    if not isinstance(value, dict) or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7", "1.8"} or target_version != "1.9":
         return value, None
     source_version = value["ir_version"]
     migrated = copy.deepcopy(value)
@@ -767,13 +775,13 @@ def migrate_deck_payload(value: Any, *, target_version: str = "1.8") -> tuple[An
                     if not isinstance(region, dict) or "components" in region or "component" not in region:
                         continue
                     region["components"] = [region.pop("component")]
-    migrated["ir_version"] = "1.8"
+    migrated["ir_version"] = "1.9"
     return migrated, source_version
 
 
 class DeckIR(ContractModel):
     ir_type: Literal["deck"]
-    ir_version: Literal["1.8"]
+    ir_version: Literal["1.9"]
     meta: DeckMeta
     slides: list[DeckSlide] = Field(min_length=1, max_length=30)
 

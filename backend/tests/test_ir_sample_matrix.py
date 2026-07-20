@@ -27,6 +27,7 @@ def test_deck_ir_positive_samples_validate_and_render(tmp_path: Path) -> None:
         "deck_valid_09_data_bar_kpi.json",
         "deck_valid_10_composite.json",
         "deck_valid_11_composite_stacked.json",
+        "deck_valid_12_architecture_semantic_colors.json",
         "deck_valid_full.json",
     ]:
         payload = json.loads((ROOT / "samples" / "ir" / sample_name).read_text(encoding="utf-8"))

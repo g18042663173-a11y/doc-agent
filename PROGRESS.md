@@ -155,3 +155,10 @@
 - 递归 lint 已覆盖：堆叠内 13 条边 architecture_diagram 仍报既有密度 `HW-W03`；三块累计超高时新增 `组合页该栏内容过多` `HW-W03`。table、要点和 KPI 的原有产物规则继续通过原 lint 路径执行。
 - 视觉样例为 `samples/ir/deck_valid_11_composite_stacked.json`，产物 `output/composite_stacked_venus_review/deck_composite_stacked_venus.pptx`，中文 PDF `output/composite_stacked_venus_review/deck_composite_stacked_venus.pdf`。左栏表格、架构图、要点顺序清楚且无重叠/裁切；该混合密度页仍有 1 条真实 `HW-W01`（全页 7 种字号超过主题上限 3 种），未做豁免。
 - 相关回归 `268 passed`，全量 pytest 在新增 v1.8 兼容几何测试前为 `417 passed`；最终门禁待本轮结束时再次运行。
+
+## 2026-07-20 Architecture diagram v1.9 语义配色
+
+- DeckIR 升至 1.9：ArchitectureNode.type 改为非空、可扩展字符串；主题注册 primary/secondary/emphasis/data/job/module，未知 type 不猜测业务含义，回退到 theme default 色。
+- 既有色值保持不变：primary 青、secondary 黄、emphasis 红、data 绿；新增 job 黄、module 绿。renderer 与 lint 都从 `layouts.architecture_diagram.node_type_colors` 读取同一映射，不保留硬编码配色表。
+- 试点样例 `samples/ir/deck_valid_12_architecture_semantic_colors.json` 已生成原生可编辑 PPTX 和中文 PDF：`output/architecture_semantic_colors_review/deck_architecture_semantic_colors.pdf`。视觉检查确认 Job/未知 type 为黄，module/data 为绿，Graphviz 关系和标签清楚；CLI lint 为 0 Error / 0 Warning。
+- 回归覆盖注册 type 与未知 default 填色、主题色 lint、已有架构与 composite/堆叠样例。最终全量 pytest、verify、ruff、Schema 快照待本轮结束时再次运行。

@@ -202,7 +202,7 @@ def test_validate_deck_ir_maps_unknown_layout_to_d003() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-                "ir_version": "1.8",
+                "ir_version": "1.9",
             "meta": {"title": "未知版式"},
             "slides": [{"layout": "mystery", "title": "无法渲染"}],
         }
@@ -212,7 +212,7 @@ def test_validate_deck_ir_maps_unknown_layout_to_d003() -> None:
     assert result.errors[0].code == "D003"
 
 
-@pytest.mark.parametrize("source_version", ["1.4", "1.5", "1.6", "1.7"])
+@pytest.mark.parametrize("source_version", ["1.4", "1.5", "1.6", "1.7", "1.8"])
 def test_validate_deck_ir_migrates_legacy_versions_without_mutating_input(source_version: str) -> None:
     import copy
 
@@ -230,14 +230,14 @@ def test_validate_deck_ir_migrates_legacy_versions_without_mutating_input(source
     direct = DeckIR.model_validate(payload)
 
     assert result.ok and result.value is not None
-    assert result.value.ir_version == "1.8"
-    assert direct.ir_version == "1.8"
+    assert result.value.ir_version == "1.9"
+    assert direct.ir_version == "1.9"
     assert payload == original
     assert any(
         item.code == "D004"
         and item.loc == "ir_version"
         and source_version in item.message
-        and "1.8" in item.message
+        and "1.9" in item.message
         for item in result.warnings
     )
 
@@ -248,7 +248,7 @@ def test_validate_deck_ir_accepts_composite_with_existing_component_models() -> 
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.8",
+            "ir_version": "1.9",
             "meta": {"title": "组合页"},
             "slides": [
                 {
@@ -328,10 +328,10 @@ def test_validate_deck_ir_migrates_v17_single_composite_component_without_mutati
     result = validate_deck_ir(payload)
 
     assert result.ok and result.value is not None
-    assert result.value.ir_version == "1.8"
+    assert result.value.ir_version == "1.9"
     assert [len(region.components) for region in result.value.slides[0].regions] == [1, 1]
     assert payload == original
-    assert any(item.code == "D004" and "1.7" in item.message and "1.8" in item.message for item in result.warnings)
+    assert any(item.code == "D004" and "1.7" in item.message and "1.9" in item.message for item in result.warnings)
 
 
 def test_validate_deck_ir_accepts_three_stacked_components_and_rejects_fourth() -> None:
@@ -342,7 +342,7 @@ def test_validate_deck_ir_accepts_three_stacked_components_and_rejects_fourth() 
     component = {"layout": "title_bullets", "title": "块", "bullets": [{"text": "内容", "level": 1}]}
     valid = {
         "ir_type": "deck",
-        "ir_version": "1.8",
+        "ir_version": "1.9",
         "meta": {"title": "堆叠"},
         "slides": [
             {
@@ -1025,7 +1025,7 @@ def test_validate_deck_ir_ignores_unknown_fields_and_warns() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.8",
+            "ir_version": "1.9",
             "unknown_top": "ignored",
             "meta": {"title": "未知字段", "unknown_meta": "ignored"},
             "slides": [{"layout": "cover", "title": "封面", "unknown_slide": "ignored"}],
@@ -1043,7 +1043,7 @@ def test_validate_deck_ir_accepts_architecture_diagram_v14() -> None:
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.8",
+            "ir_version": "1.9",
             "meta": {"title": "技术架构"},
             "slides": [
                 {
@@ -1080,6 +1080,34 @@ def test_validate_deck_ir_accepts_architecture_diagram_v14() -> None:
     assert result.warnings == []
 
 
+def test_validate_deck_ir_preserves_semantic_and_unregistered_architecture_types() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.9",
+            "meta": {"title": "节点语义"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "type 由内容明确提供",
+                    "nodes": [
+                        {"id": "job", "text": "Job", "type": "job"},
+                        {"id": "module", "text": "Module", "type": "module"},
+                        {"id": "custom", "text": "Custom", "type": "custom_extension"},
+                    ],
+                    "edges": [{"from": "job", "to": "module"}, {"from": "custom", "to": "module"}],
+                    "groups": [],
+                }
+            ],
+        }
+    )
+
+    assert result.ok and result.value is not None
+    assert [node.type for node in result.value.slides[0].nodes] == ["job", "module", "custom_extension"]
+
+
 def test_validate_deck_ir_rejects_architecture_edge_to_unknown_node() -> None:
     from app.ir.validation import validate_deck_ir
 
@@ -1111,7 +1139,7 @@ def test_validate_deck_ir_warns_for_nested_architecture_unknown_fields_only() ->
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.8",
+            "ir_version": "1.9",
             "meta": {"title": "架构未知字段"},
             "slides": [
                 {
@@ -1519,7 +1547,7 @@ def test_validate_deck_ir_warns_for_nested_process_and_timeline_unknown_fields()
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "1.8",
+            "ir_version": "1.9",
             "meta": {"title": "未知字段"},
             "slides": [
                 {

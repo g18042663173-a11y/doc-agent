@@ -344,6 +344,15 @@
       "node_text_margin_in": 0.08,
       "node_font_size_pt": 12,
       "node_border_pt": 1.0,
+      "node_type_colors": {
+        "default": "accent4",
+        "primary": "accent6",
+        "secondary": "accent4",
+        "emphasis": "hw_red",
+        "data": "accent5",
+        "job": "accent4",
+        "module": "accent5"
+      },
       "graphviz_rankdir": "LR",
       "graphviz_node_sep_in": 0.35,
       "graphviz_rank_sep_in": 0.65,

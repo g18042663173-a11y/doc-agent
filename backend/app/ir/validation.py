@@ -631,8 +631,8 @@ def validate_deck_ir(raw: str | Mapping[str, Any]) -> ValidationResult[DeckIR]:
             _warning(
                 "D004",
                 "ir_version",
-                f"DeckIR {migrated_from} 已在内存中兼容迁移到 1.8，并按 1.8 契约重新校验。",
-                f"重新生成或序列化为 1.8 可消除该兼容提示；原始 {migrated_from} 文件不会被覆写。",
+                f"DeckIR {migrated_from} 已在内存中兼容迁移到 1.9，并按 1.9 契约重新校验。",
+                f"重新生成或序列化为 1.9 可消除该兼容提示；原始 {migrated_from} 文件不会被覆写。",
             )
         )
     data, normalization_warnings = _normalize_deck_data(data)
