@@ -54,9 +54,13 @@ EVIDENCE_RESULT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 CAPTION_PATTERN = re.compile(r"^\s*(?:图|表)\s*\d+", re.IGNORECASE)
-FEW_SHOT_FILES: dict[Kind, str] = {
-    "word": "word_valid_01_plain.json",
-    "deck": "deck_valid_08_layout_selection.json",
+FEW_SHOT_FILES: dict[Kind, tuple[str, ...]] = {
+    "word": ("word_valid_01_plain.json",),
+    "deck": (
+        "deck_few_shot_table_v19.json",
+        "deck_few_shot_architecture_v19.json",
+        "deck_few_shot_composite_v19.json",
+    ),
 }
 
 TARGETS = {
@@ -102,6 +106,7 @@ def build_prompt(
         target_label=target["label"],
         target_description=target["description"],
         contract_guide=_contract_guide(kind),
+        field_quick_reference=_field_quick_reference(kind),
         content_rules=_content_rules(kind, depth=depth, pages=pages),
         generation_workflow=_generation_workflow(
             kind,
@@ -136,6 +141,23 @@ def _contract_guide(kind: Kind) -> str:
         "chart.orientation=horizontal 只允许 kind=bar；cards.variant=kpi 时 title/desc/tag 分别表示指标名/数值/口径；"
         "architecture_diagram.nodes[].type 可使用 primary/secondary/emphasis/data/job/module；未知 type 使用主题 default 配色；"
         "composite.regions 必须恰含 left/right，components 为 1-3 块从上到下堆叠，首版仅允许 table/architecture_diagram/title_bullets/cards。"
+    )
+
+
+def _field_quick_reference(kind: Kind) -> str:
+    if kind == "word":
+        return "本目标为 WordIR；完整 Schema 是唯一准绳，不得添加 Schema 外字段。"
+    return (
+        "这份速查规则只划重点，不替代后面的完整 Schema；冲突时以完整 Schema 为准。\n"
+        "1. table.col_widths 是各列的正数相对权重，渲染时归一化；不是英寸，总和不必为 1。\n"
+        "2. 表格索引从 0 开始：column_groups[].start_col、row_groups[].start_row、conclusion_col、"
+        "cell_spans[].row/col 都是 0 起始索引。span、rowspan、colspan 是覆盖数量，不是结束索引。\n"
+        "3. architecture_diagram.nodes[].position/size 是架构图内容区的 0-1 比例：position 是节点中心，"
+        "size 是宽高比例。type 决定主题色，只能用 primary、secondary、emphasis、data、job、module。\n"
+        "4. chart.thresholds[].value 与 chart.series[].values 必须使用同一数值单位；chart.unit 只显示单位后缀，"
+        "不换算数据。\n"
+        "5. composite.regions 必须刚好有 left 与 right 各一栏；每栏 components 是从上到下的 1-3 个组件列表，"
+        "仅可嵌入 table、architecture_diagram、title_bullets、cards。组件字段完全复用其原有 layout。"
     )
 
 
@@ -216,10 +238,14 @@ def _output_plan(
 
 
 def _few_shot(kind: Kind) -> str:
-    path = SAMPLE_DIR / FEW_SHOT_FILES[kind]
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    TARGETS[kind]["model"].model_validate(payload)
-    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    examples: list[str] = []
+    for index, filename in enumerate(FEW_SHOT_FILES[kind], start=1):
+        path = SAMPLE_DIR / filename
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        TARGETS[kind]["model"].model_validate(payload)
+        compact = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        examples.append(f"示例 {index}：{compact}")
+    return "\n".join(examples)
 
 
 def _generation_workflow(kind: Kind, *, genre: str | None, context_incomplete: bool) -> str:

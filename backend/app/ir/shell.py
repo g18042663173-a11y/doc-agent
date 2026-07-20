@@ -105,11 +105,13 @@ def _extract_error(code: str, raw: str, message: str) -> ValidationItem:
     )
 
 
-def validate_word_ir_text(raw: str | Mapping[str, Any]) -> ValidationResult:
+def validate_word_ir_text(
+    raw: str | Mapping[str, Any], *, reject_unknown_fields: bool = False
+) -> ValidationResult:
     if isinstance(raw, Mapping):
-        return validate_word_ir(raw)
+        return validate_word_ir(raw, reject_unknown_fields=reject_unknown_fields)
     try:
-        return validate_word_ir(extract_json_text(raw))
+        return validate_word_ir(extract_json_text(raw), reject_unknown_fields=reject_unknown_fields)
     except JsonExtractionError as exc:
         return ValidationResult(value=None, errors=[_extract_error("E001", raw, str(exc))])
 
@@ -123,10 +125,12 @@ def validate_document_ir_text(raw: str | Mapping[str, Any]) -> ValidationResult:
         return ValidationResult(value=None, errors=[_extract_error("E001", raw, str(exc))])
 
 
-def validate_deck_ir_text(raw: str | Mapping[str, Any]) -> ValidationResult:
+def validate_deck_ir_text(
+    raw: str | Mapping[str, Any], *, reject_unknown_fields: bool = False
+) -> ValidationResult:
     if isinstance(raw, Mapping):
-        return validate_deck_ir(raw)
+        return validate_deck_ir(raw, reject_unknown_fields=reject_unknown_fields)
     try:
-        return validate_deck_ir(extract_json_text(raw))
+        return validate_deck_ir(extract_json_text(raw), reject_unknown_fields=reject_unknown_fields)
     except JsonExtractionError as exc:
         return ValidationResult(value=None, errors=[_extract_error("D001", raw, str(exc))])

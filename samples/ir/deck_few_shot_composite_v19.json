@@ -1,0 +1,32 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {"title": "组合页示例"},
+  "slides": [
+    {
+      "layout": "composite",
+      "title": "指标结论与处理链路需同页联读",
+      "regions": [
+        {
+          "slot": "left",
+          "components": [
+            {"layout": "table", "title": "关键指标", "table": {"header": ["指标", "结果"], "rows": [["时延", "18 ms"]]}},
+            {"layout": "title_bullets", "title": "判断", "bullets": [{"text": "先验证低时延链路"}]}
+          ]
+        },
+        {
+          "slot": "right",
+          "components": [
+            {
+              "layout": "architecture_diagram",
+              "title": "处理链路",
+              "nodes": [{"id": "in", "text": "输入", "type": "primary"}, {"id": "out", "text": "输出", "type": "data"}],
+              "edges": [{"from": "in", "to": "out"}],
+              "groups": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

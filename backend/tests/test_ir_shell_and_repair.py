@@ -20,6 +20,15 @@ VALID_WORD_JSON = """
 }
 """.strip()
 
+VALID_DECK_JSON = """
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {"title": "修复完成"},
+  "slides": [{"layout": "cover", "title": "修复完成"}]
+}
+""".strip()
+
 
 def test_extract_json_text_accepts_pure_json() -> None:
     from app.ir.shell import extract_json_text
@@ -130,6 +139,18 @@ class BrokenGenerator:
         return '{"ir_type":"word","ir_version":"1.0","meta":{},"blocks":[]}'
 
 
+class DeckRepairingGenerator:
+    name = "deck-repairing"
+
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    def generate(self, prompt: str, *, target: str) -> str:
+        assert target == "deck_ir"
+        self.prompts.append(prompt)
+        return VALID_DECK_JSON
+
+
 def test_repair_loop_retries_with_error_codes_until_valid() -> None:
     from app.ir.repair import repair_ir_text
 
@@ -161,6 +182,41 @@ def test_repair_loop_stops_after_max_retries() -> None:
     assert result.value is None
     assert result.errors[0].code == "E002"
     assert len(generator.prompts) == 2
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_code", "expected_loc"),
+    [
+        (
+            '{"ir_type":"deck","ir_version":"1.9","meta":{"title":"拼写"},"slides":[{"layout":"cover","title":"拼写","subtitel":"错误"}]}',
+            "D004",
+            "slides[0].subtitel",
+        ),
+        (
+            '{"ir_type":"deck","ir_version":"1.9","meta":{"title":"嵌套拼写"},"slides":[{"layout":"composite","title":"嵌套拼写","regions":[{"slot":"left","components":[{"layout":"table","title":"表","table":{"header":["项","值"],"rows":[["时延","18 ms"]],"colum_widths":[1,1]}}]},{"slot":"right","components":[{"layout":"title_bullets","title":"判断","bullets":[{"text":"可验证"}]}]}]}]}',
+            "D005",
+            "slides[0].regions[0].components[0].table.colum_widths",
+        ),
+        (
+            '{"ir_type":"deck","ir_version":"1.9","meta":{"title":"类型拼写"},"slides":[{"layout":"architecture_diagram","title":"类型拼写","nodes":[{"id":"a","text":"模块","type":"moduel"}],"edges":[],"groups":[]}]}',
+            "D004",
+            "slides[0].nodes[0].type",
+        ),
+    ],
+)
+def test_repair_loop_retries_all_model_unknown_field_cases(
+    raw: str, expected_code: str, expected_loc: str
+) -> None:
+    from app.ir.repair import repair_ir_text
+
+    generator = DeckRepairingGenerator()
+    result = repair_ir_text(raw, target="deck_ir", generator=generator, max_retries=1)
+
+    assert result.ok
+    assert len(generator.prompts) == 1
+    assert expected_code in generator.prompts[0]
+    assert expected_loc in generator.prompts[0]
+    assert "未知字段" in generator.prompts[0] or "未知节点 type" in generator.prompts[0]
 
 
 def test_repair_loop_rebuilds_truncated_output_with_compact_bare_json_prompt() -> None:

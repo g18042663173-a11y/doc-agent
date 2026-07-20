@@ -7,6 +7,8 @@
 4. 生成完先静默检查括号闭合、必填字段、枚举值、数组上限和引用关系，再输出。
 [严格字段结构和取值约束]
 {contract_guide}
+[字段速查规则]
+{field_quick_reference}
 [内容组织规则]
 {content_rules}
 [输出预算与分页]

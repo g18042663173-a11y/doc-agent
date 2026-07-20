@@ -55,9 +55,9 @@ def repair_ir_text(
 
 def _validate(raw: str, target: Target) -> ValidationResult:
     if target == "word_ir":
-        return validate_word_ir_text(raw)
+        return validate_word_ir_text(raw, reject_unknown_fields=True)
     if target == "deck_ir":
-        return validate_deck_ir_text(raw)
+        return validate_deck_ir_text(raw, reject_unknown_fields=True)
     raise ValueError(f"unsupported target: {target}")
 
 

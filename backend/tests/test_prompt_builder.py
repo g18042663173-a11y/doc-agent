@@ -202,9 +202,25 @@ def test_build_deck_prompt_contains_weak_model_rules_and_few_shot() -> None:
     assert "优先组织为 8-10 页技术评审稿" in prompt
     assert "[正例 few-shot]" in prompt
     assert '"ir_type":"deck"' in prompt
-    sample = json.loads((ROOT / "samples" / "ir" / "deck_valid_08_layout_selection.json").read_text(encoding="utf-8"))
-    compact_sample = json.dumps(sample, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    assert compact_sample in prompt
+    assert prompt.index("[字段速查规则]") < prompt.index("[完整目标 Schema，以此为最终准绳]")
+    for phrase in (
+        "相对权重",
+        "总和不必为 1",
+        "span、rowspan、colspan 是覆盖数量",
+        "primary、secondary、emphasis、data、job、module",
+        "thresholds[].value 与 chart.series[].values 必须使用同一数值单位",
+        "components 是从上到下的 1-3 个组件列表",
+    ):
+        assert phrase in prompt
+    for filename in (
+        "deck_few_shot_table_v19.json",
+        "deck_few_shot_architecture_v19.json",
+        "deck_few_shot_composite_v19.json",
+    ):
+        sample = json.loads((ROOT / "samples" / "ir" / filename).read_text(encoding="utf-8"))
+        compact_sample = json.dumps(sample, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert compact_sample in prompt
+        assert '"ir_version":"1.9"' in compact_sample
     assert "est_chars=2" in prompt
     assert "```" not in prompt
 
@@ -500,7 +516,7 @@ def test_deck_prompt_optional_depth_rules_keep_default_path_deterministic() -> N
     detailed = build_prompt(kind="deck", context=context, depth="详细", pages=16)
 
     assert hashlib.sha256(legacy.encode("utf-8")).hexdigest() == (
-        "5e2fb56b0545e8f00300006c23ee0d593ed259d2b6b12bffe2acabfa70317d8a"
+        "4fc5a5a2985a13fa62cb78d2de8bdb7f39f39e92e1faa35f4d931caaf4d6ce94"
     )
     from app.generators.stub import StubGenerator
 

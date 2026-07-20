@@ -11,6 +11,7 @@ from app.ir.common import (
     BulletListBlock,
     HeadingBlock,
     ImagePlaceholderBlock,
+    ListItem,
     NumberedListBlock,
     PageBreakBlock,
     ParagraphBlock,
@@ -23,6 +24,7 @@ from app.ir.deck_ir import (
     ArchitectureGroup,
     ArchitectureManualHints,
     ArchitectureNode,
+    Card,
     CardsSlide,
     ChartSlide,
     ChartSeries,
@@ -33,6 +35,7 @@ from app.ir.deck_ir import (
     CompositeSlide,
     ConclusionSlide,
     CoverSlide,
+    ColumnContent,
     DeckTable,
     DeckTableCell,
     DeckIR,
@@ -43,6 +46,9 @@ from app.ir.deck_ir import (
     ProcessStep,
     SectionSlide,
     TableSlide,
+    TableCellSpan,
+    TableColumnGroup,
+    TableRowGroup,
     TitleBulletsSlide,
     TimelineMilestone,
     TimelineSlide,
@@ -56,6 +62,7 @@ from app.ir.word_ir import WordIR, WordMeta
 
 
 MAX_WORD_TEXT_CHARS = 2000
+REGISTERED_ARCHITECTURE_NODE_TYPES = frozenset({"primary", "secondary", "emphasis", "data", "job", "module"})
 
 
 WORD_BLOCK_MODELS: dict[str, Type[BaseModel]] = {
@@ -175,156 +182,171 @@ def _collect_word_unknowns(data: Mapping[str, Any]) -> list[ValidationItem]:
     return warnings
 
 
+def _collect_table_unknowns(table: Mapping[str, Any], prefix: str) -> list[ValidationItem]:
+    warnings = _unknown_fields(table, _model_input_fields(DeckTable), prefix)
+    for field_name, model in (
+        ("column_groups", TableColumnGroup),
+        ("row_groups", TableRowGroup),
+        ("cell_spans", TableCellSpan),
+    ):
+        items = table.get(field_name)
+        if isinstance(items, list):
+            for index, item in enumerate(items):
+                if isinstance(item, Mapping):
+                    warnings.extend(_unknown_fields(item, _model_input_fields(model), f"{prefix}.{field_name}[{index}]"))
+    rows = table.get("rows")
+    if isinstance(rows, list):
+        for row_index, row in enumerate(rows):
+            if not isinstance(row, list):
+                continue
+            for col_index, cell in enumerate(row):
+                if isinstance(cell, Mapping):
+                    warnings.extend(
+                        _unknown_fields(
+                            cell,
+                            _model_input_fields(DeckTableCell),
+                            f"{prefix}.rows[{row_index}][{col_index}]",
+                        )
+                    )
+    return warnings
+
+
+def _collect_architecture_unknowns(component: Mapping[str, Any], prefix: str) -> list[ValidationItem]:
+    warnings: list[ValidationItem] = []
+    nodes = component.get("nodes")
+    if isinstance(nodes, list):
+        for node_index, node in enumerate(nodes):
+            if not isinstance(node, Mapping):
+                continue
+            node_prefix = f"{prefix}.nodes[{node_index}]"
+            warnings.extend(_unknown_fields(node, _model_input_fields(ArchitectureNode), node_prefix))
+            node_type = node.get("type")
+            if isinstance(node_type, str) and node_type not in REGISTERED_ARCHITECTURE_NODE_TYPES:
+                warnings.append(
+                    _warning(
+                        "W105",
+                        f"{node_prefix}.type",
+                        f'未知节点 type "{node_type}"，renderer 将回退 theme default 配色。',
+                        "优先使用 primary、secondary、emphasis、data、job 或 module；自定义语义仅限人工确认的手工 IR。",
+                    )
+                )
+            for field_name, model in (("position", DiagramPosition), ("size", DiagramSize)):
+                value = node.get(field_name)
+                if isinstance(value, Mapping):
+                    warnings.extend(_unknown_fields(value, _model_input_fields(model), f"{node_prefix}.{field_name}"))
+    for field_name, model in (("edges", ArchitectureEdge), ("groups", ArchitectureGroup)):
+        items = component.get(field_name)
+        if isinstance(items, list):
+            for index, item in enumerate(items):
+                if isinstance(item, Mapping):
+                    warnings.extend(_unknown_fields(item, _model_input_fields(model), f"{prefix}.{field_name}[{index}]"))
+    manual_hints = component.get("manual_hints")
+    if isinstance(manual_hints, Mapping):
+        manual_prefix = f"{prefix}.manual_hints"
+        warnings.extend(_unknown_fields(manual_hints, _model_input_fields(ArchitectureManualHints), manual_prefix))
+        for field_name, model in (("node_positions", DiagramPosition), ("node_sizes", DiagramSize)):
+            hints = manual_hints.get(field_name)
+            if not isinstance(hints, Mapping):
+                continue
+            for node_id, hint in hints.items():
+                if isinstance(hint, Mapping):
+                    warnings.extend(_unknown_fields(hint, _model_input_fields(model), f"{manual_prefix}.{field_name}.{node_id}"))
+    return warnings
+
+
+def _collect_deck_component_unknowns(component: Mapping[str, Any], prefix: str) -> list[ValidationItem]:
+    layout = str(component.get("layout"))
+    model = DECK_SLIDE_MODELS.get(layout)
+    if model is None:
+        return []
+    warnings = _unknown_fields(component, _model_input_fields(model), prefix)
+    if layout == "table":
+        table = component.get("table")
+        if isinstance(table, Mapping):
+            warnings.extend(_collect_table_unknowns(table, f"{prefix}.table"))
+    elif layout == "architecture_diagram":
+        warnings.extend(_collect_architecture_unknowns(component, prefix))
+    elif layout == "title_bullets":
+        bullets = component.get("bullets")
+        if isinstance(bullets, list):
+            for index, bullet in enumerate(bullets):
+                if isinstance(bullet, Mapping):
+                    warnings.extend(_unknown_fields(bullet, _model_input_fields(ListItem), f"{prefix}.bullets[{index}]"))
+    elif layout == "cards":
+        cards = component.get("cards")
+        if isinstance(cards, list):
+            for index, card in enumerate(cards):
+                if isinstance(card, Mapping):
+                    warnings.extend(_unknown_fields(card, _model_input_fields(Card), f"{prefix}.cards[{index}]"))
+    elif layout == "two_column":
+        for side in ("left", "right"):
+            column = component.get(side)
+            if not isinstance(column, Mapping):
+                continue
+            column_prefix = f"{prefix}.{side}"
+            warnings.extend(_unknown_fields(column, _model_input_fields(ColumnContent), column_prefix))
+            bullets = column.get("bullets")
+            if isinstance(bullets, list):
+                for index, bullet in enumerate(bullets):
+                    if isinstance(bullet, Mapping):
+                        warnings.extend(_unknown_fields(bullet, _model_input_fields(ListItem), f"{column_prefix}.bullets[{index}]"))
+    elif layout == "chart":
+        chart = component.get("chart")
+        if isinstance(chart, Mapping):
+            chart_prefix = f"{prefix}.chart"
+            warnings.extend(_unknown_fields(chart, _model_input_fields(ChartSpec), chart_prefix))
+            for field_name, model in (("series", ChartSeries), ("thresholds", ChartThreshold)):
+                items = chart.get(field_name)
+                if isinstance(items, list):
+                    for index, item in enumerate(items):
+                        if isinstance(item, Mapping):
+                            warnings.extend(_unknown_fields(item, _model_input_fields(model), f"{chart_prefix}.{field_name}[{index}]"))
+            side_table = chart.get("side_table")
+            if isinstance(side_table, Mapping):
+                warnings.extend(_unknown_fields(side_table, _model_input_fields(ChartSideTable), f"{chart_prefix}.side_table"))
+    elif layout == "process_flow":
+        steps = component.get("steps")
+        if isinstance(steps, list):
+            for index, step in enumerate(steps):
+                if isinstance(step, Mapping):
+                    warnings.extend(_unknown_fields(step, _model_input_fields(ProcessStep), f"{prefix}.steps[{index}]"))
+    elif layout == "timeline":
+        milestones = component.get("milestones")
+        if isinstance(milestones, list):
+            for index, milestone in enumerate(milestones):
+                if isinstance(milestone, Mapping):
+                    warnings.extend(_unknown_fields(milestone, _model_input_fields(TimelineMilestone), f"{prefix}.milestones[{index}]"))
+    elif layout == "composite":
+        regions = component.get("regions")
+        if isinstance(regions, list):
+            for region_index, region in enumerate(regions):
+                if not isinstance(region, Mapping):
+                    continue
+                region_prefix = f"{prefix}.regions[{region_index}]"
+                warnings.extend(_unknown_fields(region, _model_input_fields(CompositeRegion), region_prefix))
+                components = region.get("components")
+                if isinstance(components, list):
+                    for component_index, nested_component in enumerate(components):
+                        if isinstance(nested_component, Mapping):
+                            warnings.extend(
+                                _collect_deck_component_unknowns(
+                                    nested_component,
+                                    f"{region_prefix}.components[{component_index}]",
+                                )
+                            )
+    return warnings
+
+
 def _collect_deck_unknowns(data: Mapping[str, Any]) -> list[ValidationItem]:
-    warnings = _unknown_fields(data, set(DeckIR.model_fields))
+    warnings = _unknown_fields(data, _model_input_fields(DeckIR))
     meta = data.get("meta")
     if isinstance(meta, Mapping):
-        warnings.extend(_unknown_fields(meta, set(DeckIR.model_fields["meta"].annotation.model_fields), "meta"))
+        warnings.extend(_unknown_fields(meta, _model_input_fields(DeckIR.model_fields["meta"].annotation), "meta"))
     slides = data.get("slides")
     if isinstance(slides, list):
         for index, slide in enumerate(slides):
-            if not isinstance(slide, Mapping):
-                continue
-            layout = slide.get("layout")
-            model = DECK_SLIDE_MODELS.get(str(layout))
-            if model is None:
-                continue
-            slide_prefix = f"slides[{index}]"
-            warnings.extend(_unknown_fields(slide, set(model.model_fields), slide_prefix))
-            if layout == "composite":
-                regions = slide.get("regions")
-                if isinstance(regions, list):
-                    for region_index, region in enumerate(regions):
-                        if not isinstance(region, Mapping):
-                            continue
-                        region_prefix = f"{slide_prefix}.regions[{region_index}]"
-                        warnings.extend(_unknown_fields(region, set(CompositeRegion.model_fields), region_prefix))
-                        components = region.get("components")
-                        if not isinstance(components, list):
-                            continue
-                        for component_index, component in enumerate(components):
-                            if not isinstance(component, Mapping):
-                                continue
-                            component_model = DECK_SLIDE_MODELS.get(str(component.get("layout")))
-                            if component_model in {TableSlide, ArchitectureDiagramSlide, TitleBulletsSlide, CardsSlide}:
-                                warnings.extend(
-                                    _unknown_fields(
-                                        component,
-                                        set(component_model.model_fields),
-                                        f"{region_prefix}.components[{component_index}]",
-                                    )
-                                )
-            table = slide.get("table")
-            if layout == "table" and isinstance(table, Mapping):
-                warnings.extend(_unknown_fields(table, set(DeckTable.model_fields), f"{slide_prefix}.table"))
-                rows = table.get("rows")
-                if isinstance(rows, list):
-                    for row_index, row in enumerate(rows):
-                        if not isinstance(row, list):
-                            continue
-                        for col_index, cell in enumerate(row):
-                            if isinstance(cell, Mapping):
-                                warnings.extend(
-                                    _unknown_fields(
-                                        cell,
-                                        set(DeckTableCell.model_fields),
-                                        f"{slide_prefix}.table.rows[{row_index}][{col_index}]",
-                                    )
-                                )
-            chart = slide.get("chart")
-            if layout == "chart" and isinstance(chart, Mapping):
-                chart_prefix = f"{slide_prefix}.chart"
-                warnings.extend(_unknown_fields(chart, set(ChartSpec.model_fields), chart_prefix))
-                series_items = chart.get("series")
-                if isinstance(series_items, list):
-                    for series_index, series in enumerate(series_items):
-                        if isinstance(series, Mapping):
-                            warnings.extend(_unknown_fields(series, set(ChartSeries.model_fields), f"{chart_prefix}.series[{series_index}]"))
-                thresholds = chart.get("thresholds")
-                if isinstance(thresholds, list):
-                    for threshold_index, threshold in enumerate(thresholds):
-                        if isinstance(threshold, Mapping):
-                            warnings.extend(_unknown_fields(threshold, set(ChartThreshold.model_fields), f"{chart_prefix}.thresholds[{threshold_index}]"))
-                side_table = chart.get("side_table")
-                if isinstance(side_table, Mapping):
-                    warnings.extend(_unknown_fields(side_table, set(ChartSideTable.model_fields), f"{chart_prefix}.side_table"))
-            if layout == "architecture_diagram":
-                nodes = slide.get("nodes")
-                if isinstance(nodes, list):
-                    for node_index, node in enumerate(nodes):
-                        if not isinstance(node, Mapping):
-                            continue
-                        node_prefix = f"{slide_prefix}.nodes[{node_index}]"
-                        warnings.extend(_unknown_fields(node, _model_input_fields(ArchitectureNode), node_prefix))
-                        position = node.get("position")
-                        if isinstance(position, Mapping):
-                            warnings.extend(_unknown_fields(position, _model_input_fields(DiagramPosition), f"{node_prefix}.position"))
-                        size = node.get("size")
-                        if isinstance(size, Mapping):
-                            warnings.extend(_unknown_fields(size, _model_input_fields(DiagramSize), f"{node_prefix}.size"))
-                edges = slide.get("edges")
-                if isinstance(edges, list):
-                    for edge_index, edge in enumerate(edges):
-                        if isinstance(edge, Mapping):
-                            warnings.extend(
-                                _unknown_fields(
-                                    edge,
-                                    _model_input_fields(ArchitectureEdge),
-                                    f"{slide_prefix}.edges[{edge_index}]",
-                                )
-                            )
-                groups = slide.get("groups")
-                if isinstance(groups, list):
-                    for group_index, group in enumerate(groups):
-                        if isinstance(group, Mapping):
-                            warnings.extend(
-                                _unknown_fields(
-                                    group,
-                                    _model_input_fields(ArchitectureGroup),
-                                    f"{slide_prefix}.groups[{group_index}]",
-                                )
-                            )
-                manual_hints = slide.get("manual_hints")
-                if isinstance(manual_hints, Mapping):
-                    manual_prefix = f"{slide_prefix}.manual_hints"
-                    warnings.extend(_unknown_fields(manual_hints, _model_input_fields(ArchitectureManualHints), manual_prefix))
-                    for field_name, model in (("node_positions", DiagramPosition), ("node_sizes", DiagramSize)):
-                        hints = manual_hints.get(field_name)
-                        if not isinstance(hints, Mapping):
-                            continue
-                        for node_id, hint in hints.items():
-                            if isinstance(hint, Mapping):
-                                warnings.extend(
-                                    _unknown_fields(
-                                        hint,
-                                        _model_input_fields(model),
-                                        f"{manual_prefix}.{field_name}.{node_id}",
-                                    )
-                                )
-            if layout == "process_flow":
-                steps = slide.get("steps")
-                if isinstance(steps, list):
-                    for step_index, step in enumerate(steps):
-                        if isinstance(step, Mapping):
-                            warnings.extend(
-                                _unknown_fields(
-                                    step,
-                                    _model_input_fields(ProcessStep),
-                                    f"{slide_prefix}.steps[{step_index}]",
-                                )
-                            )
-            if layout == "timeline":
-                milestones = slide.get("milestones")
-                if isinstance(milestones, list):
-                    for milestone_index, milestone in enumerate(milestones):
-                        if isinstance(milestone, Mapping):
-                            warnings.extend(
-                                _unknown_fields(
-                                    milestone,
-                                    _model_input_fields(TimelineMilestone),
-                                    f"{slide_prefix}.milestones[{milestone_index}]",
-                                )
-                            )
+            if isinstance(slide, Mapping):
+                warnings.extend(_collect_deck_component_unknowns(slide, f"slides[{index}]"))
     return warnings
 
 
@@ -497,6 +519,31 @@ def _deck_item(error: dict[str, Any]) -> ValidationItem:
     return ValidationItem(code=code, level="Error", loc=loc, message=message)
 
 
+def _strict_unknown_errors(warnings: list[ValidationItem], *, target: str) -> list[ValidationItem]:
+    errors: list[ValidationItem] = []
+    for warning in warnings:
+        if warning.code not in {"W104", "W105"}:
+            continue
+        if target == "deck":
+            code = "D005" if ".table" in warning.loc or ".side_table" in warning.loc else "D004"
+        else:
+            code = "E001"
+        message = warning.message
+        if warning.code == "W104":
+            field_name = warning.loc.rsplit(".", 1)[-1]
+            message = f'未知字段 "{field_name}" 不属于当前 IR Schema，模型输出不得携带 Schema 外字段。'
+        errors.append(
+            ValidationItem(
+                code=code,
+                level="Error",
+                loc=warning.loc,
+                message=message,
+                suggestion=warning.suggestion or "删除该字段，或改为当前 Schema 中定义的字段名。",
+            )
+        )
+    return errors
+
+
 def _normalize_deck_data(data: Mapping[str, Any]) -> tuple[dict[str, Any], list[ValidationItem]]:
     normalized = copy.deepcopy(dict(data))
     warnings: list[ValidationItem] = []
@@ -592,7 +639,9 @@ def _shift_table_indexes_to_zero_based(table: dict[str, Any]) -> None:
                 span[index_name] -= 1
 
 
-def validate_word_ir(raw: str | Mapping[str, Any]) -> ValidationResult[WordIR]:
+def validate_word_ir(
+    raw: str | Mapping[str, Any], *, reject_unknown_fields: bool = False
+) -> ValidationResult[WordIR]:
     data, parse_errors = _parse_raw(raw, "E001")
     if data is None:
         return ValidationResult(value=None, errors=parse_errors)
@@ -600,9 +649,13 @@ def validate_word_ir(raw: str | Mapping[str, Any]) -> ValidationResult[WordIR]:
     data, normalization_warnings, infos = _normalize_word_data(data)
     warnings.extend(normalization_warnings)
     try:
-        return ValidationResult(value=WordIR.model_validate(data), warnings=warnings, infos=infos)
+        value = WordIR.model_validate(data)
     except ValidationError as exc:
         return ValidationResult(value=None, errors=[_word_item(error) for error in exc.errors()], warnings=warnings, infos=infos)
+    strict_errors = _strict_unknown_errors(warnings, target="word") if reject_unknown_fields else []
+    if strict_errors:
+        return ValidationResult(value=None, errors=strict_errors, warnings=warnings, infos=infos)
+    return ValidationResult(value=value, warnings=warnings, infos=infos)
 
 
 def validate_document_ir(raw: str | Mapping[str, Any]) -> ValidationResult[DocumentIR]:
@@ -620,7 +673,9 @@ def validate_document_ir(raw: str | Mapping[str, Any]) -> ValidationResult[Docum
         )
 
 
-def validate_deck_ir(raw: str | Mapping[str, Any]) -> ValidationResult[DeckIR]:
+def validate_deck_ir(
+    raw: str | Mapping[str, Any], *, reject_unknown_fields: bool = False
+) -> ValidationResult[DeckIR]:
     data, parse_errors = _parse_raw(raw, "D001")
     if data is None:
         return ValidationResult(value=None, errors=parse_errors)
@@ -638,6 +693,10 @@ def validate_deck_ir(raw: str | Mapping[str, Any]) -> ValidationResult[DeckIR]:
     data, normalization_warnings = _normalize_deck_data(data)
     warnings.extend(normalization_warnings)
     try:
-        return ValidationResult(value=DeckIR.model_validate(data), warnings=warnings)
+        value = DeckIR.model_validate(data)
     except ValidationError as exc:
         return ValidationResult(value=None, errors=[_deck_item(error) for error in exc.errors()], warnings=warnings)
+    strict_errors = _strict_unknown_errors(warnings, target="deck") if reject_unknown_fields else []
+    if strict_errors:
+        return ValidationResult(value=None, errors=strict_errors, warnings=warnings)
+    return ValidationResult(value=value, warnings=warnings)

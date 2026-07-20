@@ -1037,6 +1037,108 @@ def test_validate_deck_ir_ignores_unknown_fields_and_warns() -> None:
     assert [warning.loc for warning in result.warnings] == ["unknown_top", "meta.unknown_meta", "slides[0].unknown_slide"]
 
 
+def test_strict_deck_validation_rejects_unknown_optional_field_for_model_repair() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    payload = {
+        "ir_type": "deck",
+        "ir_version": "1.9",
+        "meta": {"title": "字段拼写"},
+        "slides": [{"layout": "cover", "title": "字段拼写", "subtitel": "拼错的可选字段"}],
+    }
+
+    compatible = validate_deck_ir(payload)
+    strict = validate_deck_ir(payload, reject_unknown_fields=True)
+
+    assert compatible.ok
+    assert [(item.code, item.loc) for item in compatible.warnings] == [("W104", "slides[0].subtitel")]
+    assert strict.value is None
+    assert [(item.code, item.loc) for item in strict.errors] == [("D004", "slides[0].subtitel")]
+    assert "未知字段" in strict.errors[0].message
+
+
+def test_strict_deck_validation_recurses_into_composite_table_unknown_fields() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    payload = {
+        "ir_type": "deck",
+        "ir_version": "1.9",
+        "meta": {"title": "组合页字段拼写"},
+        "slides": [
+            {
+                "layout": "composite",
+                "title": "嵌入组件仍需严格校验",
+                "regions": [
+                    {
+                        "slot": "left",
+                        "components": [
+                            {
+                                "layout": "table",
+                                "title": "指标表",
+                                "table": {
+                                    "header": ["指标", "结果"],
+                                    "rows": [["时延", "18 ms"]],
+                                    "colum_widths": [1, 1],
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "slot": "right",
+                        "components": [
+                            {
+                                "layout": "architecture_diagram",
+                                "title": "处理链路",
+                                "nodes": [{"id": "in", "text": "输入", "type": "primary"}],
+                                "edges": [],
+                                "groups": [],
+                            }
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+
+    compatible = validate_deck_ir(payload)
+    strict = validate_deck_ir(payload, reject_unknown_fields=True)
+
+    expected_loc = "slides[0].regions[0].components[0].table.colum_widths"
+    assert compatible.ok
+    assert [(item.code, item.loc) for item in compatible.warnings] == [("W104", expected_loc)]
+    assert strict.value is None
+    assert [(item.code, item.loc) for item in strict.errors] == [("D005", expected_loc)]
+
+
+def test_unknown_architecture_type_warns_normally_and_is_repairable_in_strict_mode() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    payload = {
+        "ir_type": "deck",
+        "ir_version": "1.9",
+        "meta": {"title": "节点类型拼写"},
+        "slides": [
+            {
+                "layout": "architecture_diagram",
+                "title": "错误 type 不应静默回退",
+                "nodes": [{"id": "module", "text": "处理模块", "type": "moduel"}],
+                "edges": [],
+                "groups": [],
+            }
+        ],
+    }
+
+    compatible = validate_deck_ir(payload)
+    strict = validate_deck_ir(payload, reject_unknown_fields=True)
+
+    assert compatible.ok and compatible.value is not None
+    assert compatible.value.slides[0].nodes[0].type == "moduel"
+    assert [(item.code, item.loc) for item in compatible.warnings] == [("W105", "slides[0].nodes[0].type")]
+    assert "回退 theme default 配色" in compatible.warnings[0].message
+    assert strict.value is None
+    assert [(item.code, item.loc) for item in strict.errors] == [("D004", "slides[0].nodes[0].type")]
+
+
 def test_validate_deck_ir_accepts_architecture_diagram_v14() -> None:
     from app.ir.validation import validate_deck_ir
 
