@@ -63,6 +63,13 @@ class _RenderRegion:
         }
 
 
+@dataclass(frozen=True)
+class _CompositeStackBlock:
+    component: object
+    body_height_in: float
+    height_in: float
+
+
 def render_deck_ir(deck: DeckIR, output_path: Path) -> Path:
     theme = load_theme(deck.meta.theme)
     prs = Presentation()
@@ -1175,14 +1182,24 @@ def _render_composite_single_component(slide, slot: str, outer: _RenderRegion, c
 
 def _render_composite_component_stack(slide, slot: str, outer: _RenderRegion, components: list, layout: dict, theme: dict) -> None:
     padding = layout["region_padding_in"]
-    cursor = outer.top_in + padding
     width = outer.width_in - padding * 2
-    for index, component in enumerate(components, start=1):
-        title_height = layout["stack_region_title_height_in"]
-        title_gap = layout["stack_region_title_gap_in"]
-        probe_region = _RenderRegion(outer.left_in + padding, cursor + title_height + title_gap, width, 1.0)
+    title_height = layout["stack_region_title_height_in"]
+    title_gap = layout["stack_region_title_gap_in"]
+    blocks: list[_CompositeStackBlock] = []
+    for component in components:
+        probe_region = _RenderRegion(
+            outer.left_in + padding,
+            outer.top_in + padding + title_height + title_gap,
+            width,
+            1.0,
+        )
         body_height = _composite_component_preferred_height(component, probe_region, layout, theme)
-        block_height = title_height + title_gap + body_height
+        blocks.append(_CompositeStackBlock(component, body_height, title_height + title_gap + body_height))
+
+    positions = _composite_stack_positions(blocks, outer, padding, layout, theme)
+    for index, (block, cursor) in enumerate(zip(blocks, positions), start=1):
+        component = block.component
+        block_height = block.height_in
         _add_composite_block_boundary(slide, slot, index, outer.left_in + padding, cursor, width, block_height)
         _add_text_box(
             slide,
@@ -1199,10 +1216,81 @@ def _render_composite_component_stack(slide, slot: str, outer: _RenderRegion, co
             color_key="hw_red",
             name=f"HW_RENDERED_TEXT:COMPOSITE_BLOCK_TITLE:{slot}:{index}",
         )
-        component_region = _RenderRegion(outer.left_in + padding, cursor + title_height + title_gap, width, body_height)
+        component_region = _RenderRegion(
+            outer.left_in + padding,
+            cursor + title_height + title_gap,
+            width,
+            block.body_height_in,
+        )
         _render_composite_component(slide, component, component_region, theme)
-        if index < len(components):
-            cursor = _snap_to_baseline_in(cursor + block_height + layout["stack_gap_in"], theme)
+
+
+def _composite_stack_positions(
+    blocks: list[_CompositeStackBlock],
+    outer: _RenderRegion,
+    padding: float,
+    layout: dict,
+    theme: dict,
+) -> list[float]:
+    """Keep the legacy spacing unless overflow can be solved by reclaiming only blank gaps."""
+    start = outer.top_in + padding
+    available_bottom = outer.top_in + outer.height_in - padding
+    default_gap = float(layout["stack_gap_in"])
+    default_positions = _composite_stack_positions_for_gap(blocks, start, default_gap, theme, preserve_legacy_snap=True)
+    if _composite_stack_fits(blocks, default_positions, available_bottom):
+        return default_positions
+
+    minimum_gap = float(layout["stack_min_gap_in"])
+    minimum_positions = _composite_stack_positions_for_gap(blocks, start, minimum_gap, theme, preserve_legacy_snap=False)
+    if not _composite_stack_fits(blocks, minimum_positions, available_bottom):
+        return minimum_positions
+
+    # Every gap uses the same value. Binary search finds the least intrusive
+    # reduction while retaining the theme's readable minimum gap.
+    lower = minimum_gap
+    upper = default_gap
+    best = minimum_positions
+    for _ in range(20):
+        candidate_gap = (lower + upper) / 2
+        candidate = _composite_stack_positions_for_gap(
+            blocks,
+            start,
+            candidate_gap,
+            theme,
+            preserve_legacy_snap=False,
+        )
+        if _composite_stack_fits(blocks, candidate, available_bottom):
+            lower = candidate_gap
+            best = candidate
+        else:
+            upper = candidate_gap
+    return best
+
+
+def _composite_stack_positions_for_gap(
+    blocks: list[_CompositeStackBlock],
+    start: float,
+    gap: float,
+    theme: dict,
+    *,
+    preserve_legacy_snap: bool,
+) -> list[float]:
+    positions: list[float] = []
+    cursor = start
+    for index, block in enumerate(blocks):
+        positions.append(cursor)
+        if index < len(blocks) - 1:
+            next_cursor = cursor + block.height_in + gap
+            cursor = (
+                _snap_to_baseline_in(next_cursor, theme)
+                if preserve_legacy_snap
+                else next_cursor
+            )
+    return positions
+
+
+def _composite_stack_fits(blocks: list[_CompositeStackBlock], positions: list[float], available_bottom: float) -> bool:
+    return not blocks or positions[-1] + blocks[-1].height_in <= available_bottom + 1e-6
 
 
 def _render_composite_component(slide, component, region: _RenderRegion, theme: dict) -> None:

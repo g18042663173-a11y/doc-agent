@@ -1,0 +1,93 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {
+    "title": "Venus 风格复杂汇报页演示",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "composite",
+      "title": "多框分布式软件架构将采集与工程能力沉淀为可复用规格",
+      "regions": [
+        {
+          "slot": "left",
+          "components": [
+            {
+              "layout": "table",
+              "title": "采集参数",
+              "table": {
+                "header": ["信道", "CDT 类型", "数据维度", "内存量"],
+                "rows": [
+                  ["下行", "CDT-A", "IQ 采样/时隙", "512 MB"],
+                  ["上行", "CDT-B", "LLR/码块", "384 MB"]
+                ],
+                "col_widths": [1.0, 1.0, 1.45, 0.95]
+              }
+            },
+            {
+              "layout": "architecture_diagram",
+              "title": "采集数据流",
+              "nodes": [
+                {"id": "cache", "text": "CDT 缓存", "type": "data"},
+                {"id": "shard", "text": "数据分片", "type": "job"},
+                {"id": "l3", "text": "L3 解析", "type": "module"}
+              ],
+              "edges": [
+                {"from": "cache", "to": "shard", "label": "窗口数据"},
+                {"from": "shard", "to": "l3", "label": "分片索引"}
+              ],
+              "groups": []
+            },
+            {
+              "layout": "title_bullets",
+              "title": "采集机制",
+              "bullets": [
+                {"text": "CDT 类型与数据维度定义统一采集边界", "level": 1},
+                {"text": "分片索引连接缓存、处理和解析，支持回溯", "level": 1}
+              ]
+            }
+          ]
+        },
+        {
+          "slot": "right",
+          "components": [
+            {
+              "layout": "table",
+              "title": "工程能力",
+              "table": {
+                "header": ["工程能力", "价值", "技术点"],
+                "rows": [
+                  ["参数化采集", "降低接入成本", "类型化配置"],
+                  ["分片处理", "控制峰值内存", "窗口与索引"],
+                  ["并发调度", "缩短处理时延", "任务队列"]
+                ],
+                "col_widths": [1.25, 1.35, 1.25],
+                "conclusion_col": 1
+              }
+            },
+            {
+              "layout": "architecture_diagram",
+              "title": "AS IS / TO BE 调度对比",
+              "nodes": [
+                {"id": "as_job", "text": "AS IS\n串行任务", "type": "job", "group": "as_is"},
+                {"id": "as_module", "text": "单一执行器", "type": "module", "group": "as_is"},
+                {"id": "to_job", "text": "TO BE\n并发调度", "type": "job", "group": "to_be"},
+                {"id": "to_module", "text": "多执行器", "type": "module", "group": "to_be"}
+              ],
+              "edges": [
+                {"from": "as_job", "to": "as_module", "label": "串行"},
+                {"from": "to_job", "to": "to_module", "label": "并发"}
+              ],
+              "groups": [
+                {"id": "as_is", "label": "改造前", "node_ids": ["as_job", "as_module"]},
+                {"id": "to_be", "label": "改造后", "node_ids": ["to_job", "to_module"]}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

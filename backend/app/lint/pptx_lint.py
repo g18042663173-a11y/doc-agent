@@ -94,7 +94,7 @@ def check_pptx(path: Path, *, classification: str | None = None, theme_name: str
         items.extend(_image_placeholder_items(slide, slide_index, theme))
         items.extend(_bullet_items(slide, slide_index, theme))
         items.extend(_content_overflow_items(slide, slide_index, theme, expected_classification))
-        items.extend(_grid_items(text_shapes, slide_index, prs, theme, expected_classification))
+        items.extend(_grid_items(slide, text_shapes, slide_index, prs, theme, expected_classification))
         items.extend(_layout_items(slide, slide_index, prs, theme, expected_classification))
         items.extend(_key_frame_items(text_shapes, slide_index, prs, theme, expected_classification))
         items.extend(_contrast_items(slide, slide_index, theme, expected_classification))
@@ -793,7 +793,7 @@ def _emu_to_points(value: int | None) -> float:
     return 0.0 if value is None else value / EMU_PER_INCH * PT_PER_INCH
 
 
-def _grid_items(text_shapes: list, slide_index: int, prs, theme: dict, expected_classification: str) -> list[PptxLintItem]:
+def _grid_items(slide, text_shapes: list, slide_index: int, prs, theme: dict, expected_classification: str) -> list[PptxLintItem]:
     items: list[PptxLintItem] = []
     grid_lines = _column_grid_lines(prs, theme)
     tolerance_in = theme["grid"]["snap_tolerance_in"]
@@ -805,12 +805,15 @@ def _grid_items(text_shapes: list, slide_index: int, prs, theme: dict, expected_
             continue
         if _is_architecture_shape(shape) or _is_threshold_shape(shape) or _is_sequence_shape(shape) or _is_image_placeholder_shape(shape):
             continue
+        allows_compacted_vertical_position = _is_intentionally_compacted_composite_text(shape, slide, theme)
         left = _inches(shape.left)
         right = _inches(shape.left + shape.width)
         top_pt = _inches(shape.top) * PT_PER_INCH
         bottom_pt = _inches(shape.top + shape.height) * PT_PER_INCH
         horizontal_ok = _near_any(left, grid_lines, tolerance_in) and _near_any(right, grid_lines, tolerance_in)
-        vertical_ok = _near_step(top_pt, baseline_pt, tolerance_pt) and _near_step(bottom_pt, baseline_pt, tolerance_pt)
+        vertical_ok = allows_compacted_vertical_position or (
+            _near_step(top_pt, baseline_pt, tolerance_pt) and _near_step(bottom_pt, baseline_pt, tolerance_pt)
+        )
         if not horizontal_ok or not vertical_ok:
             scope = "renderer 文本框" if _is_renderer_text_shape(shape) else "文本框"
             items.append(
@@ -824,6 +827,32 @@ def _grid_items(text_shapes: list, slide_index: int, prs, theme: dict, expected_
             )
             break
     return items
+
+
+def _is_intentionally_compacted_composite_text(shape, slide, theme: dict) -> bool:
+    """Allow only theme-approved sub-baseline positions inside a squeezed composite block."""
+    layout = theme["layouts"].get("composite", {})
+    minimum_gap = float(layout.get("stack_min_gap_in", 0))
+    default_gap = float(layout.get("stack_gap_in", 0))
+    if minimum_gap <= 0 or minimum_gap >= default_gap:
+        return False
+
+    blocks_by_slot: dict[str, list] = {"left": [], "right": []}
+    for candidate in slide.shapes:
+        parts = getattr(candidate, "name", "").split(":")
+        if len(parts) == 3 and parts[0] == "HW_COMPOSITE_BLOCK" and parts[1] in blocks_by_slot:
+            blocks_by_slot[parts[1]].append(candidate)
+
+    shape_box = _bbox(shape)
+    for blocks in blocks_by_slot.values():
+        blocks.sort(key=lambda candidate: candidate.top)
+        for index, block in enumerate(blocks):
+            if index == 0 or not _box_contains(_bbox(block), shape_box):
+                continue
+            previous = blocks[index - 1]
+            actual_gap = _inches(block.top) - _inches(previous.top + previous.height)
+            return minimum_gap - 0.01 <= actual_gap < default_gap - 0.01
+    return False
 
 
 def _is_renderer_text_shape(shape) -> bool:

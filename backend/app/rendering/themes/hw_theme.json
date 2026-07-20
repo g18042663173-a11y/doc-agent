@@ -402,6 +402,7 @@
       "region_title_gap_in": 0.222222,
       "region_title_font_size_pt": 18,
       "stack_gap_in": 0.111111,
+      "stack_min_gap_in": 0.08,
       "stack_region_title_height_in": 0.444444,
       "stack_region_title_gap_in": 0.111111,
       "stack_architecture_min_height_in": 1.055556,

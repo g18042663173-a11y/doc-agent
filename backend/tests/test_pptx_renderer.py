@@ -1405,6 +1405,153 @@ def test_render_composite_stacks_table_architecture_and_bullets_inside_left_regi
     assert not {"HW-W06", "HW-W07"} & {item.code for item in report.items}
 
 
+def _composite_stack_deck(left_components: list[dict]) -> dict:
+    return {
+        "ir_type": "deck",
+        "ir_version": "1.9",
+        "meta": {"title": "栏内留白", "classification": "公开", "theme": "hw_v1"},
+        "slides": [
+            {
+                "layout": "composite",
+                "title": "栏内仅回收多余留白",
+                "regions": [
+                    {"slot": "left", "components": left_components},
+                    {
+                        "slot": "right",
+                        "components": [
+                            {
+                                "layout": "title_bullets",
+                                "title": "对照",
+                                "bullets": [{"text": "右栏保持正常间距。", "level": 1}],
+                            }
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+
+
+def _left_composite_blocks(slide) -> list:
+    return sorted(
+        [shape for shape in slide.shapes if shape.name.startswith("HW_COMPOSITE_BLOCK:left:")],
+        key=lambda shape: shape.top,
+    )
+
+
+def test_composite_stack_preserves_default_gap_when_column_fits(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        _composite_stack_deck(
+            [
+                {"layout": "table", "title": "参数", "table": {"header": ["项", "值"], "rows": [["范围", "正常"]]}},
+                {"layout": "title_bullets", "title": "结论", "bullets": [{"text": "正常内容不触发间距回收。", "level": 1}]},
+            ]
+        )
+    )
+    output = render_deck_ir(deck, tmp_path / "composite-default-gap.pptx")
+    slide = Presentation(str(output)).slides[0]
+    blocks = _left_composite_blocks(slide)
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw_theme.json").read_text(encoding="utf-8"))
+    layout = theme["layouts"]["composite"]
+    baseline_step = theme["grid"]["baseline_pt"] / 72
+    first_bottom = (blocks[0].top + blocks[0].height) / 914400
+    expected_second_top = round((first_bottom + layout["stack_gap_in"]) / baseline_step) * baseline_step
+    report = check_pptx(output, classification="公开")
+
+    assert len(blocks) == 2
+    assert blocks[1].top / 914400 == pytest.approx(expected_second_top)
+    assert not any(item.code == "HW-W03" and "组合页该栏内容过多" in item.message for item in report.items)
+
+
+def test_composite_stack_reclaims_gaps_for_slight_overflow_without_changing_content_or_fonts(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    bullet_text = "完整说明不截断，也不缩小字号。"
+    deck = DeckIR.model_validate(
+        _composite_stack_deck(
+            [
+                {
+                    "layout": "table",
+                    "title": "七行参数",
+                    "table": {"header": ["项", "值"], "rows": [[f"参数{index}", "已保留"] for index in range(1, 8)]},
+                },
+                {"layout": "title_bullets", "title": "结论", "bullets": [{"text": bullet_text, "level": 1}]},
+            ]
+        )
+    )
+    output = render_deck_ir(deck, tmp_path / "composite-slight-overflow.pptx")
+    presentation = Presentation(str(output))
+    slide = presentation.slides[0]
+    blocks = _left_composite_blocks(slide)
+    table_shape = next(shape for shape in slide.shapes if getattr(shape, "has_table", False))
+    body = next(shape for shape in slide.shapes if getattr(shape, "text", "") == f"• {bullet_text}")
+    block_title = next(shape for shape in slide.shapes if shape.name == "HW_RENDERED_TEXT:COMPOSITE_BLOCK_TITLE:left:2")
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw_theme.json").read_text(encoding="utf-8"))
+    layout = theme["layouts"]["composite"]
+    actual_gap = (blocks[1].top - blocks[0].top - blocks[0].height) / 914400
+    content_bottom = layout["content"]["top_in"] + layout["content"]["height_in"]
+    report = check_pptx(output, classification="公开")
+
+    assert len(presentation.slides) == 1
+    assert layout["stack_min_gap_in"] <= actual_gap < layout["stack_gap_in"]
+    assert (blocks[-1].top + blocks[-1].height) / 914400 <= content_bottom + 0.01
+    assert "参数7" in table_shape.table.cell(7, 0).text
+    assert body.text == f"• {bullet_text}"
+    assert table_shape.table.cell(0, 0).text_frame.paragraphs[0].runs[0].font.size == Pt(11)
+    assert table_shape.table.cell(1, 0).text_frame.paragraphs[0].runs[0].font.size == Pt(10)
+    assert block_title.text_frame.paragraphs[0].runs[0].font.size == Pt(18)
+    assert body.text_frame.paragraphs[0].runs[0].font.size == Pt(16)
+    assert not {"HW-W03", "HW-W06", "HW-W07"} & {item.code for item in report.items}
+
+    body.left += Inches(0.2)
+    presentation.save(output)
+    assert any(item.code == "HW-W06" for item in check_pptx(output, classification="公开").items)
+
+
+def test_composite_stack_keeps_minimum_gap_and_warns_when_content_is_far_too_tall(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    bullet_text = "保留完整事实" * 40
+    deck = DeckIR.model_validate(
+        _composite_stack_deck(
+            [
+                {
+                    "layout": "table",
+                    "title": "七行参数",
+                    "table": {"header": ["项", "值"], "rows": [[f"参数{index}", "已保留"] for index in range(1, 8)]},
+                },
+                {"layout": "title_bullets", "title": "完整说明", "bullets": [{"text": bullet_text, "level": 1}]},
+            ]
+        )
+    )
+    output = render_deck_ir(deck, tmp_path / "composite-large-overflow.pptx")
+    presentation = Presentation(str(output))
+    slide = presentation.slides[0]
+    blocks = _left_composite_blocks(slide)
+    body = next(shape for shape in slide.shapes if getattr(shape, "text", "") == f"• {bullet_text}")
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw_theme.json").read_text(encoding="utf-8"))
+    layout = theme["layouts"]["composite"]
+    actual_gap = (blocks[1].top - blocks[0].top - blocks[0].height) / 914400
+    content_bottom = layout["content"]["top_in"] + layout["content"]["height_in"]
+    report = check_pptx(output, classification="公开")
+
+    assert len(presentation.slides) == 1
+    assert actual_gap >= layout["stack_min_gap_in"]
+    assert actual_gap < layout["stack_gap_in"]
+    assert (blocks[-1].top + blocks[-1].height) / 914400 > content_bottom
+    assert body.text == f"• {bullet_text}"
+    assert body.text_frame.paragraphs[0].runs[0].font.size == Pt(16)
+    assert any(item.code == "HW-W03" and "left 栏" in item.message for item in report.items)
+
+
 def _overlap(first, second) -> bool:
     return (
         first.left < second.left + second.width
