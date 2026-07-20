@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -648,6 +649,50 @@ def test_render_ppt_typography_uses_large_semantic_hierarchy_and_compact_tables(
     assert long_title.top + long_title.height < title_bar.top
 
 
+def test_title_decoration_tracks_wrapped_title_and_preserves_single_line_position(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw_theme.json").read_text(encoding="utf-8"))
+    short_title = "单行结论标题"
+    wrapped_title = (
+        "CNN-LSTM在1000km轨道高度达到NMSE -10dB；"
+        "edRVFL仍需量化验证，当前输入仍缺少跨场景对比结果"
+    )
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "标题装饰线回归", "classification": "PUBLIC"},
+            "slides": [
+                {"layout": "title_bullets", "title": short_title, "bullets": [{"text": "短标题基线", "level": 1}]},
+                {"layout": "title_bullets", "title": wrapped_title, "bullets": [{"text": "长标题换行", "level": 1}]},
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "title-decoration.pptx")
+    prs = Presentation(str(output))
+
+    def named(slide, name: str):
+        return next(shape for shape in slide.shapes if shape.name == name)
+
+    short_title_shape = named(prs.slides[0], "HW_RENDERED_TEXT:TITLE")
+    short_bar = named(prs.slides[0], "HW_DECORATION:RED_BAR")
+    wrapped_title_shape = named(prs.slides[1], "HW_RENDERED_TEXT:TITLE")
+    wrapped_bar = named(prs.slides[1], "HW_DECORATION:RED_BAR")
+    base_title = theme["layouts"]["title"]
+    base_bar = theme["layouts"]["title_bar"]
+    expected_gap_in = base_bar["gap_after_title_in"]
+
+    assert abs(short_bar.top / 914400 - base_bar["top_in"]) < 0.001
+    assert abs(short_title_shape.height / 914400 - base_title["height_in"]) < 0.001
+    assert wrapped_title_shape.height > short_title_shape.height
+    assert wrapped_bar.top > short_bar.top
+    assert abs((wrapped_bar.top - wrapped_title_shape.top - wrapped_title_shape.height) / 914400 - expected_gap_in) < 0.001
+    assert wrapped_title_shape.top + wrapped_title_shape.height < wrapped_bar.top
+
+
 def test_pptx_renderer_keeps_layout_dimensions_in_theme() -> None:
     source_path = ROOT / "backend" / "app" / "rendering" / "pptx_renderer.py"
     source = source_path.read_text(encoding="utf-8")
@@ -906,6 +951,128 @@ def test_render_architecture_diagram_as_editable_shapes(tmp_path: Path) -> None:
     same_layer_segments = _architecture_edge_segments(slide, edge_index=2)
     assert len(same_layer_segments) == 1
     assert same_layer_segments[0].height == 0
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")
+def test_render_graphviz_architecture_long_text_stays_inside_editable_node(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+    from app.rendering.typography import estimate_text_height_in
+
+    long_text = (
+        "质量闸门在生成与渲染之间执行结构校验和有限修复，"
+        "非法内容不得进入Office输出，所有告警必须保留证据定位"
+    )
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "长文字节点", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "Graphviz 按文字内容计算节点尺寸",
+                    "nodes": [
+                        {"id": "gate", "text": long_text, "type": "emphasis"},
+                        {"id": "output", "text": "可编辑Office产物", "type": "data"},
+                    ],
+                    "edges": [
+                        {"from": "gate", "to": "output", "label": "校验通过", "direction": "forward"}
+                    ],
+                    "groups": [],
+                }
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "graphviz-long-node.pptx")
+    slide = Presentation(str(output)).slides[0]
+    gate = next(shape for shape in slide.shapes if shape.name == "HW_ARCH_NODE:gate")
+    output_node = next(shape for shape in slide.shapes if shape.name == "HW_ARCH_NODE:output")
+    label = next(shape for shape in slide.shapes if shape.name == "HW_ARCH_EDGE_LABEL:1")
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw_theme.json").read_text(encoding="utf-8"))
+    layout = theme["layouts"]["architecture_diagram"]
+    font_size_pt = gate.text_frame.paragraphs[0].runs[0].font.size.pt
+    estimated_height_in = estimate_text_height_in(
+        gate.text,
+        font_size_pt,
+        width_in=gate.width / 914400,
+        line_spacing=theme["typography"]["line_spacing"],
+        baseline_pt=theme["grid"]["baseline_pt"],
+        horizontal_margin_in=layout["node_text_margin_in"],
+        vertical_margin_in=layout["node_text_margin_in"],
+    )
+
+    assert gate.text.replace("\n", "") == long_text
+    assert estimated_height_in <= gate.height / 914400
+    assert not _overlap(gate, output_node)
+    assert not _overlap(label, gate)
+    assert not _overlap(label, output_node)
+    assert "<p:sp" in gate.element.xml
+    assert all("<p:cxnSp" in shape.element.xml for shape in _architecture_edge_segments(slide))
+
+
+def test_render_architecture_falls_back_with_warning_when_graphviz_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.architecture_graphviz import GraphvizLayoutUnavailable
+    import app.rendering.pptx_renderer as renderer
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.6",
+            "meta": {"title": "fallback", "classification": "公开", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "Graphviz 不可用仍可渲染",
+                    "nodes": [
+                        {"id": "portal", "text": "门户", "type": "primary", "group": "access"},
+                        {"id": "api", "text": "接口服务", "type": "secondary", "group": "service"},
+                        {"id": "engine", "text": "计算引擎", "type": "emphasis", "group": "service"},
+                        {"id": "store", "text": "数据存储", "type": "data", "group": "data"},
+                    ],
+                    "edges": [
+                        {"from": "portal", "to": "api", "label": "请求", "direction": "forward"},
+                        {
+                            "from": "api",
+                            "to": "engine",
+                            "label": "双向调用",
+                            "style": "dashed",
+                            "direction": "both",
+                        },
+                        {"from": "engine", "to": "store", "label": "读写", "direction": "forward"},
+                    ],
+                    "groups": [
+                        {"id": "access", "label": "接入层", "node_ids": ["portal"]},
+                        {"id": "service", "label": "服务层", "node_ids": ["api", "engine"]},
+                        {"id": "data", "label": "数据层", "node_ids": ["store"]},
+                    ],
+                }
+            ],
+        }
+    )
+
+    def unavailable(*_args, **_kwargs):
+        raise GraphvizLayoutUnavailable("dot executable is missing")
+
+    monkeypatch.setattr(renderer, "layout_architecture_with_graphviz", unavailable)
+    with pytest.warns(RuntimeWarning, match="using deterministic fallback: dot executable is missing"):
+        output = renderer.render_deck_ir(deck, tmp_path / "architecture-fallback.pptx")
+
+    slide = Presentation(str(output)).slides[0]
+    nodes = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_NODE:")]
+    labels = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_EDGE_LABEL:")]
+    edge_segments = _architecture_edge_segments(slide)
+    assert {shape.text for shape in nodes} == {"门户", "接口服务", "计算引擎", "数据存储"}
+    assert {shape.text for shape in labels} == {"请求", "双向调用", "读写"}
+    assert all("<p:cxnSp" in shape.element.xml for shape in edge_segments)
+    assert all(_is_orthogonal_connector(shape) for shape in edge_segments)
+    assert not any(_connector_crosses_unrelated_node(segment, node) for segment in edge_segments for node in nodes)
+    assert all(_label_is_near_own_edge(label, slide) for label in labels)
 
 
 def _overlap(first, second) -> bool:

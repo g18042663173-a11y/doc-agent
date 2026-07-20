@@ -16,7 +16,14 @@ IR 是唯一契约。模型文本必须先剥壳和校验,非法 IR 不进入 re
 
 ```bash
 python -m pip install -r requirements.txt
+brew install graphviz
+dot -V
 ```
+
+`graphviz` Python 包只负责调用布局引擎,不包含 `dot` 二进制。Mac 开发机需安装
+Graphviz;目标 Windows 内网机需将离线 Graphviz 运行时随项目部署并把其 `bin`
+目录加入 `PATH`。`dot` 不可用时只有 `architecture_diagram` 自动退回旧的确定性
+布局并发出 warning,其它渲染链路不受影响。
 
 ## 三步使用
 

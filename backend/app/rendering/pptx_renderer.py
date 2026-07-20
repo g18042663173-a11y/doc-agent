@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import warnings
 
 from pptx.chart.data import CategoryChartData
 from pptx import Presentation
@@ -34,6 +35,11 @@ from app.ir.deck_ir import (
     TimelineSlide,
     TitleBulletsSlide,
     TwoColumnSlide,
+)
+from app.rendering.architecture_graphviz import (
+    ArchitectureEdgeLayout,
+    GraphvizLayoutUnavailable,
+    layout_architecture_with_graphviz,
 )
 from app.rendering.theme import load_theme
 from app.rendering.typography import constrained_stack_heights, fit_text_stack
@@ -729,9 +735,9 @@ def _chart_type(chart_ir: ChartSpec):
 
 def _chart_title(slide, text: str, layout: dict, theme: dict) -> None:
     box = layout.get("title", theme["layouts"]["title"])
-    size = _fit_ppt_text(text, theme["ppt_typography"]["slide_title_candidates_pt"], box, theme)
-    _add_text_box(slide, text, box, theme, size=size, bold=True, name="HW_RENDERED_TEXT:TITLE")
-    _red_bar(slide, theme, theme["layouts"]["title_bar"])
+    title_box, title_size, bar_box = _page_title_layout(text, box, theme)
+    _add_text_box(slide, text, title_box, theme, size=title_size, bold=True, name="HW_RENDERED_TEXT:TITLE")
+    _red_bar(slide, theme, bar_box)
 
 
 def _format_chart(chart, chart_ir: ChartSpec, theme: dict) -> None:
@@ -985,11 +991,114 @@ def _add_chart_side_content(slide, chart_ir: ChartSpec, layout: dict, theme: dic
 def _render_architecture_diagram(slide, slide_ir: ArchitectureDiagramSlide, theme: dict) -> None:
     _title(slide, slide_ir.title, theme)
     layout = theme["layouts"]["architecture_diagram"]
+    try:
+        graphviz_layout = layout_architecture_with_graphviz(slide_ir, layout, theme)
+    except GraphvizLayoutUnavailable as exc:
+        warnings.warn(
+            f"architecture_diagram Graphviz layout unavailable; using deterministic fallback: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        _render_architecture_diagram_fallback(slide, slide_ir, layout, theme)
+        return
+
+    _render_architecture_groups(slide, slide_ir, graphviz_layout.group_layers, layout, theme)
+    _render_graphviz_architecture_edges(slide, slide_ir.edges, graphviz_layout.edges, layout, theme)
+    for node in slide_ir.nodes:
+        _render_architecture_node(
+            slide,
+            node,
+            graphviz_layout.node_boxes[node.id],
+            layout,
+            theme,
+            text=graphviz_layout.node_texts[node.id],
+            font_size_pt=graphviz_layout.node_font_size_pt,
+        )
+    _render_graphviz_architecture_labels(slide, graphviz_layout.edges, layout, theme)
+
+
+def _render_architecture_diagram_fallback(
+    slide,
+    slide_ir: ArchitectureDiagramSlide,
+    layout: dict,
+    theme: dict,
+) -> None:
     boxes, layers = _architecture_node_boxes(slide_ir, layout)
     _render_architecture_groups(slide, slide_ir, layers, layout, theme)
     _render_architecture_edges(slide, slide_ir.edges, boxes, layers, layout, theme)
     for node in slide_ir.nodes:
         _render_architecture_node(slide, node, boxes[node.id], layout, theme)
+
+
+def _render_graphviz_architecture_edges(
+    slide,
+    edges: list[ArchitectureEdge],
+    routed_edges: tuple[ArchitectureEdgeLayout, ...],
+    layout: dict,
+    theme: dict,
+) -> None:
+    edge_by_index = {index: edge for index, edge in enumerate(edges, start=1)}
+    for routed_edge in routed_edges:
+        edge = edge_by_index[routed_edge.edge_index]
+        tolerance = layout["edge_route_alignment_tolerance_in"]
+        route = _simplify_architecture_route(
+            _orthogonalize_architecture_route(list(routed_edge.points), tolerance),
+            tolerance / 1000,
+        )
+        segments = list(zip(route, route[1:]))
+        for segment_index, (start, end) in enumerate(segments, start=1):
+            connector = slide.shapes.add_connector(
+                MSO_CONNECTOR.STRAIGHT,
+                Inches(start[0]),
+                Inches(start[1]),
+                Inches(end[0]),
+                Inches(end[1]),
+            )
+            if segment_index == len(segments):
+                connector.name = (
+                    f"HW_ARCH_EDGE:{routed_edge.edge_index}:{segment_index}:"
+                    f"{edge.from_node}->{edge.to}"
+                )
+            else:
+                connector.name = (
+                    f"HW_ARCH_EDGE_SEGMENT:{routed_edge.edge_index}:{segment_index}:"
+                    f"{edge.from_node}->{edge.to}"
+                )
+            connector.line.color.rgb = _rgb(theme["colors"]["secondary"])
+            connector.line.width = Pt(layout["edge_width_pt"])
+            if edge.style == "dashed":
+                connector.line.dash_style = MSO_LINE_DASH_STYLE.DASH
+            _set_connector_arrowheads(
+                connector,
+                _architecture_segment_direction(edge.direction, segment_index, len(segments)),
+            )
+
+
+def _render_graphviz_architecture_labels(
+    slide,
+    routed_edges: tuple[ArchitectureEdgeLayout, ...],
+    layout: dict,
+    theme: dict,
+) -> None:
+    for routed_edge in routed_edges:
+        if routed_edge.label_text is None or routed_edge.label_box is None:
+            continue
+        label = _add_text_box(
+            slide,
+            routed_edge.label_text,
+            routed_edge.label_box,
+            theme,
+            size=layout["edge_label_font_size_pt"],
+            color_key="secondary",
+        )
+        label.name = f"HW_ARCH_EDGE_LABEL:{routed_edge.edge_index}"
+        label.fill.solid()
+        label.fill.fore_color.rgb = _rgb(theme["colors"]["background"])
+        label.line.fill.background()
+        label.text_frame.margin_left = Inches(layout["graphviz_label_horizontal_margin_in"])
+        label.text_frame.margin_right = Inches(layout["graphviz_label_horizontal_margin_in"])
+        label.text_frame.margin_top = Inches(layout["graphviz_label_vertical_margin_in"])
+        label.text_frame.margin_bottom = Inches(layout["graphviz_label_vertical_margin_in"])
 
 
 def _render_process_flow(slide, slide_ir: ProcessFlowSlide, theme: dict) -> None:
@@ -1620,6 +1729,26 @@ def _simplify_architecture_route(
     return simplified
 
 
+def _orthogonalize_architecture_route(
+    points: list[tuple[float, float]],
+    tolerance: float,
+) -> list[tuple[float, float]]:
+    if not points:
+        return []
+    normalized = [points[0]]
+    for x, y in points[1:]:
+        previous_x, previous_y = normalized[-1]
+        delta_x = abs(x - previous_x)
+        delta_y = abs(y - previous_y)
+        if delta_x <= tolerance:
+            normalized.append((previous_x, y))
+        elif delta_y <= tolerance:
+            normalized.append((x, previous_y))
+        else:
+            normalized.extend(((x, previous_y), (x, y)))
+    return normalized
+
+
 def _architecture_segment_direction(direction: str, segment_index: int, segment_count: int) -> str:
     if segment_count == 1:
         return direction
@@ -1774,7 +1903,16 @@ def _boxes_overlap(first: dict[str, float], second: dict[str, float], gap: float
     )
 
 
-def _render_architecture_node(slide, node: ArchitectureNode, box: dict[str, float], layout: dict, theme: dict) -> None:
+def _render_architecture_node(
+    slide,
+    node: ArchitectureNode,
+    box: dict[str, float],
+    layout: dict,
+    theme: dict,
+    *,
+    text: str | None = None,
+    font_size_pt: float | None = None,
+) -> None:
     shape_type = MSO_SHAPE.ROUNDED_RECTANGLE if node.type in {"primary", "emphasis"} else MSO_SHAPE.RECTANGLE
     shape = slide.shapes.add_shape(
         shape_type,
@@ -1806,9 +1944,15 @@ def _render_architecture_node(slide, node: ArchitectureNode, box: dict[str, floa
     paragraph.alignment = PP_ALIGN.CENTER
     _format_paragraph(paragraph, theme)
     run = paragraph.add_run()
-    run.text = node.text
+    run.text = node.text if text is None else text
     text_color = "background" if node.type == "emphasis" else "body"
-    _format_run(run, theme, size=layout["node_font_size_pt"], bold=True, color_key=text_color)
+    _format_run(
+        run,
+        theme,
+        size=layout["node_font_size_pt"] if font_size_pt is None else font_size_pt,
+        bold=True,
+        color_key=text_color,
+    )
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
@@ -1865,9 +2009,36 @@ def _render_placeholder(slide, layout: str, theme: dict) -> None:
 
 def _title(slide, text: str, theme: dict) -> None:
     box = theme["layouts"]["title"]
-    size = _fit_ppt_text(text, theme["ppt_typography"]["slide_title_candidates_pt"], box, theme)
-    _add_text_box(slide, text, box, theme, size=size, bold=True, name="HW_RENDERED_TEXT:TITLE")
-    _red_bar(slide, theme, theme["layouts"]["title_bar"])
+    title_box, title_size, bar_box = _page_title_layout(text, box, theme)
+    _add_text_box(slide, text, title_box, theme, size=title_size, bold=True, name="HW_RENDERED_TEXT:TITLE")
+    _red_bar(slide, theme, bar_box)
+
+
+def _page_title_layout(text: str, box: dict, theme: dict) -> tuple[dict, float, dict]:
+    typography = theme["ppt_typography"]
+    bar = theme["layouts"]["title_bar"]
+    max_title_height = max(
+        box["height_in"],
+        bar["max_bottom_in"] - box["top_in"] - bar["gap_after_title_in"] - bar["height_in"],
+    )
+    fit = fit_text_stack(
+        [text],
+        typography["slide_title_candidates_pt"],
+        width_in=box["width_in"] * typography["title_measure_width_factor"],
+        height_in=max_title_height,
+        line_spacing=theme["typography"]["line_spacing"],
+        item_gap_in=0,
+        baseline_pt=theme["grid"]["baseline_pt"],
+        horizontal_margin_in=typography["text_horizontal_margin_in"],
+        vertical_margin_in=typography["text_vertical_margin_in"],
+    )
+    measured_height = fit.item_heights_in[0]
+    title_box = {**box, "height_in": min(max(box["height_in"], measured_height), max_title_height)}
+    bar_box = {
+        **bar,
+        "top_in": title_box["top_in"] + title_box["height_in"] + bar["gap_after_title_in"],
+    }
+    return title_box, fit.font_size_pt, bar_box
 
 
 def _fit_ppt_text(text: str, candidates: list[float], box: dict, theme: dict) -> float:

@@ -2,14 +2,14 @@
   "hash_algorithm": "sha256",
   "schema_version": 1,
   "source_requirements": "requirements.txt",
-  "source_requirements_sha256": "3f8e63416fd30b082a94a20c7cfbd0e0d44e228d57a594470597f74623a3f179",
+  "source_requirements_sha256": "fb3f6d24c851259d99c35a12867f9c6f7035148a8247002e964a125088f26ce0",
   "target": {
     "implementation": "CPython",
     "platform": "win_amd64",
     "python_version": "3.12"
   },
   "verification_boundary": "Hashes were generated from downloaded Windows wheels on macOS; offline installation still requires Windows true-machine validation.",
-  "wheel_count": 26,
+  "wheel_count": 27,
   "wheels": [
     {
       "bytes": 13643,
@@ -52,6 +52,13 @@
       "name": "Flask",
       "sha256": "21128f47e4e3b9d597a3e8521a329bf56909b690fcc3fa3e477725aa81367638",
       "version": "3.0.0"
+    },
+    {
+      "bytes": 47300,
+      "filename": "graphviz-0.21-py3-none-any.whl",
+      "name": "graphviz",
+      "sha256": "54f33de9f4f911d7e84e4191749cac8cc5653f815b06738c54db9a15ab8b1e42",
+      "version": "0.21"
     },
     {
       "bytes": 7484,
