@@ -41,6 +41,23 @@ def test_parse_docx_extracts_headings_paragraph_lists_and_table(tmp_path: Path) 
     assert ir.content.blocks[-1].rows == [["title", "文档标题"]]
 
 
+def test_parse_docx_preserves_monospace_code_paragraph_indentation(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "code.docx"
+    doc = Document()
+    code = doc.add_paragraph(style="Normal")
+    run = code.add_run("if (ready) {\n    send();\n}")
+    run.font.name = "Consolas"
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert ir.ir_version == "1.2"
+    assert ir.content.blocks[0].type == "code_block"
+    assert ir.content.blocks[0].code == "if (ready) {\n    send();\n}"
+
+
 def test_parse_docx_truncates_table_preview_to_20_rows(tmp_path: Path) -> None:
     from app.parsers.docx_parser import parse_docx
 

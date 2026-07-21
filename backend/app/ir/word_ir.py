@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal, Union
+import copy
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field, field_validator, model_validator
 
 from app.ir.common import (
     BulletListBlock,
+    CodeBlock,
     ContractModel,
     HeadingBlock,
     ImagePlaceholderBlock,
@@ -32,6 +34,7 @@ WordBlock = Annotated[
     Union[
         HeadingBlock,
         ParagraphBlock,
+        CodeBlock,
         BulletListBlock,
         NumberedListBlock,
         TableBlock,
@@ -42,11 +45,25 @@ WordBlock = Annotated[
 ]
 
 
+def migrate_word_payload(value: Any, *, target_version: str = "1.1") -> tuple[Any, str | None]:
+    if not isinstance(value, dict) or value.get("ir_version") != "1.0" or target_version != "1.1":
+        return value, None
+    migrated = copy.deepcopy(value)
+    migrated["ir_version"] = "1.1"
+    return migrated, "1.0"
+
+
 class WordIR(ContractModel):
     ir_type: Literal["word"]
-    ir_version: Literal["1.0"]
+    ir_version: Literal["1.1"]
     meta: WordMeta
     blocks: list[WordBlock] = Field(min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_payload(cls, value: Any) -> Any:
+        migrated, _source_version = migrate_word_payload(value)
+        return migrated
 
     @model_validator(mode="after")
     def validate_tables(self) -> "WordIR":

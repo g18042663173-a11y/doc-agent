@@ -12,6 +12,7 @@ from docx.shared import Inches, Pt, RGBColor
 
 from app.ir.common import (
     BulletListBlock,
+    CodeBlock,
     HeadingBlock,
     ImagePlaceholderBlock,
     NumberedListBlock,
@@ -34,6 +35,8 @@ def render_word_ir(ir: WordIR, output_path: Path) -> Path:
             _render_heading(document, block)
         elif isinstance(block, ParagraphBlock):
             _render_paragraph(document, block, theme)
+        elif isinstance(block, CodeBlock):
+            _render_code_block(document, block, theme)
         elif isinstance(block, BulletListBlock):
             _render_list(document, block, numbered=False)
         elif isinstance(block, NumberedListBlock):
@@ -89,6 +92,15 @@ def _configure_styles(document: Document, theme: dict) -> None:
     note.paragraph_format.space_after = Pt(6)
     note.paragraph_format.line_spacing = theme["typography"]["line_spacing"]
 
+    code = _get_or_add_paragraph_style(document, "IR Code")
+    _set_code_style_font(code, theme)
+    code_token = theme["word_code_block"]
+    code.paragraph_format.left_indent = Inches(code_token["padding_in"])
+    code.paragraph_format.right_indent = Inches(code_token["padding_in"])
+    code.paragraph_format.space_before = Pt(code_token["space_before_pt"])
+    code.paragraph_format.space_after = Pt(code_token["space_after_pt"])
+    code.paragraph_format.line_spacing = 1
+
 
 def _set_style_font(style, theme: dict, size_pt: int, *, bold: bool = False, italic: bool = False, color_key: str = "body") -> None:
     font = style.font
@@ -98,6 +110,15 @@ def _set_style_font(style, theme: dict, size_pt: int, *, bold: bool = False, ita
     font.italic = italic
     font.color.rgb = _theme_rgb(theme, color_key)
     _set_rfonts(style.element.get_or_add_rPr(), theme)
+
+
+def _set_code_style_font(style, theme: dict) -> None:
+    code_font = theme["fonts"]["code"][0]
+    font = style.font
+    font.name = code_font
+    font.size = Pt(theme["word_code_block"]["font_size_pt"])
+    font.color.rgb = _theme_rgb(theme, "body")
+    _set_code_rfonts(style.element.get_or_add_rPr(), theme)
 
 
 def _get_or_add_paragraph_style(document: Document, name: str):
@@ -161,6 +182,25 @@ def _render_paragraph(document: Document, block: ParagraphBlock, theme: dict) ->
         document.add_paragraph(block.text)
 
 
+def _render_code_block(document: Document, block: CodeBlock, theme: dict) -> None:
+    token = theme["word_code_block"]
+    paragraph = document.add_paragraph(style="IR Code")
+    paragraph.paragraph_format.keep_together = True
+    _shade_paragraph(paragraph, fill=_theme_hex(theme, token["fill_color_key"]))
+    _set_paragraph_box_border(
+        paragraph,
+        theme["colors"][token["border_color_key"]],
+        width_pt=token["border_width_pt"],
+    )
+    lines = block.code.split("\n")
+    for index, line in enumerate(lines):
+        run = paragraph.add_run(line)
+        _format_code_run(run, theme)
+        _preserve_run_spaces(run)
+        if index < len(lines) - 1:
+            run.add_break()
+
+
 def _shade_paragraph(paragraph, *, fill: str) -> None:
     paragraph_properties = paragraph._p.get_or_add_pPr()
     shading = OxmlElement("w:shd")
@@ -175,6 +215,18 @@ def _render_list(document: Document, block: BulletListBlock | NumberedListBlock,
         else:
             style = "List Bullet" if item.level == 1 else "List Bullet 2"
         document.add_paragraph(item.text, style=style)
+
+
+def _format_code_run(run, theme: dict) -> None:
+    run.font.name = theme["fonts"]["code"][0]
+    run.font.size = Pt(theme["word_code_block"]["font_size_pt"])
+    run.font.color.rgb = _theme_rgb(theme, "body")
+    _set_code_rfonts(run._element.get_or_add_rPr(), theme)
+
+
+def _preserve_run_spaces(run) -> None:
+    for text in run._r.findall(qn("w:t")):
+        text.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
 
 
 def _render_basic_table(document: Document, block: TableBlock, theme: dict) -> None:
@@ -291,6 +343,17 @@ def _set_rfonts(rpr, theme: dict) -> None:
     rfonts.set(qn("w:hAnsi"), theme["fonts"]["latin"][0])
 
 
+def _set_code_rfonts(rpr, theme: dict) -> None:
+    rfonts = rpr.rFonts
+    if rfonts is None:
+        rfonts = OxmlElement("w:rFonts")
+        rpr.append(rfonts)
+    code_font = theme["fonts"]["code"][0]
+    rfonts.set(qn("w:eastAsia"), code_font)
+    rfonts.set(qn("w:ascii"), code_font)
+    rfonts.set(qn("w:hAnsi"), code_font)
+
+
 def _set_paragraph_left_border(paragraph, color: str, *, width_pt: float) -> None:
     paragraph_properties = paragraph._p.get_or_add_pPr()
     borders = paragraph_properties.find(qn("w:pBdr"))
@@ -305,6 +368,23 @@ def _set_paragraph_left_border(paragraph, color: str, *, width_pt: float) -> Non
     left.set(qn("w:sz"), str(int(width_pt * 8)))
     left.set(qn("w:space"), "8")
     left.set(qn("w:color"), color.lstrip("#"))
+
+
+def _set_paragraph_box_border(paragraph, color: str, *, width_pt: float) -> None:
+    paragraph_properties = paragraph._p.get_or_add_pPr()
+    borders = paragraph_properties.find(qn("w:pBdr"))
+    if borders is None:
+        borders = OxmlElement("w:pBdr")
+        paragraph_properties.append(borders)
+    for edge in ("top", "left", "bottom", "right"):
+        border = borders.find(qn(f"w:{edge}"))
+        if border is None:
+            border = OxmlElement(f"w:{edge}")
+            borders.append(border)
+        border.set(qn("w:val"), "single")
+        border.set(qn("w:sz"), str(int(width_pt * 8)))
+        border.set(qn("w:space"), "0")
+        border.set(qn("w:color"), color.lstrip("#"))
 
 
 def _theme_rgb(theme: dict, color_key: str) -> RGBColor:

@@ -66,6 +66,7 @@ def test_check_docx_accepts_theme_compliant_renderer_output(tmp_path: Path) -> N
                 {"type": "paragraph", "text": "正文"},
                 {"type": "paragraph", "style": "quote", "text": "引用"},
                 {"type": "paragraph", "style": "note", "text": "提示"},
+                {"type": "code_block", "language": "c", "code": "if (ready) {\n    send();\n}"},
                 {"type": "table", "header": ["项", "值"], "rows": [["主题", "通过"], ["表格", "通过"]]},
                 {"type": "image_placeholder", "ref": "arch.png", "caption": "图1: 架构图"},
             ],
@@ -111,6 +112,21 @@ def test_check_docx_rejects_non_theme_font_or_size(tmp_path: Path) -> None:
 
     assert report.summary["pass"] is False
     assert "HW-E02" in [item.code for item in report.items]
+
+
+def test_check_docx_rejects_code_block_font_or_preserved_spacing_drift(tmp_path: Path) -> None:
+    path = _render_compliant_docx(
+        tmp_path,
+        blocks=[{"type": "code_block", "code": "if (ready) {\n    send();\n}"}],
+    )
+    _rewrite_docx_xml(path, lambda text: text.replace("Consolas", "Arial").replace('xml:space="preserve"', ""))
+
+    from app.lint.docx_lint import check_docx
+
+    report = check_docx(path, classification="HUAWEI CONFIDENTIAL")
+
+    assert report.summary["pass"] is False
+    assert "E004" in [item.code for item in report.items]
 
 
 def test_check_docx_rejects_table_header_or_border_drift(tmp_path: Path) -> None:

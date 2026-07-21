@@ -81,7 +81,7 @@ def _word_payload(context: dict[str, Any] | None) -> dict[str, Any]:
         ]
     return {
         "ir_type": "word",
-        "ir_version": "1.0",
+        "ir_version": "1.1",
         "meta": {"title": title, "classification": "内部公开"},
         "blocks": blocks,
     }
@@ -117,6 +117,14 @@ def _copy_document_blocks(blocks: Any) -> list[dict[str, Any]]:
             text = _text(block.get("text"), max_chars=1000)
             if text:
                 copied.append({"type": "paragraph", "text": text, "style": block.get("style", "normal")})
+        elif block_type == "code_block":
+            code = block.get("code")
+            if isinstance(code, str) and code.strip():
+                copied_block = {"type": "code_block", "code": code}
+                language = block.get("language")
+                if isinstance(language, str) and language.strip():
+                    copied_block["language"] = language.strip()
+                copied.append(copied_block)
         elif block_type in {"bullet_list", "numbered_list"}:
             items = _list_items(block.get("items"))
             if items:

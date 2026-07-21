@@ -146,6 +146,38 @@ def test_render_word_ir_formats_table_header_and_widths(tmp_path: Path) -> None:
     assert widths[:2][0] > widths[:2][1]
 
 
+def test_render_word_ir_preserves_code_block_indentation_and_theme_tokens(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    code = "typedef struct {\n    uint16_t frame_id;\n    uint8_t payload[32];\n} FrameHeader;"
+    function = "static bool frame_header_valid(const FrameHeader *header) {\n    return header != NULL && header->frame_id != 0U;\n}"
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.1",
+            "meta": {"title": "代码详设"},
+            "blocks": [
+                {"type": "code_block", "language": "c", "code": code},
+                {"type": "code_block", "language": "c", "code": function},
+            ],
+        }
+    )
+
+    output = render_word_ir(ir, tmp_path / "code.docx")
+    doc = Document(str(output))
+    paragraphs = [item for item in doc.paragraphs if item.style.name == "IR Code"]
+    xml = _word_package_xml(output)
+
+    assert [paragraph.text for paragraph in paragraphs] == [code, function]
+    assert all(paragraph.runs[0].font.name == "Consolas" for paragraph in paragraphs)
+    assert all(paragraph.runs[0].font.size == Pt(9) for paragraph in paragraphs)
+    assert 'xml:space="preserve"' in xml
+    assert "w:br" in xml
+    assert 'w:fill="F5F5F5"' in xml
+    assert "DDDDDD" in xml
+
+
 def test_render_word_ir_uses_hw_theme_tokens_not_word_blue(tmp_path: Path) -> None:
     from app.ir.word_ir import WordIR
     from app.rendering.docx_renderer import render_word_ir

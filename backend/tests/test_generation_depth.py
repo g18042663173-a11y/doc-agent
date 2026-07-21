@@ -16,7 +16,7 @@ PY_ENV = {**os.environ, "PYTHONPATH": str(ROOT / "backend")}
 def _document_payload() -> dict:
     return {
         "ir_type": "document",
-        "ir_version": "1.1",
+        "ir_version": "1.2",
         "source": {
             "filename": "技术报告.docx",
             "format": "docx",

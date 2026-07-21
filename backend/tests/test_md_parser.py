@@ -79,3 +79,14 @@ def test_parse_markdown_warns_for_malformed_table_rows(tmp_path: Path) -> None:
     table = next(block for block in ir.content.blocks if block.type == "table")
     assert table.rows == [["正常", "完成"]]
     assert any("malformed table rows" in warning for warning in ir.warnings)
+
+
+def test_parse_markdown_preserves_fenced_code_block_indentation() -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    ir = parse_markdown(ROOT / "samples" / "input" / "synthetic" / "md_03_code_fence.md")
+    code = next(block for block in ir.content.blocks if block.type == "code_block")
+
+    assert ir.ir_version == "1.2"
+    assert code.language == "c"
+    assert code.code == "typedef struct {\n    uint16_t frame_id;\n    uint8_t payload[32];\n} FrameHeader;"

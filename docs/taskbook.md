@@ -207,7 +207,7 @@ class IRGenerator(Protocol):
 - Schema 冻结与快照测试:三份 JSON Schema 导出为文件入库,配 schema 快照测试;凡改动 IR 字段而未同步升 ir_version、未过评审的,CI 直接失败(见 §7.1),杜绝契约悄悄漂移。
 - IR 契约是唯一可信来源:任何人(含编码 agent)不得为了让某个样例通过而擅自放宽 Schema;确需变更时,先改 Schema + 升版本 + 更新正反样例,再改代码。
 
-### 3.1  WordIR v1.0(Word 输出契约,Step 1 核心)
+### 3.1  WordIR v1.1(Word 输出契约,Step 1 核心)
 
 顶层结构:meta(文档元信息)+ blocks(有序内容块数组)。meta 字段:title(必填)、subtitle、author、classification(密级,默认“内部公开”)、header_text、footer_text。blocks 类型枚举如下:
 
@@ -215,6 +215,7 @@ class IRGenerator(Protocol):
 | --- | --- | --- |
 | heading | level(1-4), text | 映射 Word 内置标题样式,保证导航窗格与目录可用。 |
 | paragraph | text;可选 style: normal / quote / note | note 渲染为浅底提示框;quote 渲染为左竖线灰字。 |
+| code_block | code;可选 language | 保留换行和行首缩进，使用主题等宽字体、浅色底纹和边框。 |
 | bullet_list / numbered_list | items[{ text, level: 1\|2 }] | 支持两级嵌套;空 items 报 E006。 |
 | table | header[], rows[][];可选 caption, col_widths[] | 行列必须规整;有 col_widths 按比例分配,否则均分。 |
 | image_placeholder | 可选 ref, caption | v1 输出带边框占位文本框与题注,不嵌真图(真图为 P2)。 |
@@ -224,7 +225,7 @@ class IRGenerator(Protocol):
 
 ```
 {
-  "ir_type": "word", "ir_version": "1.0",
+  "ir_type": "word", "ir_version": "1.1",
   "meta": { "title": "XX 项目周报", "subtitle": "2026 年第 27 周",
             "author": "张三", "classification": "内部公开" },
   "blocks": [
@@ -258,7 +259,7 @@ class IRGenerator(Protocol):
 
 渲染硬性要求:中文字体与字号、标题层级样式、段落间距、表格边框(0.5pt)、页眉(= title)、页脚(密级 + 页码)全部集中在渲染器 STYLES 常量,业务代码零散设置样式视为缺陷;产物必须是可编辑 DOCX,禁止图片化或只读输出。
 
-### 3.2  DocumentIR v1.1(输入侧契约,Step 2 核心)
+### 3.2  DocumentIR v1.2(输入侧契约,Step 2 核心)
 
 顶层结构:source { filename, format, size_kb, parsed_at } + stats(计数摘要)+ warnings[](降级与不支持项)+ content(按格式区分)。设计决定:docx / md 的 content 直接复用 WordIR 的 blocks 词汇(外加 outline 标题树摘要),使“解析结果”与“目标输出”同构,天然可当 few-shot 示例,降低模型出错率。
 
@@ -329,7 +330,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 | 编号 | 任务 | 关键实现点 | 验收标准 | 预估 |
 | --- | --- | --- | --- | --- |
-| S1-1 | WordIR v1.0 定稿与校验器 | pydantic 模型;错误码表落码;validate_word_ir() 校验函数;Schema 快照导出 | 10 个非法样例逐一命中预期错误码;Schema 文件入库 | 1.0 天 |
+| S1-1 | WordIR v1.1 定稿与校验器 | pydantic 模型;错误码表落码;validate_word_ir() 校验函数;Schema 快照导出 | 10 个非法样例逐一命中预期错误码;Schema 文件入库 | 1.0 天 |
 | S1-2 | 剥壳器 + IR 修复回路 | 三形态剥壳(纯 JSON / 代码块 / 带解释);校验失败回喂错误码限重试 2 次;失败附原文前 200 字(见 §5.3) | 三形态用例全过;注入可修复错误经回路后通过,不可修复者稳定报 E00x | 1.0 天 |
 | S1-3 | DOCX 渲染核心 | 标题 1-4 级、段落、两级列表、quote/note、分页;页眉页脚 + 密级 + 页码;样式集中 STYLES | 样例 1、2 渲染后回读断言全过;Word 中可直接编辑 | 2.0 天 |
 | S1-4 | 表格渲染 | 表头加粗底纹、比例列宽、跨页续排(表头重复)、超限截断 + W103 | 样例 3 通过;100 行 x 12 列极限表可渲染不崩 | 1.0 天 |
@@ -358,7 +359,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 ```
 [角色] 你是企业文档结构化助手。
-[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.0(或 DeckIR v1.9)Schema。
+[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.1(或 DeckIR v1.9)Schema。
 [输出纪律] 只输出一个裸 JSON 对象,不得使用代码围栏或附加文字;不得新增 Schema 之外的字段;
           表格不超过 <上限>;要点每页不超过 7 条。
 [目标 Schema 摘要] <内嵌字段说明或精简 JSON Schema,由 ir 包自动生成,禁止手抄>

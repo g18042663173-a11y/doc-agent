@@ -6,7 +6,7 @@ from app.ir.errors import ValidationItem, ValidationResult
 SUGGESTIONS = {
     "E001": "确认模型输出是一个完整 JSON 对象或单个 json 代码块。",
     "E002": "补齐 meta.title, 且标题不能为空白字符串。",
-    "E003": "把 block.type 改为 heading、paragraph、bullet_list、numbered_list、table、image_placeholder 或 page_break。",
+    "E003": "把 block.type 改为 heading、paragraph、code_block、bullet_list、numbered_list、table、image_placeholder 或 page_break。",
     "E004": "检查 table.header、rows 和 col_widths 的列数是否一致, 且表格不超过 100 行 x 12 列。",
     "E005": "将 heading.level 调整到 1-4。",
     "E006": "为 blocks 或列表 items 至少提供 1 条内容。",

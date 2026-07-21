@@ -20,6 +20,8 @@ from app.parsers.text_limits import TextLimiter
 
 
 HEADING_STYLE_RE = re.compile(r"^(Heading|标题)\s*([1-6])$")
+CODE_STYLE_NAMES = {"ir code", "code", "source code", "preformatted"}
+MONOSPACE_FONT_NAMES = {"consolas", "courier new", "courier", "menlo", "monaco"}
 
 
 @parser_error_boundary
@@ -41,6 +43,12 @@ def parse_docx(path: Path) -> DocumentIR:
 
     for item_index, item in enumerate(_iter_block_items(document), start=1):
         if isinstance(item, Paragraph):
+            if _is_code_paragraph(item):
+                flush_list()
+                code = item.text
+                if code.strip():
+                    blocks.append({"type": "code_block", "code": code})
+                continue
             text = limiter.limit(item.text.strip(), loc=f"docx body paragraph {item_index}")
             if not text:
                 continue
@@ -82,7 +90,7 @@ def parse_docx(path: Path) -> DocumentIR:
     return DocumentIR.model_validate(
         {
             "ir_type": "document",
-            "ir_version": "1.1",
+            "ir_version": "1.2",
             "source": {
                 "filename": path.name,
                 "format": "docx",
@@ -127,6 +135,15 @@ def _heading_level(paragraph: Paragraph) -> int | None:
         return int(value) + 1
     except ValueError:
         return None
+
+
+def _is_code_paragraph(paragraph: Paragraph) -> bool:
+    if paragraph.style.name.strip().casefold() in CODE_STYLE_NAMES:
+        return True
+    return any(
+        run.font.name is not None and run.font.name.strip().casefold() in MONOSPACE_FONT_NAMES
+        for run in paragraph.runs
+    )
 
 
 def _list_kind(paragraph: Paragraph) -> str | None:

@@ -14,6 +14,7 @@ VALID_SAMPLES = [
     "word_valid_01_plain.json",
     "word_valid_02_list.json",
     "word_valid_03_table.json",
+    "word_valid_04_code_block.json",
 ]
 
 INVALID_EXPECTATIONS = {

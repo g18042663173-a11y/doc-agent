@@ -97,6 +97,7 @@ def check_docx(path: Path, *, classification: str | None = None, theme_name: str
     items.extend(_table_items(document, theme))
     items.extend(_placeholder_items(document))
     items.extend(_quote_note_items(document, theme))
+    items.extend(_code_block_items(document, theme))
     items.extend(_footer_format_items(document, package_xml, classification))
     return DocxLintReport(items)
 
@@ -123,7 +124,7 @@ def _theme_items(document: Document, package_xml: str, theme: dict) -> list[Docx
 
 
 def _font_items(document: Document, theme: dict) -> list[DocxLintItem]:
-    whitelist = set(theme["fonts"]["whitelist"])
+    whitelist = set(theme["fonts"]["whitelist"]) | set(theme["fonts"].get("code", []))
     allowed_sizes = {float(value) for value in theme["font_sizes_pt"].values() if isinstance(value, (int, float))}
     for paragraph in _iter_all_paragraphs(document):
         if not paragraph.text.strip():
@@ -180,6 +181,28 @@ def _quote_note_items(document: Document, theme: dict) -> list[DocxLintItem]:
         if style_name == "IR Note" and f'w:fill="{note_fill}"' not in xml:
             items.append(_item("E004", "note 段落缺少主题浅底。", "为 note 段落添加主题浅底提示框。"))
     return _dedupe(items)
+
+
+def _code_block_items(document: Document, theme: dict) -> list[DocxLintItem]:
+    token = theme["word_code_block"]
+    code_fonts = set(theme["fonts"]["code"])
+    fill = theme["colors"][token["fill_color_key"]].lstrip("#").upper()
+    border = theme["colors"][token["border_color_key"]].lstrip("#").upper()
+    expected_size = float(token["font_size_pt"])
+    for paragraph in document.paragraphs:
+        if paragraph.style.name != "IR Code":
+            continue
+        visible_runs = [run for run in paragraph.runs if run.text]
+        if any(_effective_font_name(paragraph, run) not in code_fonts for run in visible_runs):
+            return [_item("E004", "code_block 未使用主题等宽字体。", "使用 hw_theme.json 的 word_code_block 与 fonts.code token。")]
+        if any(_effective_font_size(paragraph, run) != expected_size for run in visible_runs):
+            return [_item("E004", "code_block 字号不符合主题 token。", "使用 word_code_block.font_size_pt。")]
+        xml = paragraph._p.xml
+        if f'w:fill="{fill}"' not in xml or border not in xml:
+            return [_item("E004", "code_block 缺少主题底纹或边框。", "使用 word_code_block 的 fill_color_key 与 border_color_key。")]
+        if 'xml:space="preserve"' not in xml:
+            return [_item("E004", "code_block 未保留 XML 空格语义。", "代码文本节点设置 xml:space=preserve，保留行首缩进。")]
+    return []
 
 
 def _footer_format_items(document: Document, package_xml: str, classification: str | None) -> list[DocxLintItem]:

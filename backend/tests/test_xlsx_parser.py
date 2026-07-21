@@ -371,7 +371,7 @@ def test_xlsx_isolated_worker_serializes_success_and_closes_connection(monkeypat
     result = DocumentIR.model_validate(
         {
             "ir_type": "document",
-            "ir_version": "1.1",
+            "ir_version": "1.2",
             "source": {"filename": "worker.xlsx", "format": "xlsx", "size_kb": 1, "parsed_at": "now"},
             "stats": {},
             "content": {"sheets": []},
@@ -383,7 +383,7 @@ def test_xlsx_isolated_worker_serializes_success_and_closes_connection(monkeypat
     xlsx_parser._xlsx_worker("worker.xlsx", connection)
 
     assert connection.messages[0][0] == "ok"
-    assert connection.messages[0][1]["ir_version"] == "1.1"
+    assert connection.messages[0][1]["ir_version"] == "1.2"
     assert connection.closed is True
 
 

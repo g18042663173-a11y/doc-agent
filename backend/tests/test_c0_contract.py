@@ -32,7 +32,27 @@ def test_word_ir_validates_minimal_report() -> None:
     )
 
     assert ir.meta.title == "周报"
+    assert ir.ir_version == "1.1"
     assert ir.blocks[0].type == "heading"
+
+
+def test_word_ir_v10_migrates_to_v11_without_mutating_input() -> None:
+    import copy
+
+    from app.ir.word_ir import WordIR
+
+    payload = {
+        "ir_type": "word",
+        "ir_version": "1.0",
+        "meta": {"title": "旧版报告"},
+        "blocks": [{"type": "paragraph", "text": "正文"}],
+    }
+    original = copy.deepcopy(payload)
+
+    migrated = WordIR.model_validate(payload)
+
+    assert migrated.ir_version == "1.1"
+    assert payload == original
 
 
 def test_word_ir_rejects_empty_blocks() -> None:
@@ -225,7 +245,7 @@ def test_document_schema_exposes_format_and_preview_limits() -> None:
     sheet_props = schema["$defs"]["SheetSummary"]["properties"]
     table_props = schema["$defs"]["DocumentTableBlock"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "1.1"
+    assert schema["properties"]["ir_version"]["const"] == "1.2"
     assert len(schema["allOf"]) == 3
     assert sheet_props["preview_rows"]["maxItems"] == 20
     assert sheet_props["preview_rows"]["items"]["maxItems"] == 15
@@ -307,7 +327,7 @@ def test_document_ir_accepts_preview_limits_and_rejects_overflow() -> None:
         DocumentIR.model_validate(payload)
 
 
-def test_document_ir_reads_v10_as_v11_with_explicit_migration_warning() -> None:
+def test_document_ir_reads_v10_as_v12_with_explicit_migration_warning() -> None:
     from app.ir.document_ir import DocumentIR
 
     payload = {
@@ -326,9 +346,9 @@ def test_document_ir_reads_v10_as_v11_with_explicit_migration_warning() -> None:
 
     migrated = DocumentIR.model_validate(payload)
 
-    assert migrated.ir_version == "1.1"
+    assert migrated.ir_version == "1.2"
     assert migrated.content.blocks[0].text == "存量摘要"
-    assert any("DocumentIR 1.0" in warning and "1.1" in warning for warning in migrated.warnings)
+    assert any("DocumentIR 1.0" in warning and "1.2" in warning for warning in migrated.warnings)
 
 
 def test_document_ir_v10_migration_still_enforces_v11_constraints() -> None:

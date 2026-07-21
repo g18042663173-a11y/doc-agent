@@ -46,7 +46,7 @@ def parse_pptx(path: Path) -> DocumentIR:
     return DocumentIR.model_validate(
         {
             "ir_type": "document",
-            "ir_version": "1.1",
+            "ir_version": "1.2",
             "source": {
                 "filename": path.name,
                 "format": "pptx",

@@ -23,6 +23,40 @@
       "title": "BulletListBlock",
       "type": "object"
     },
+    "CodeBlock": {
+      "properties": {
+        "code": {
+          "description": "保留原始换行和行首缩进的源码文本，不得按普通段落合并或 strip。",
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选语言标记，例如 c、cpp 或 python；仅供阅读与解析追溯。",
+          "title": "Language"
+        },
+        "type": {
+          "const": "code_block",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "code"
+      ],
+      "title": "CodeBlock",
+      "type": "object"
+    },
     "ColumnStat": {
       "properties": {
         "name": {
@@ -77,6 +111,7 @@
             "discriminator": {
               "mapping": {
                 "bullet_list": "#/$defs/BulletListBlock",
+                "code_block": "#/$defs/CodeBlock",
                 "heading": "#/$defs/HeadingBlock",
                 "image_placeholder": "#/$defs/ImagePlaceholderBlock",
                 "numbered_list": "#/$defs/NumberedListBlock",
@@ -92,6 +127,9 @@
               },
               {
                 "$ref": "#/$defs/ParagraphBlock"
+              },
+              {
+                "$ref": "#/$defs/CodeBlock"
               },
               {
                 "$ref": "#/$defs/BulletListBlock"
@@ -705,7 +743,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "1.1",
+      "const": "1.2",
       "title": "Ir Version",
       "type": "string"
     },

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal, Union
+import copy
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import ConfigDict, Field, model_validator
 
 from app.ir.common import (
     BulletListBlock,
+    CodeBlock,
     ContractModel,
     HeadingBlock,
     ImagePlaceholderBlock,
@@ -75,6 +77,7 @@ DocumentBlock = Annotated[
     Union[
         HeadingBlock,
         ParagraphBlock,
+        CodeBlock,
         BulletListBlock,
         NumberedListBlock,
         DocumentTableBlock,
@@ -177,7 +180,7 @@ class DocumentIR(ContractModel):
     )
 
     ir_type: Literal["document"]
-    ir_version: Literal["1.1"]
+    ir_version: Literal["1.2"]
     source: DocumentSource
     stats: DocumentStats
     warnings: list[str] = Field(default_factory=list)
@@ -185,13 +188,14 @@ class DocumentIR(ContractModel):
 
     @model_validator(mode="before")
     @classmethod
-    def migrate_v10_payload(cls, value):
-        if not isinstance(value, dict) or value.get("ir_version") != "1.0":
+    def migrate_legacy_payload(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or value.get("ir_version") not in {"1.0", "1.1"}:
             return value
-        migrated = dict(value)
-        migrated["ir_version"] = "1.1"
+        source_version = value["ir_version"]
+        migrated = copy.deepcopy(value)
+        migrated["ir_version"] = "1.2"
         warnings = list(migrated.get("warnings") or [])
-        migration_warning = "DocumentIR 1.0 已兼容迁移到 1.1，并按 1.1 约束重新校验。"
+        migration_warning = f"DocumentIR {source_version} 已兼容迁移到 1.2，并按 1.2 约束重新校验。"
         if migration_warning not in warnings:
             warnings.append(migration_warning)
         migrated["warnings"] = warnings

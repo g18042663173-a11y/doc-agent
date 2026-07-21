@@ -65,7 +65,7 @@ FEW_SHOT_FILES: dict[Kind, tuple[str, ...]] = {
 
 TARGETS = {
     "word": {
-        "label": "WordIR v1.0",
+        "label": "WordIR v1.1",
         "description": "可编辑 Word 文档",
         "model": WordIR,
     },
@@ -126,9 +126,10 @@ def _contract_guide(kind: Kind) -> str:
     if kind == "word":
         return (
             "顶层只能有 ir_type、ir_version、meta、blocks。"
-            "ir_type 固定为 word，ir_version 固定为 1.0，meta.title 必填且非空，blocks 至少 1 条。\n"
-            "block.type 只能是 heading、paragraph、bullet_list、numbered_list、table、image_placeholder、page_break；"
-            "heading.level 只能为 1-4；列表 items 至少 1 条；table 每行列数必须等于 header 列数。"
+            "ir_type 固定为 word，ir_version 固定为 1.1，meta.title 必填且非空，blocks 至少 1 条。\n"
+            "block.type 只能是 heading、paragraph、code_block、bullet_list、numbered_list、table、image_placeholder、page_break；"
+            "heading.level 只能为 1-4；code_block.code 必填且必须保留原始换行与行首缩进；"
+            "列表 items 至少 1 条；table 每行列数必须等于 header 列数。"
         )
     return (
         "顶层只能有 ir_type、ir_version、meta、slides。"
@@ -242,8 +243,9 @@ def _few_shot(kind: Kind) -> str:
     for index, filename in enumerate(FEW_SHOT_FILES[kind], start=1):
         path = SAMPLE_DIR / filename
         payload = json.loads(path.read_text(encoding="utf-8"))
-        TARGETS[kind]["model"].model_validate(payload)
-        compact = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        validated = TARGETS[kind]["model"].model_validate(payload)
+        prompt_payload = validated.model_dump(mode="json") if kind == "word" else payload
+        compact = json.dumps(prompt_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         examples.append(f"示例 {index}：{compact}")
     return "\n".join(examples)
 

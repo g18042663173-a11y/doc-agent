@@ -9,6 +9,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.ir.common import (
     BulletListBlock,
+    CodeBlock,
     HeadingBlock,
     ImagePlaceholderBlock,
     ListItem,
@@ -68,6 +69,7 @@ REGISTERED_ARCHITECTURE_NODE_TYPES = frozenset({"primary", "secondary", "emphasi
 WORD_BLOCK_MODELS: dict[str, Type[BaseModel]] = {
     "heading": HeadingBlock,
     "paragraph": ParagraphBlock,
+    "code_block": CodeBlock,
     "bullet_list": BulletListBlock,
     "numbered_list": NumberedListBlock,
     "table": TableBlock,

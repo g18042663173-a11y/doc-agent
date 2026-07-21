@@ -12,6 +12,7 @@ HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 UNORDERED_RE = re.compile(r"^(\s*)[-*]\s+(.+?)\s*$")
 ORDERED_RE = re.compile(r"^(\s*)\d+[.)]\s+(.+?)\s*$")
 TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$")
+CODE_FENCE_RE = re.compile(r"^\s*```\s*([A-Za-z0-9_+-]*)\s*$")
 
 
 @parser_error_boundary
@@ -32,6 +33,27 @@ def parse_markdown(path: Path) -> DocumentIR:
     while index < len(lines):
         line = lines[index]
         stripped = line.strip()
+        code_fence = CODE_FENCE_RE.match(line)
+        if code_fence:
+            flush_paragraph()
+            language = code_fence.group(1) or None
+            code_lines: list[str] = []
+            index += 1
+            while index < len(lines) and not CODE_FENCE_RE.match(lines[index]):
+                code_lines.append(lines[index])
+                index += 1
+            if index == len(lines):
+                warnings.append("markdown code fence is not closed; remaining lines kept as code_block")
+            else:
+                index += 1
+            if code_lines and any(line.strip() for line in code_lines):
+                block: dict[str, str] = {"type": "code_block", "code": "\n".join(code_lines)}
+                if language:
+                    block["language"] = language
+                blocks.append(block)
+            else:
+                warnings.append("markdown empty code fence skipped")
+            continue
         if not stripped:
             flush_paragraph()
             index += 1
@@ -80,7 +102,7 @@ def parse_markdown(path: Path) -> DocumentIR:
     return DocumentIR.model_validate(
         {
             "ir_type": "document",
-            "ir_version": "1.1",
+            "ir_version": "1.2",
             "source": {
                 "filename": path.name,
                 "format": "md",

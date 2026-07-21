@@ -22,7 +22,7 @@ def test_build_prompt_is_deterministic_and_contains_schema() -> None:
     second = build_prompt(kind="word", context=context)
 
     assert first == second
-    assert "WordIR v1.0" in first
+    assert "WordIR v1.1" in first
     assert '"ir_type"' in first
     assert "[输入 DocumentIR]" in first
     assert "Q3 业务汇报" in first
@@ -516,7 +516,7 @@ def test_deck_prompt_optional_depth_rules_keep_default_path_deterministic() -> N
     detailed = build_prompt(kind="deck", context=context, depth="详细", pages=16)
 
     assert hashlib.sha256(legacy.encode("utf-8")).hexdigest() == (
-        "4fc5a5a2985a13fa62cb78d2de8bdb7f39f39e92e1faa35f4d931caaf4d6ce94"
+        "4f5967a24f0ce69e4ecb3094158a31727eed075f0cfce283b7c3a8d62ea8f264"
     )
     from app.generators.stub import StubGenerator
 

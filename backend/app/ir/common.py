@@ -37,6 +37,24 @@ class ParagraphBlock(ContractModel):
     style: Literal["normal", "quote", "note"] = "normal"
 
 
+class CodeBlock(ContractModel):
+    type: Literal["code_block"]
+    code: str = Field(min_length=1, description="保留原始换行和行首缩进的源码文本，不得按普通段落合并或 strip。")
+    language: str | None = Field(default=None, description="可选语言标记，例如 c、cpp 或 python；仅供阅读与解析追溯。")
+
+    @field_validator("code")
+    @classmethod
+    def code_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("code must not be blank")
+        return value
+
+    @field_validator("language")
+    @classmethod
+    def language_not_blank(cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+
 class BulletListBlock(ContractModel):
     type: Literal["bullet_list"]
     items: list[ListItem] = Field(min_length=1)
