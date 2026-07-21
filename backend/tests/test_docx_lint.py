@@ -129,6 +129,37 @@ def test_check_docx_rejects_code_block_font_or_preserved_spacing_drift(tmp_path:
     assert "E004" in [item.code for item in report.items]
 
 
+def test_check_docx_validates_document_control_tables_and_detects_missing_table(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.lint.docx_lint import check_docx
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.2",
+            "meta": {
+                "title": "控制信息",
+                "classification": "内部公开",
+                "document_control": {
+                    "product_name": "产品",
+                    "document_name": "控制信息",
+                    "version": "V1.0",
+                },
+            },
+            "blocks": [{"type": "paragraph", "text": "正文"}],
+        }
+    )
+    path = render_word_ir(ir, tmp_path / "control.docx")
+
+    assert check_docx(path, classification="内部公开").summary["pass"] is True
+    _rewrite_docx_xml(path, lambda text: text.replace("HW_DOCUMENT_CONTROL_APPROVAL", "HW_DOCUMENT_CONTROL_REMOVED"))
+    report = check_docx(path, classification="内部公开")
+
+    assert report.summary["pass"] is False
+    assert "E004" in [item.code for item in report.items]
+
+
 def test_check_docx_rejects_table_header_or_border_drift(tmp_path: Path) -> None:
     from app.lint.docx_lint import check_docx
 

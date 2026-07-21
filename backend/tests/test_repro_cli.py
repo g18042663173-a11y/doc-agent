@@ -78,7 +78,7 @@ def test_prompt_cli_writes_prompt_from_context(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stdout + result.stderr
     prompt_text = prompt.read_text(encoding="utf-8")
-    assert "WordIR v1.1" in prompt_text
+    assert "WordIR v1.2" in prompt_text
     assert "最多 13 个 blocks" in prompt_text
 
 

@@ -81,7 +81,7 @@ def _word_payload(context: dict[str, Any] | None) -> dict[str, Any]:
         ]
     return {
         "ir_type": "word",
-        "ir_version": "1.1",
+        "ir_version": "1.2",
         "meta": {"title": title, "classification": "内部公开"},
         "blocks": blocks,
     }

@@ -35,9 +35,9 @@ def test_usage_documents_document_ir_v10_compatibility() -> None:
     usage = (ROOT / "docs" / "使用说明.md").read_text(encoding="utf-8")
 
     assert "DocumentIR 1.0 兼容读取" in usage
-    assert "在内存中把版本迁移为 1.1" in usage
-    assert "重新执行 1.1" in usage
-    assert "不会覆写原 1.0 文件" in usage
+    assert "在内存中把版本迁移为 1.2" in usage
+    assert "重新执行 1.2" in usage
+    assert "不会覆写原文件" in usage
 
 
 def test_web_usage_doc_covers_stub_and_nga_switch() -> None:

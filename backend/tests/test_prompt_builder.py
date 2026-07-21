@@ -22,10 +22,12 @@ def test_build_prompt_is_deterministic_and_contains_schema() -> None:
     second = build_prompt(kind="word", context=context)
 
     assert first == second
-    assert "WordIR v1.1" in first
+    assert "WordIR v1.2" in first
     assert '"ir_type"' in first
     assert "[输入 DocumentIR]" in first
     assert "Q3 业务汇报" in first
+    assert "document_control" in first
+    assert "帧头接口模块详细设计" in first
 
 
 def test_build_prompt_truncates_context_and_declares_it() -> None:

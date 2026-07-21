@@ -66,6 +66,18 @@
     "space_before_pt": 6,
     "space_after_pt": 6
   },
+  "word_document_control": {
+    "label_fill_color_key": "table_stripe",
+    "border_color_key": "border",
+    "border_width_pt": 0.5,
+    "label_font_size_pt": 9,
+    "value_font_size_pt": 10,
+    "padding_in": 0.05,
+    "space_after_pt": 8,
+    "empty_value_text": " ",
+    "info_col_widths": [1.1, 2.15, 1.1, 2.15],
+    "approval_col_widths": [1.2, 2.6, 2.7]
+  },
   "ppt_typography": {
     "cover_title_candidates_pt": [
       40,

@@ -7,7 +7,9 @@ import zipfile
 from typing import Any
 
 from docx import Document
+from docx.oxml.ns import qn
 
+from app.ir.word_ir import WORD_CLASSIFICATIONS
 from app.rendering.theme import load_theme
 
 
@@ -95,6 +97,7 @@ def check_docx(path: Path, *, classification: str | None = None, theme_name: str
     items.extend(_theme_items(document, package_xml, theme))
     items.extend(_font_items(document, theme))
     items.extend(_table_items(document, theme))
+    items.extend(_document_control_items(document, theme, classification))
     items.extend(_placeholder_items(document))
     items.extend(_quote_note_items(document, theme))
     items.extend(_code_block_items(document, theme))
@@ -147,7 +150,7 @@ def _table_items(document: Document, theme: dict) -> list[DocxLintItem]:
     header_fill = theme["colors"]["hw_red"].lstrip("#").upper()
     border = theme["colors"]["border"].lstrip("#").upper()
     for table in document.tables:
-        if _is_image_placeholder_table(table):
+        if _is_image_placeholder_table(table) or _document_control_caption(table) is not None:
             continue
         if not table.rows:
             continue
@@ -159,6 +162,49 @@ def _table_items(document: Document, theme: dict) -> list[DocxLintItem]:
             return [_item("E004", "表格表头未使用白色文字。", "表头文字使用白色并加粗。")]
         if border not in table_xml:
             return [_item("E004", f"表格边框未使用主题边框色 {theme['colors']['border']}。", "表格边框使用主题灰色。")]
+    return []
+
+
+def _document_control_items(document: Document, theme: dict, classification: str | None) -> list[DocxLintItem]:
+    expected_marker = document.core_properties.category == "HW_DOCUMENT_CONTROL"
+    tables = {
+        caption: table
+        for table in document.tables
+        if (caption := _document_control_caption(table)) is not None
+    }
+    expected = {"HW_DOCUMENT_CONTROL_INFO", "HW_DOCUMENT_CONTROL_APPROVAL"}
+    if not tables and not expected_marker:
+        return []
+    if set(tables) != expected:
+        return [
+            _item(
+                "E004",
+                "文档控制信息表不完整。",
+                "在正文前保留产品/版本表和拟制、审核、批准表，且使用完整控制信息标记。",
+            )
+        ]
+    info = tables["HW_DOCUMENT_CONTROL_INFO"]
+    approval = tables["HW_DOCUMENT_CONTROL_APPROVAL"]
+    if len(info.rows) != 2 or len(info.columns) != 4:
+        return [_item("E004", "产品/版本控制表尺寸错误。", "使用固定 2 行 x 4 列控制信息表。")]
+    if len(approval.rows) != 4 or len(approval.columns) != 3:
+        return [_item("E004", "拟制审核批准表尺寸错误。", "使用固定表头加拟制、审核、批准三行。")]
+    info_labels = [[info.cell(row, col).text.strip() for col in (0, 2)] for row in range(2)]
+    if info_labels != [["产品名称", "文档名称"], ["密级", "版本号"]]:
+        return [_item("E004", "产品/版本控制表缺少必需标签。", "保留产品名称、文档名称、密级、版本号四项。")]
+    actual_classification = info.cell(1, 1).text.strip()
+    if actual_classification not in WORD_CLASSIFICATIONS:
+        return [_item("E004", "文档头密级值不合法。", "使用 WordIR 约定的公开、内部公开、秘密、机密、绝密或华为密级文案。")]
+    if classification is not None and actual_classification != classification:
+        return [_item("E004", "文档头密级与复检期望不一致。", "使用与 meta.classification 相同的密级文案。")]
+    if [approval.cell(0, col).text.strip() for col in range(3)] != ["角色", "姓名", "日期"]:
+        return [_item("E004", "拟制审核批准表缺少角色、姓名、日期表头。", "使用固定三列表头。")]
+    if [approval.cell(row, 0).text.strip() for row in range(1, 4)] != ["拟制", "审核", "批准"]:
+        return [_item("E004", "拟制审核批准表缺少固定角色行。", "即使姓名或日期为空，也保留拟制、审核、批准三行。")]
+    fill = theme["colors"][theme["word_document_control"]["label_fill_color_key"]].lstrip("#").upper()
+    border = theme["colors"][theme["word_document_control"]["border_color_key"]].lstrip("#").upper()
+    if fill not in info._tbl.xml or fill not in approval._tbl.xml or border not in info._tbl.xml or border not in approval._tbl.xml:
+        return [_item("E004", "文档控制信息表未使用主题底纹或边框。", "使用 word_document_control 的主题 token 重新渲染。")]
     return []
 
 
@@ -250,6 +296,14 @@ def _contains_text(document: Document, needle: str) -> bool:
 def _is_image_placeholder_table(table) -> bool:
     cells = [cell for row in table.rows for cell in row.cells]
     return len(cells) == 1 and "图片占位" in cells[0].text
+
+
+def _document_control_caption(table) -> str | None:
+    caption = table._tbl.tblPr.find(qn("w:tblCaption"))
+    if caption is None:
+        return None
+    value = caption.get(qn("w:val"))
+    return value if value in {"HW_DOCUMENT_CONTROL_INFO", "HW_DOCUMENT_CONTROL_APPROVAL"} else None
 
 
 def _dedupe(items: list[DocxLintItem]) -> list[DocxLintItem]:

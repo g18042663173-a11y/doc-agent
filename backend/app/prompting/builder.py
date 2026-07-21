@@ -55,7 +55,7 @@ EVIDENCE_RESULT_PATTERN = re.compile(
 )
 CAPTION_PATTERN = re.compile(r"^\s*(?:图|表)\s*\d+", re.IGNORECASE)
 FEW_SHOT_FILES: dict[Kind, tuple[str, ...]] = {
-    "word": ("word_valid_01_plain.json",),
+    "word": ("word_valid_01_plain.json", "word_valid_05_document_control.json"),
     "deck": (
         "deck_few_shot_table_v19.json",
         "deck_few_shot_architecture_v19.json",
@@ -65,7 +65,7 @@ FEW_SHOT_FILES: dict[Kind, tuple[str, ...]] = {
 
 TARGETS = {
     "word": {
-        "label": "WordIR v1.1",
+        "label": "WordIR v1.2",
         "description": "可编辑 Word 文档",
         "model": WordIR,
     },
@@ -126,10 +126,12 @@ def _contract_guide(kind: Kind) -> str:
     if kind == "word":
         return (
             "顶层只能有 ir_type、ir_version、meta、blocks。"
-            "ir_type 固定为 word，ir_version 固定为 1.1，meta.title 必填且非空，blocks 至少 1 条。\n"
+            "ir_type 固定为 word，ir_version 固定为 1.2，meta.title 必填且非空，blocks 至少 1 条。\n"
             "block.type 只能是 heading、paragraph、code_block、bullet_list、numbered_list、table、image_placeholder、page_break；"
             "heading.level 只能为 1-4；code_block.code 必填且必须保留原始换行与行首缩进；"
             "列表 items 至少 1 条；table 每行列数必须等于 header 列数。"
+            "需要正式详设文档头时，meta.document_control 必填 product_name、document_name、version，"
+            "可填 classification（必须等于 meta.classification）以及 prepared/reviewed/approved 的 name/date；空签核字段写 null，不得省略记录对象。"
         )
     return (
         "顶层只能有 ir_type、ir_version、meta、slides。"
@@ -147,7 +149,12 @@ def _contract_guide(kind: Kind) -> str:
 
 def _field_quick_reference(kind: Kind) -> str:
     if kind == "word":
-        return "本目标为 WordIR；完整 Schema 是唯一准绳，不得添加 Schema 外字段。"
+        return (
+            "本目标为 WordIR；完整 Schema 是唯一准绳，不得添加 Schema 外字段。"
+            "document_control 是可选的整篇文档元数据，不是 blocks 里的普通表格："
+            "产品名称、文档名称和版本号必填；密级默认沿用 meta.classification；"
+            "prepared/reviewed/approved 都必须保留 name/date 结构，未知值用 null。"
+        )
     return (
         "这份速查规则只划重点，不替代后面的完整 Schema；冲突时以完整 Schema 为准。\n"
         "1. table.col_widths 是各列的正数相对权重，渲染时归一化；不是英寸，总和不必为 1。\n"
@@ -167,7 +174,8 @@ def _content_rules(kind: Kind, *, depth: Depth | None = None, pages: int | None 
         return (
             "- 标题层级连续，不从 1 级直接跳到 3/4 级。\n"
             "- 一段只表达一个主题；长内容拆成多个 heading + paragraph，不把整篇材料塞进一个 paragraph。\n"
-            "- 表格必须有数据行；图片占位必须至少给 ref 或 caption；不得编造输入中没有的事实。"
+            "- 表格必须有数据行；图片占位必须至少给 ref 或 caption；不得编造输入中没有的事实。\n"
+            "- 仅当输入明确提供产品名、版本和拟制/审核信息时才输出 document_control；信息不足时不要编造。"
         )
     legacy = (
         "- 观点在标题：除 cover、agenda、section 外，title 应写结论或判断，不只写“背景/分析/数据”等栏目名。\n"

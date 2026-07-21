@@ -29,6 +29,9 @@ def render_word_ir(ir: WordIR, output_path: Path) -> Path:
     document = Document()
     _configure_styles(document, theme)
     _configure_header_footer(document, ir, theme)
+    if ir.meta.document_control is not None:
+        document.core_properties.category = "HW_DOCUMENT_CONTROL"
+        _render_document_control(document, ir, theme)
 
     for block in ir.blocks:
         if isinstance(block, HeadingBlock):
@@ -201,6 +204,98 @@ def _render_code_block(document: Document, block: CodeBlock, theme: dict) -> Non
             run.add_break()
 
 
+def _render_document_control(document: Document, ir: WordIR, theme: dict) -> None:
+    control = ir.meta.document_control
+    if control is None:
+        return
+    token = theme["word_document_control"]
+    classification = control.classification or ir.meta.classification
+    info_table = document.add_table(rows=2, cols=4)
+    info_table.style = "Table Grid"
+    info_table.autofit = False
+    _set_table_caption(info_table, "HW_DOCUMENT_CONTROL_INFO")
+    _set_table_widths(info_table, token["info_col_widths"])
+    info_rows = [
+        ("产品名称", control.product_name, "文档名称", control.document_name),
+        ("密级", classification, "版本号", control.version),
+    ]
+    for row, values in zip(info_table.rows, info_rows, strict=True):
+        for index, value in enumerate(values):
+            _write_document_control_cell(row.cells[index], value, theme, label=index % 2 == 0)
+        _set_row_widths(row.cells, token["info_col_widths"])
+
+    approval_table = document.add_table(rows=4, cols=3)
+    approval_table.style = "Table Grid"
+    approval_table.autofit = False
+    _set_table_caption(approval_table, "HW_DOCUMENT_CONTROL_APPROVAL")
+    _set_table_widths(approval_table, token["approval_col_widths"])
+    _write_document_control_row(approval_table.rows[0], ("角色", "姓名", "日期"), theme, label=True)
+    prepared_name = control.prepared.name or ir.meta.author
+    approval_rows = [
+        ("拟制", prepared_name, control.prepared.date),
+        ("审核", control.reviewed.name, control.reviewed.date),
+        ("批准", control.approved.name, control.approved.date),
+    ]
+    for row, values in zip(approval_table.rows[1:], approval_rows, strict=True):
+        _write_document_control_row(row, values, theme, label=False)
+    document.add_paragraph().paragraph_format.space_after = Pt(token["space_after_pt"])
+
+
+def _write_document_control_row(row, values: tuple[str | None, str | None, str | None], theme: dict, *, label: bool) -> None:
+    token = theme["word_document_control"]
+    for index, value in enumerate(values):
+        _write_document_control_cell(row.cells[index], value, theme, label=label or index == 0)
+    _set_row_widths(row.cells, token["approval_col_widths"])
+
+
+def _write_document_control_cell(cell, value: str | None, theme: dict, *, label: bool) -> None:
+    token = theme["word_document_control"]
+    text = value if value is not None else token["empty_value_text"]
+    cell.text = text
+    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    _set_cell_margins(cell, token["padding_in"])
+    if label:
+        _shade_cell(cell, _theme_hex(theme, token["label_fill_color_key"]))
+    else:
+        _shade_cell(cell, _theme_hex(theme, "background"))
+    _set_cell_borders(cell, theme, width_pt=token["border_width_pt"], color_key=token["border_color_key"])
+    for paragraph in cell.paragraphs:
+        paragraph.paragraph_format.line_spacing = theme["typography"]["line_spacing"]
+        for run in paragraph.runs:
+            _format_runs(
+                [run],
+                theme,
+                size=token["label_font_size_pt"] if label else token["value_font_size_pt"],
+                color_key="body",
+                bold=label,
+            )
+
+
+def _set_table_caption(table, caption: str) -> None:
+    table_properties = table._tbl.tblPr
+    caption_element = table_properties.find(qn("w:tblCaption"))
+    if caption_element is None:
+        caption_element = OxmlElement("w:tblCaption")
+        table_properties.append(caption_element)
+    caption_element.set(qn("w:val"), caption)
+
+
+def _set_cell_margins(cell, padding_in: float) -> None:
+    tc_properties = cell._tc.get_or_add_tcPr()
+    margins = tc_properties.find(qn("w:tcMar"))
+    if margins is None:
+        margins = OxmlElement("w:tcMar")
+        tc_properties.append(margins)
+    value = str(int(Inches(padding_in) / 635))
+    for edge in ("top", "left", "bottom", "right"):
+        margin = margins.find(qn(f"w:{edge}"))
+        if margin is None:
+            margin = OxmlElement(f"w:{edge}")
+            margins.append(margin)
+        margin.set(qn("w:w"), value)
+        margin.set(qn("w:type"), "dxa")
+
+
 def _shade_paragraph(paragraph, *, fill: str) -> None:
     paragraph_properties = paragraph._p.get_or_add_pPr()
     shading = OxmlElement("w:shd")
@@ -291,7 +386,7 @@ def _shade_cell(cell, fill: str) -> None:
     tc_properties.append(shading)
 
 
-def _set_cell_borders(cell, theme: dict) -> None:
+def _set_cell_borders(cell, theme: dict, *, width_pt: float | None = None, color_key: str = "border") -> None:
     tc_properties = cell._tc.get_or_add_tcPr()
     borders = tc_properties.find(qn("w:tcBorders"))
     if borders is None:
@@ -303,9 +398,9 @@ def _set_cell_borders(cell, theme: dict) -> None:
             border = OxmlElement(f"w:{edge}")
             borders.append(border)
         border.set(qn("w:val"), "single")
-        border.set(qn("w:sz"), str(int(theme["strokes"]["card_border_pt"] * 8)))
+        border.set(qn("w:sz"), str(int((width_pt or theme["strokes"]["card_border_pt"]) * 8)))
         border.set(qn("w:space"), "0")
-        border.set(qn("w:color"), _theme_hex(theme, "border"))
+        border.set(qn("w:color"), _theme_hex(theme, color_key))
 
 
 def _repeat_table_header(row) -> None:

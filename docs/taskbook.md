@@ -207,9 +207,9 @@ class IRGenerator(Protocol):
 - Schema 冻结与快照测试:三份 JSON Schema 导出为文件入库,配 schema 快照测试;凡改动 IR 字段而未同步升 ir_version、未过评审的,CI 直接失败(见 §7.1),杜绝契约悄悄漂移。
 - IR 契约是唯一可信来源:任何人(含编码 agent)不得为了让某个样例通过而擅自放宽 Schema;确需变更时,先改 Schema + 升版本 + 更新正反样例,再改代码。
 
-### 3.1  WordIR v1.1(Word 输出契约,Step 1 核心)
+### 3.1  WordIR v1.2(Word 输出契约,Step 1 核心)
 
-顶层结构:meta(文档元信息)+ blocks(有序内容块数组)。meta 字段:title(必填)、subtitle、author、classification(密级,默认“内部公开”)、header_text、footer_text。blocks 类型枚举如下:
+顶层结构:meta(文档元信息)+ blocks(有序内容块数组)。meta 字段:title(必填)、subtitle、author、classification(密级,默认“内部公开”)、header_text、footer_text、可选 document_control。document_control 用于正式详设文档头:product_name、document_name、version 必填;classification 省略时沿用 meta.classification;prepared/reviewed/approved 均为 { name?, date? }，空值保留在控制表中而不省略行。blocks 类型枚举如下:
 
 | block.type | 必填字段 | 渲染要点 |
 | --- | --- | --- |
@@ -225,7 +225,7 @@ class IRGenerator(Protocol):
 
 ```
 {
-  "ir_type": "word", "ir_version": "1.1",
+  "ir_type": "word", "ir_version": "1.2",
   "meta": { "title": "XX 项目周报", "subtitle": "2026 年第 27 周",
             "author": "张三", "classification": "内部公开" },
   "blocks": [
@@ -249,7 +249,7 @@ class IRGenerator(Protocol):
 | E001 | Error | 剥壳后仍无法解析为 JSON。提示附原文前 200 字与常见原因(多个代码块、尾部逗号、被截断)。 |
 | E002 | Error | 缺少 meta.title 或为空白字符串。 |
 | E003 | Error | 出现未知 block.type,列出该块序号与允许的类型清单。 |
-| E004 | Error | 表格行列不规整,或超过 100 行 x 12 列上限。 |
+| E004 | Error | 表格行列不规整、文档控制信息表缺列或密级不合法，或超过 100 行 x 12 列上限。 |
 | E005 | Error | heading.level 不在 1-4 范围。 |
 | E006 | Error | 列表 items 为空数组。 |
 | W101 | Warning | 标题层级跳级(如 1 级直接到 3 级),按就近降一级渲染并提示。 |
@@ -257,7 +257,7 @@ class IRGenerator(Protocol):
 | W103 | Warning | 单元格 / 段落超长已按上限截断。 |
 | I201 | Info | 未提供 classification,已使用默认密级文案。 |
 
-渲染硬性要求:中文字体与字号、标题层级样式、段落间距、表格边框(0.5pt)、页眉(= title)、页脚(密级 + 页码)全部集中在渲染器 STYLES 常量,业务代码零散设置样式视为缺陷;产物必须是可编辑 DOCX,禁止图片化或只读输出。
+渲染硬性要求:中文字体与字号、标题层级样式、段落间距、表格边框(0.5pt)、页眉(= title)、页脚(密级 + 页码)全部集中在主题 token 与渲染器中;document_control 存在时正文前必须渲染产品/文档/密级/版本表和拟制/审核/批准/日期表;产物必须是可编辑 DOCX,禁止图片化或只读输出。
 
 ### 3.2  DocumentIR v1.2(输入侧契约,Step 2 核心)
 
@@ -330,7 +330,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 | 编号 | 任务 | 关键实现点 | 验收标准 | 预估 |
 | --- | --- | --- | --- | --- |
-| S1-1 | WordIR v1.1 定稿与校验器 | pydantic 模型;错误码表落码;validate_word_ir() 校验函数;Schema 快照导出 | 10 个非法样例逐一命中预期错误码;Schema 文件入库 | 1.0 天 |
+| S1-1 | WordIR v1.2 定稿与校验器 | pydantic 模型;错误码表落码;validate_word_ir() 校验函数;Schema 快照导出 | 10 个非法样例逐一命中预期错误码;Schema 文件入库 | 1.0 天 |
 | S1-2 | 剥壳器 + IR 修复回路 | 三形态剥壳(纯 JSON / 代码块 / 带解释);校验失败回喂错误码限重试 2 次;失败附原文前 200 字(见 §5.3) | 三形态用例全过;注入可修复错误经回路后通过,不可修复者稳定报 E00x | 1.0 天 |
 | S1-3 | DOCX 渲染核心 | 标题 1-4 级、段落、两级列表、quote/note、分页;页眉页脚 + 密级 + 页码;样式集中 STYLES | 样例 1、2 渲染后回读断言全过;Word 中可直接编辑 | 2.0 天 |
 | S1-4 | 表格渲染 | 表头加粗底纹、比例列宽、跨页续排(表头重复)、超限截断 + W103 | 样例 3 通过;100 行 x 12 列极限表可渲染不崩 | 1.0 天 |
@@ -359,7 +359,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 ```
 [角色] 你是企业文档结构化助手。
-[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.1(或 DeckIR v1.9)Schema。
+[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.2(或 DeckIR v1.9)Schema。
 [输出纪律] 只输出一个裸 JSON 对象,不得使用代码围栏或附加文字;不得新增 Schema 之外的字段;
           表格不超过 <上限>;要点每页不超过 7 条。
 [目标 Schema 摘要] <内嵌字段说明或精简 JSON Schema,由 ir 包自动生成,禁止手抄>

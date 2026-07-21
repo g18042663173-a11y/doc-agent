@@ -57,6 +57,92 @@
       "title": "CodeBlock",
       "type": "object"
     },
+    "ControlRecord": {
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "对应人员的日期；为空时保留空白占位单元格。",
+          "title": "Date"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "拟制、审核或批准人员姓名；为空时保留空白占位单元格。",
+          "title": "Name"
+        }
+      },
+      "title": "ControlRecord",
+      "type": "object"
+    },
+    "DocumentControl": {
+      "properties": {
+        "approved": {
+          "$ref": "#/$defs/ControlRecord",
+          "description": "批准人员与日期。"
+        },
+        "classification": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "文档头展示的密级；省略时使用 meta.classification，填写时必须与其一致。",
+          "title": "Classification"
+        },
+        "document_name": {
+          "description": "文档名称，通常与 meta.title 一致但可按正式名称单独填写。",
+          "minLength": 1,
+          "title": "Document Name",
+          "type": "string"
+        },
+        "prepared": {
+          "$ref": "#/$defs/ControlRecord",
+          "description": "拟制人员与日期。"
+        },
+        "product_name": {
+          "description": "产品名称，渲染在文档控制信息表第一行。",
+          "minLength": 1,
+          "title": "Product Name",
+          "type": "string"
+        },
+        "reviewed": {
+          "$ref": "#/$defs/ControlRecord",
+          "description": "审核人员与日期。"
+        },
+        "version": {
+          "description": "文档版本号，例如 V1.0。",
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "product_name",
+        "document_name",
+        "version"
+      ],
+      "title": "DocumentControl",
+      "type": "object"
+    },
     "HeadingBlock": {
       "properties": {
         "level": {
@@ -291,8 +377,21 @@
         },
         "classification": {
           "default": "内部公开",
+          "description": "页脚和文档头共用的受控密级文案。",
           "title": "Classification",
           "type": "string"
+        },
+        "document_control": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选华为详设文档控制信息；存在时在正文前渲染产品/版本表和拟制审核批准表。"
         },
         "footer_text": {
           "anyOf": [
@@ -396,7 +495,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "1.1",
+      "const": "1.2",
       "title": "Ir Version",
       "type": "string"
     },

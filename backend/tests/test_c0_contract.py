@@ -32,18 +32,19 @@ def test_word_ir_validates_minimal_report() -> None:
     )
 
     assert ir.meta.title == "周报"
-    assert ir.ir_version == "1.1"
+    assert ir.ir_version == "1.2"
     assert ir.blocks[0].type == "heading"
 
 
-def test_word_ir_v10_migrates_to_v11_without_mutating_input() -> None:
+@pytest.mark.parametrize("source_version", ["1.0", "1.1"])
+def test_word_ir_legacy_versions_migrate_to_v12_without_mutating_input(source_version: str) -> None:
     import copy
 
     from app.ir.word_ir import WordIR
 
     payload = {
         "ir_type": "word",
-        "ir_version": "1.0",
+        "ir_version": source_version,
         "meta": {"title": "旧版报告"},
         "blocks": [{"type": "paragraph", "text": "正文"}],
     }
@@ -51,8 +52,33 @@ def test_word_ir_v10_migrates_to_v11_without_mutating_input() -> None:
 
     migrated = WordIR.model_validate(payload)
 
-    assert migrated.ir_version == "1.1"
+    assert migrated.ir_version == "1.2"
     assert payload == original
+
+
+def test_word_ir_document_control_requires_matching_classification() -> None:
+    from pydantic import ValidationError
+
+    from app.ir.word_ir import WordIR
+
+    with pytest.raises(ValidationError, match="must match meta.classification"):
+        WordIR.model_validate(
+            {
+                "ir_type": "word",
+                "ir_version": "1.2",
+                "meta": {
+                    "title": "详设",
+                    "classification": "内部公开",
+                    "document_control": {
+                        "product_name": "产品",
+                        "document_name": "模块详设",
+                        "classification": "公开",
+                        "version": "V1.0",
+                    },
+                },
+                "blocks": [{"type": "paragraph", "text": "正文"}],
+            }
+        )
 
 
 def test_word_ir_rejects_empty_blocks() -> None:

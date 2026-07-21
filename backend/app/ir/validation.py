@@ -59,7 +59,7 @@ from app.ir.deck_ir import (
 from app.ir.document_ir import DocumentIR
 from app.ir.document_ir import DocumentContent, DocumentSource, DocumentStats
 from app.ir.errors import ValidationItem, ValidationResult
-from app.ir.word_ir import WordIR, WordMeta
+from app.ir.word_ir import ControlRecord, DocumentControl, WordIR, WordMeta
 
 
 MAX_WORD_TEXT_CHARS = 2000
@@ -170,6 +170,15 @@ def _collect_word_unknowns(data: Mapping[str, Any]) -> list[ValidationItem]:
     meta = data.get("meta")
     if isinstance(meta, Mapping):
         warnings.extend(_unknown_fields(meta, set(WordMeta.model_fields), "meta"))
+        control = meta.get("document_control")
+        if isinstance(control, Mapping):
+            warnings.extend(_unknown_fields(control, set(DocumentControl.model_fields), "meta.document_control"))
+            for record_name in ("prepared", "reviewed", "approved"):
+                record = control.get(record_name)
+                if isinstance(record, Mapping):
+                    warnings.extend(
+                        _unknown_fields(record, set(ControlRecord.model_fields), f"meta.document_control.{record_name}")
+                    )
     blocks = data.get("blocks")
     if isinstance(blocks, list):
         for index, block in enumerate(blocks):

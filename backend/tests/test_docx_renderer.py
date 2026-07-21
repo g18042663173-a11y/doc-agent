@@ -85,6 +85,84 @@ def test_render_word_ir_writes_header_footer_and_page_field(tmp_path: Path) -> N
     assert "PAGE" in footer_xml
 
 
+def test_render_word_ir_writes_document_control_tables_before_body(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.2",
+            "meta": {
+                "title": "链路控制模块详细设计",
+                "classification": "内部公开",
+                "document_control": {
+                    "product_name": "星载基带传输平台",
+                    "document_name": "链路控制模块详细设计",
+                    "version": "V1.0",
+                    "prepared": {"name": "张三", "date": "2026-07-21"},
+                    "reviewed": {"name": "李四", "date": "2026-07-22"},
+                    "approved": {"name": "王五", "date": "2026-07-23"},
+                },
+            },
+            "blocks": [{"type": "heading", "level": 1, "text": "功能设计"}],
+        }
+    )
+
+    output = render_word_ir(ir, tmp_path / "document-control.docx")
+    doc = Document(str(output))
+    xml = _word_package_xml(output)
+
+    assert doc.core_properties.category == "HW_DOCUMENT_CONTROL"
+    assert len(doc.tables) == 2
+    assert [[cell.text for cell in row.cells] for row in doc.tables[0].rows] == [
+        ["产品名称", "星载基带传输平台", "文档名称", "链路控制模块详细设计"],
+        ["密级", "内部公开", "版本号", "V1.0"],
+    ]
+    assert [[cell.text for cell in row.cells] for row in doc.tables[1].rows] == [
+        ["角色", "姓名", "日期"],
+        ["拟制", "张三", "2026-07-21"],
+        ["审核", "李四", "2026-07-22"],
+        ["批准", "王五", "2026-07-23"],
+    ]
+    assert "HW_DOCUMENT_CONTROL_INFO" in xml
+    assert "HW_DOCUMENT_CONTROL_APPROVAL" in xml
+    assert 'w:fill="F5F5F5"' in xml
+    assert "DDDDDD" in xml
+
+
+def test_render_word_ir_keeps_blank_document_control_signoff_cells(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.2",
+            "meta": {
+                "title": "部分签核详设",
+                "author": "张三",
+                "document_control": {
+                    "product_name": "产品",
+                    "document_name": "部分签核详设",
+                    "version": "V1.0",
+                    "prepared": {"date": "2026-07-21"},
+                },
+            },
+            "blocks": [{"type": "paragraph", "text": "正文"}],
+        }
+    )
+
+    doc = Document(str(render_word_ir(ir, tmp_path / "partial-control.docx")))
+
+    approval = doc.tables[1]
+    assert len(approval.rows) == 4
+    assert approval.cell(1, 1).text == "张三"
+    assert not approval.cell(2, 1).text.strip()
+    assert not approval.cell(2, 2).text.strip()
+    assert [approval.cell(row, 0).text for row in range(1, 4)] == ["拟制", "审核", "批准"]
+
+
 def test_render_word_ir_includes_page_break_xml(tmp_path: Path) -> None:
     from app.ir.word_ir import WordIR
     from app.rendering.docx_renderer import render_word_ir
