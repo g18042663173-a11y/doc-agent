@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>文档生成工作台</title>
+  <style>
+    :root {
+      --hw-red: #c7000b;
+      --hw-red-deep: #a30009;
+      --ink: #1d1d1a;
+      --muted: #666b70;
+      --line: #dfe3e6;
+      --line-strong: #c7cdd1;
+      --canvas: #f5f6f6;
+      --surface: #ffffff;
+      --surface-soft: #fafbfb;
+      --success: #2f7d4b;
+      --success-soft: #eef8f1;
+      --info: #346c89;
+      --info-soft: #eef5f8;
+      --warning: #a76518;
+      --warning-soft: #fff6e9;
+      --danger-soft: #fff1f2;
+      --radius: 6px;
+      --shadow: 0 2px 8px rgba(20, 29, 35, .06);
+      --page-max: 1180px;
+      --space-1: 8px;
+      --space-2: 12px;
+      --space-3: 16px;
+      --space-4: 24px;
+      --space-5: 32px;
+      --space-6: 48px;
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--canvas); }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background: var(--canvas);
+      font: 14px/1.55 "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; }
+
+    .topbar {
+      height: 68px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar__inner {
+      width: min(var(--page-max), calc(100% - 48px));
+      height: 100%;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand__mark {
+      width: 28px;
+      height: 28px;
+      background: var(--hw-red);
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .brand__mark::after {
+      content: "";
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      right: 4px;
+      bottom: 4px;
+      background: var(--surface);
+    }
+    .brand__name { font-size: 16px; font-weight: 700; white-space: nowrap; }
+    .brand__divider { width: 1px; height: 18px; background: var(--line); }
+    .brand__product { color: var(--muted); white-space: nowrap; }
+    .topbar__state {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .state-dot { width: 7px; height: 7px; background: var(--success); border-radius: 50%; }
+
+    main { width: min(var(--page-max), calc(100% - 48px)); margin: 0 auto; padding: var(--space-5) 0 var(--space-6); }
+    .page-heading { margin-bottom: var(--space-4); display: flex; justify-content: space-between; align-items: end; gap: var(--space-3); }
+    .eyebrow { margin: 0 0 6px; color: var(--hw-red); font-size: 12px; font-weight: 700; }
+    h1 { margin: 0; font-size: 28px; line-height: 1.25; font-weight: 700; }
+    .page-heading p { margin: 8px 0 0; color: var(--muted); }
+    .contract-note { color: var(--muted); font-size: 12px; text-align: right; }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .9fr); gap: var(--space-4); align-items: start; }
+    .surface { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .workflow { overflow: hidden; }
+    .section { padding: var(--space-4); border-bottom: 1px solid var(--line); }
+    .section:last-child { border-bottom: 0; }
+    .section-heading { display: flex; align-items: baseline; gap: 10px; margin-bottom: var(--space-3); }
+    .section-number { color: var(--hw-red); font-size: 12px; font-weight: 700; }
+    h2 { margin: 0; font-size: 16px; line-height: 1.3; }
+    .section-subtitle { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+
+    .dropzone {
+      min-height: 176px;
+      display: grid;
+      place-items: center;
+      padding: var(--space-4);
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      text-align: center;
+      background: var(--surface-soft);
+      transition: border-color .16s ease, background .16s ease;
+    }
+    .dropzone.is-dragover { border-color: var(--hw-red); background: #fff8f8; }
+    .dropzone.is-file { display: block; min-height: auto; padding: 0; background: var(--surface); border-style: solid; }
+    .upload-icon {
+      width: 34px;
+      height: 34px;
+      margin: 0 auto 10px;
+      border: 1px solid var(--line-strong);
+      position: relative;
+      background: var(--surface);
+    }
+    .upload-icon::before { content: ""; position: absolute; top: 8px; left: 15px; width: 2px; height: 12px; background: var(--hw-red); }
+    .upload-icon::after { content: ""; position: absolute; top: 8px; left: 11px; width: 8px; height: 8px; border-left: 2px solid var(--hw-red); border-top: 2px solid var(--hw-red); transform: rotate(45deg); }
+    .dropzone__title { margin: 0; font-weight: 700; }
+    .dropzone__hint { margin: 5px 0 14px; color: var(--muted); font-size: 12px; }
+    .file-input { display: none; }
+    .button { min-height: 36px; padding: 0 14px; border: 1px solid transparent; border-radius: 4px; font-weight: 700; transition: background .16s ease, border-color .16s ease, color .16s ease; }
+    .button--primary { background: var(--hw-red); color: #fff; }
+    .button--primary:hover:not(:disabled) { background: var(--hw-red-deep); }
+    .button--secondary { color: var(--ink); border-color: var(--line-strong); background: #fff; }
+    .button--secondary:hover:not(:disabled) { border-color: var(--hw-red); color: var(--hw-red); }
+    .button:disabled { color: #a8adb1; background: #edf0f1; border-color: #edf0f1; }
+    .file-row { display: flex; align-items: center; gap: 12px; padding: 13px 14px; text-align: left; }
+    .file-badge { display: grid; place-items: center; width: 35px; height: 35px; background: #fbe9eb; color: var(--hw-red); font-size: 10px; font-weight: 700; }
+    .file-meta { min-width: 0; flex: 1; }
+    .file-name { display: block; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .file-size { display: block; color: var(--muted); font-size: 12px; }
+    .file-remove { padding: 6px; border: 0; color: var(--muted); background: transparent; font-size: 18px; line-height: 1; }
+    .file-remove:hover { color: var(--hw-red); }
+
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+    .field-label { display: block; margin-bottom: 9px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    .segment { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+    .segment--three { grid-template-columns: repeat(3, 1fr); }
+    .segment button { min-height: 35px; padding: 0 9px; border: 0; border-right: 1px solid var(--line-strong); color: var(--muted); background: var(--surface); font-size: 13px; }
+    .segment button:last-child { border-right: 0; }
+    .segment button.is-selected { color: var(--hw-red); background: #fff5f5; font-weight: 700; box-shadow: inset 0 -2px 0 var(--hw-red); }
+    .segment.is-disabled { opacity: .42; pointer-events: none; }
+    .action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: var(--space-4); }
+    .action-note { color: var(--muted); font-size: 12px; }
+
+    .analysis { display: none; background: var(--info-soft); border: 1px solid #d7e9f1; }
+    .analysis.is-visible { display: block; }
+    .analysis-summary { display: flex; justify-content: space-between; gap: var(--space-3); align-items: center; }
+    .analysis-summary strong { font-size: 16px; }
+    .recommended { display: inline-flex; align-items: center; padding: 3px 8px; color: var(--info); background: #fff; border: 1px solid #c8e1ec; font-size: 12px; font-weight: 700; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin: 14px 0; }
+    .metric { padding: 10px; background: rgba(255,255,255,.72); border: 1px solid #d7e9f1; }
+    .metric b { display: block; font-size: 19px; line-height: 1.1; }
+    .metric span { color: var(--muted); font-size: 11px; }
+    .tier-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .tier { padding: 9px; border: 1px solid #d7e9f1; background: rgba(255,255,255,.54); color: var(--muted); font-size: 12px; }
+    .tier.is-recommended { border-color: var(--info); color: var(--ink); background: #fff; }
+    .tier b { display: block; color: var(--ink); }
+
+    .progress-panel { display: none; }
+    .progress-panel.is-visible { display: block; }
+    .progress-top { display: flex; justify-content: space-between; gap: var(--space-3); align-items: center; }
+    .progress-title { font-weight: 700; }
+    .elapsed { color: var(--muted); font-size: 12px; }
+    .progress-track { height: 5px; margin: 14px 0 13px; background: #e8ecee; overflow: hidden; }
+    .progress-fill { width: 0%; height: 100%; background: var(--hw-red); transition: width .4s ease; }
+    .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .step { color: #9aa1a5; font-size: 11px; text-align: center; }
+    .step::before { content: ""; display: block; width: 7px; height: 7px; margin: 0 auto 5px; border: 1px solid #b8bec2; border-radius: 50%; background: #fff; }
+    .step.is-active, .step.is-done { color: var(--ink); }
+    .step.is-active::before { border-color: var(--hw-red); background: var(--hw-red); box-shadow: 0 0 0 3px #fde9eb; }
+    .step.is-done::before { border-color: var(--success); background: var(--success); }
+
+    .result { display: none; }
+    .result.is-visible { display: block; }
+    .result--success { background: var(--success-soft); border: 1px solid #cde7d5; }
+    .result--error { background: var(--danger-soft); border: 1px solid #f1cbd0; }
+    .result__row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+    .result__title { margin: 0; font-size: 16px; }
+    .result__detail { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .lint-summary { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+    .lint-chip { padding: 3px 7px; border: 1px solid transparent; font-size: 11px; font-weight: 700; }
+    .lint-chip--error { color: #aa2632; border-color: #efc4c9; background: #fff; }
+    .lint-chip--warning { color: var(--warning); border-color: #efd8b7; background: #fff; }
+    .lint-chip--info { color: var(--info); border-color: #c8e1ec; background: #fff; }
+    .lint-items { margin: 11px 0 0; padding: 0; list-style: none; }
+    .lint-items li { padding: 7px 0; border-top: 1px solid rgba(47, 125, 75, .16); color: var(--muted); font-size: 12px; }
+    .lint-items b { color: var(--ink); }
+
+    .side-panel { padding: var(--space-4); }
+    .side-panel + .side-panel { border-top: 1px solid var(--line); }
+    .side-label { margin: 0 0 8px; color: var(--hw-red); font-size: 11px; font-weight: 700; }
+    h3 { margin: 0; font-size: 16px; line-height: 1.35; }
+    .side-panel p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .pipeline { margin: 18px 0 0; padding: 0; list-style: none; }
+    .pipeline li { position: relative; display: flex; align-items: center; gap: 10px; padding: 0 0 13px; color: var(--muted); font-size: 12px; }
+    .pipeline li:last-child { padding-bottom: 0; }
+    .pipeline li::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; border: 1px solid var(--line-strong); border-radius: 50%; background: #fff; z-index: 1; }
+    .pipeline li:not(:last-child)::after { content: ""; position: absolute; top: 9px; left: 4px; width: 1px; height: 13px; background: var(--line); }
+    .pipeline li:first-child::before { background: var(--hw-red); border-color: var(--hw-red); }
+    .status-card { margin-top: var(--space-3); padding: 13px; background: var(--surface-soft); border-left: 3px solid var(--hw-red); }
+    .status-card strong { display: block; font-size: 13px; }
+    .status-card span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .privacy-note { display: flex; gap: 9px; align-items: flex-start; }
+    .privacy-mark { width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid var(--line-strong); color: var(--hw-red); font-size: 11px; font-weight: 700; flex: 0 0 auto; }
+
+    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 3; max-width: min(420px, calc(100% - 40px)); padding: 12px 14px; color: #fff; background: #333; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .18s ease, transform .18s ease; }
+    .toast.is-visible { opacity: 1; transform: translateY(0); }
+    .toast.is-error { background: var(--hw-red); }
+
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: 1fr; }
+      .side { display: grid; grid-template-columns: 1fr 1fr; }
+      .side-panel + .side-panel { border-top: 0; border-left: 1px solid var(--line); }
+    }
+    @media (max-width: 620px) {
+      .topbar { height: auto; }
+      .topbar__inner, main { width: min(100% - 28px, var(--page-max)); }
+      .topbar__inner { padding: 14px 0; }
+      .brand__divider, .brand__product, .topbar__state { display: none; }
+      main { padding: 26px 0 36px; }
+      .page-heading { align-items: start; }
+      .contract-note { display: none; }
+      h1 { font-size: 23px; }
+      .section, .side-panel { padding: 18px; }
+      .options-grid, .side { grid-template-columns: 1fr; }
+      .side-panel + .side-panel { border-top: 1px solid var(--line); border-left: 0; }
+      .metrics, .tier-list { grid-template-columns: 1fr; }
+      .result__row, .analysis-summary { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <div class="brand" aria-label="文档生成工作台">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <span class="brand__name">文档生成</span>
+        <span class="brand__divider" aria-hidden="true"></span>
+        <span class="brand__product">离线智能文档工具链</span>
+      </div>
+      <div class="topbar__state"><span class="state-dot" aria-hidden="true"></span>本地服务已连接</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">DOCUMENT WORKBENCH</p>
+        <h1>从资料到可编辑交付文档</h1>
+        <p>上传源文件，分析内容规模，生成并复检 Word 或 PPTX 产物。</p>
+      </div>
+      <div class="contract-note">解析 &rarr; IR &rarr; 渲染 &rarr; 合规检查</div>
+    </div>
+
+    <div class="layout">
+      <section class="surface workflow" aria-label="生成工作流">
+        <div class="section">
+          <div class="section-heading"><span class="section-number">01</span><div><h2>导入资料</h2><p class="section-subtitle">支持 Markdown、Word、Excel、PowerPoint</p></div></div>
+          <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="上传资料，支持拖放">
+            <div id="dropzoneEmpty">
+              <div class="upload-icon" aria-hidden="true"></div>
+              <p class="dropzone__title">拖放文件到此处，或选择本地文件</p>
+              <p class="dropzone__hint">.md &nbsp; .docx &nbsp; .xlsx &nbsp; .pptx</p>
+              <button id="browseButton" class="button button--secondary" type="button">选择文件</button>
+            </div>
+            <div id="dropzoneFile" hidden></div>
+            <input id="fileInput" class="file-input" type="file" accept=".md,.docx,.xlsx,.pptx">
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-heading"><span class="section-number">02</span><div><h2>设置交付方式</h2><p class="section-subtitle">PPT 可按内容密度选择生成深度</p></div></div>
+          <div class="options-grid">
+            <div>
+              <span class="field-label">生成类型</span>
+              <div class="segment" role="group" aria-label="生成类型">
+                <button class="type-option" type="button" data-type="word">Word 详设</button>
+                <button class="type-option is-selected" type="button" data-type="deck">PPT 汇报</button>
+              </div>
+            </div>
+            <div>
+              <span class="field-label">PPT 生成深度</span>
+              <div id="depthSegment" class="segment segment--three" role="group" aria-label="PPT 生成深度">
+                <button class="depth-option" type="button" data-depth="概览">概览</button>
+                <button class="depth-option is-selected" type="button" data-depth="标准">标准</button>
+                <button class="depth-option" type="button" data-depth="详细">详细</button>
+              </div>
+            </div>
+          </div>
+          <div class="action-row">
+            <button id="analyzeButton" class="button button--secondary" type="button" disabled>分析资料</button>
+            <button id="generateButton" class="button button--primary" type="button" disabled>开始生成</button>
+            <span id="actionNote" class="action-note">请先选择一份资料</span>
+          </div>
+        </div>
+
+        <div id="analysisPanel" class="section analysis" aria-live="polite">
+          <div class="analysis-summary"><div><span class="field-label">内容分析建议</span><strong id="analysisReason">正在读取资料结构</strong></div><span id="recommendedDepth" class="recommended">推荐：--</span></div>
+          <div class="metrics">
+            <div class="metric"><b id="metricTitles">--</b><span>标题数量</span></div>
+            <div class="metric"><b id="metricLevels">--</b><span>最大层级</span></div>
+            <div class="metric"><b id="metricTables">--</b><span>表格数量</span></div>
+          </div>
+          <div id="tierList" class="tier-list"></div>
+        </div>
+
+        <div id="progressPanel" class="section progress-panel" aria-live="polite">
+          <div class="progress-top"><div><span class="field-label">生成进度</span><div id="progressTitle" class="progress-title">等待任务启动</div></div><span id="elapsed" class="elapsed">已用时 00:00</span></div>
+          <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+          <div class="stepper" aria-label="生成阶段">
+            <div class="step" data-step="parsing">解析资料</div>
+            <div class="step" data-step="generating">生成内容</div>
+            <div class="step" data-step="rendering">渲染文档</div>
+            <div class="step" data-step="linting">合规检查</div>
+          </div>
+        </div>
+
+        <div id="resultPanel" class="section result" aria-live="polite">
+          <div class="result__row"><div><h2 id="resultTitle" class="result__title">生成完成</h2><p id="resultDetail" class="result__detail"></p></div><a id="downloadButton" class="button button--primary" href="#" hidden>下载产物</a></div>
+          <div id="lintSummary" class="lint-summary"></div>
+          <ul id="lintItems" class="lint-items"></ul>
+        </div>
+      </section>
+
+      <aside class="surface side" aria-label="使用说明">
+        <div class="side-panel">
+          <p class="side-label">PROCESS</p>
+          <h3>每一步都可复核</h3>
+          <p>源文件不会直接进入渲染器。系统先解析为结构化中间表示，再生成可编辑交付件。</p>
+          <ol class="pipeline"><li>结构化解析</li><li>内容生成与校验</li><li>可编辑文档渲染</li><li>主题与版式复检</li></ol>
+          <div class="status-card"><strong>当前使用：Stub 生成器</strong><span>用于本地确定性验证。内网模型接入后可替换生成器，不改变前端调用方式。</span></div>
+        </div>
+        <div class="side-panel">
+          <div class="privacy-note"><span class="privacy-mark" aria-hidden="true">i</span><div><h3>使用边界</h3><p>合规检查能发现结构、主题和版式规则问题；最终语义与视觉交付仍应由业务人员复核。</p></div></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script>
+    (() => {
+      const state = { file: null, type: "deck", depth: "标准", jobId: null, timer: null, elapsedTimer: null, startedAt: null, busy: false };
+      const stageText = { queued: "任务已创建，等待执行", parsing: "正在解析源文件", generating: "正在生成结构化内容", rendering: "正在渲染可编辑文档", linting: "正在执行合规检查", done: "交付件已准备完成", validation_failed: "IR 校验未通过", failed: "任务执行失败" };
+      const stageOrder = ["parsing", "generating", "rendering", "linting"];
+      const el = (id) => document.getElementById(id);
+      const dropzone = el("dropzone");
+      const fileInput = el("fileInput");
+      const browseButton = el("browseButton");
+      const typeOptions = [...document.querySelectorAll(".type-option")];
+      const depthOptions = [...document.querySelectorAll(".depth-option")];
+
+      const setBusy = (busy) => {
+        state.busy = busy;
+        fileInput.disabled = busy;
+        typeOptions.forEach((button) => button.disabled = busy);
+        depthOptions.forEach((button) => button.disabled = busy);
+        updateActions();
+      };
+
+      const updateActions = () => {
+        const available = Boolean(state.file) && !state.busy;
+        el("analyzeButton").disabled = !available;
+        el("generateButton").disabled = !available;
+        el("actionNote").textContent = state.busy ? "任务运行中，请保留此页面以查看进度" : state.file ? "可先分析内容规模，再开始生成" : "请先选择一份资料";
+      };
+
+      const formatBytes = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      const extension = (file) => (file.name.split(".").pop() || "FILE").toUpperCase();
+      const showToast = (message, isError = false) => {
+        const toast = el("toast");
+        toast.textContent = message;
+        toast.className = `toast is-visible${isError ? " is-error" : ""}`;
+        window.clearTimeout(showToast.timer);
+        showToast.timer = window.setTimeout(() => { toast.className = "toast"; }, 3200);
+      };
+
+      const selectFile = (file) => {
+        if (!file) return;
+        const allowed = ["md", "docx", "xlsx", "pptx"];
+        if (!allowed.includes(extension(file).toLowerCase())) { showToast("仅支持 .md、.docx、.xlsx、.pptx 文件", true); return; }
+        state.file = file;
+        dropzone.classList.add("is-file");
+        el("dropzoneEmpty").hidden = true;
+        const fileView = el("dropzoneFile");
+        fileView.hidden = false;
+        fileView.innerHTML = "";
+        const row = document.createElement("div"); row.className = "file-row";
+        const badge = document.createElement("span"); badge.className = "file-badge"; badge.textContent = extension(file);
+        const meta = document.createElement("span"); meta.className = "file-meta";
+        const name = document.createElement("span"); name.className = "file-name"; name.textContent = file.name;
+        const size = document.createElement("span"); size.className = "file-size"; size.textContent = `${formatBytes(file.size)} · 已就绪`;
+        const remove = document.createElement("button"); remove.className = "file-remove"; remove.type = "button"; remove.setAttribute("aria-label", "移除文件"); remove.textContent = "×";
+        remove.addEventListener("click", clearFile);
+        meta.append(name, size); row.append(badge, meta, remove); fileView.append(row);
+        hideResult(); updateActions();
+      };
+
+      const clearFile = () => {
+        if (state.busy) return;
+        state.file = null; fileInput.value = "";
+        dropzone.classList.remove("is-file"); el("dropzoneEmpty").hidden = false; el("dropzoneFile").hidden = true;
+        el("analysisPanel").classList.remove("is-visible"); hideResult(); updateActions();
+      };
+      const hideResult = () => { el("resultPanel").className = "section result"; el("downloadButton").hidden = true; el("lintItems").replaceChildren(); el("lintSummary").replaceChildren(); };
+      const formDataForFile = () => { const data = new FormData(); data.append("input_file", state.file); return data; };
+      const readJson = async (response) => { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error?.message || `请求失败（${response.status}）`); return data; };
+
+      browseButton.addEventListener("click", (event) => { event.stopPropagation(); fileInput.click(); });
+      dropzone.addEventListener("click", () => { if (!state.file && !state.busy) fileInput.click(); });
+      dropzone.addEventListener("keydown", (event) => { if ((event.key === "Enter" || event.key === " ") && !state.file && !state.busy) { event.preventDefault(); fileInput.click(); } });
+      fileInput.addEventListener("change", () => selectFile(fileInput.files?.[0]));
+      ["dragenter", "dragover"].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); if (!state.busy) dropzone.classList.add("is-dragover"); }));
+      ["dragleave", "drop"].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); dropzone.classList.remove("is-dragover"); }));
+      dropzone.addEventListener("drop", (event) => { if (!state.busy) selectFile(event.dataTransfer.files?.[0]); });
+
+      typeOptions.forEach((button) => button.addEventListener("click", () => { state.type = button.dataset.type; typeOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); el("depthSegment").classList.toggle("is-disabled", state.type !== "deck"); updateActions(); }));
+      depthOptions.forEach((button) => button.addEventListener("click", () => { state.depth = button.dataset.depth; depthOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); }));
+
+      el("analyzeButton").addEventListener("click", async () => {
+        if (!state.file || state.busy) return;
+        setBusy(true); el("analyzeButton").textContent = "分析中...";
+        try {
+          const response = await fetch("/api/analyze", { method: "POST", body: formDataForFile() });
+          const data = await readJson(response);
+          renderAnalysis(data); showToast("资料分析已完成");
+        } catch (error) { showToast(error.message || "分析失败", true); }
+        finally { el("analyzeButton").textContent = "分析资料"; setBusy(false); }
+      });
+
+      const renderAnalysis = (data) => {
+        const metrics = data.metrics || {};
+        el("metricTitles").textContent = metrics.title_count ?? "--";
+        el("metricLevels").textContent = `${metrics.max_heading_depth ?? "--"} 级`;
+        el("metricTables").textContent = metrics.table_count ?? "--";
+        el("analysisReason").textContent = data.recommended_reason || "已根据资料结构给出建议";
+        el("recommendedDepth").textContent = `推荐：${data.recommended_depth}`;
+        const tiers = el("tierList"); tiers.replaceChildren();
+        (data.tiers || []).forEach((tier) => {
+          const item = document.createElement("div"); item.className = `tier${tier.depth === data.recommended_depth ? " is-recommended" : ""}`;
+          const label = document.createElement("b"); label.textContent = `${tier.depth} · ${tier.min_pages}-${tier.max_pages} 页`;
+          const coverage = document.createElement("span"); coverage.textContent = tier.coverage;
+          item.append(label, coverage); tiers.append(item);
+        });
+        el("analysisPanel").classList.add("is-visible");
+        if (state.type === "deck" && data.recommended_depth) {
+          state.depth = data.recommended_depth;
+          depthOptions.forEach((button) => button.classList.toggle("is-selected", button.dataset.depth === state.depth));
+        }
+      };
+
+      el("generateButton").addEventListener("click", async () => {
+        if (!state.file || state.busy) return;
+        hideResult(); setBusy(true); startProgress();
+        try {
+          const data = formDataForFile(); data.append("type", state.type); if (state.type === "deck") data.append("depth", state.depth);
+          const response = await fetch("/api/generate", { method: "POST", body: data });
+          const job = await readJson(response);
+          state.jobId = job.job_id; renderProgress(job); pollJob();
+        } catch (error) { finishFailure({ error: { message: error.message || "无法创建生成任务" } }); }
+      });
+
+      const startProgress = () => {
+        state.startedAt = Date.now(); el("progressPanel").classList.add("is-visible"); el("progressFill").style.width = "0%"; el("progressTitle").textContent = "正在创建任务";
+        window.clearInterval(state.elapsedTimer); state.elapsedTimer = window.setInterval(() => { const seconds = Math.floor((Date.now() - state.startedAt) / 1000); el("elapsed").textContent = `已用时 ${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }, 1000);
+      };
+      const renderProgress = (job) => {
+        const progress = job.progress || {}; const stage = progress.stage || "queued"; const percent = Number(progress.percent || 0);
+        el("progressTitle").textContent = stageText[stage] || "正在处理"; el("progressFill").style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        const current = stageOrder.indexOf(stage);
+        document.querySelectorAll(".step").forEach((step, index) => { step.classList.toggle("is-active", index === current && stage !== "done"); step.classList.toggle("is-done", stage === "done" || (current > index)); });
+      };
+      const pollJob = async () => {
+        window.clearTimeout(state.timer);
+        try {
+          const response = await fetch(`/api/status/${encodeURIComponent(state.jobId)}`); const job = await readJson(response); renderProgress(job);
+          if (job.status === "done") return finishSuccess(job);
+          if (job.status === "failed") return finishFailure(job);
+          state.timer = window.setTimeout(pollJob, 700);
+        } catch (error) { finishFailure({ error: { message: error.message || "无法查询任务状态" } }); }
+      };
+      const stopProgress = () => { window.clearTimeout(state.timer); window.clearInterval(state.elapsedTimer); };
+      const finishSuccess = (job) => {
+        stopProgress(); setBusy(false); renderProgress({ progress: { stage: "done", percent: 100 } });
+        const panel = el("resultPanel"); panel.className = "section result result--success is-visible";
+        el("resultTitle").textContent = "生成完成，产物已通过流程检查"; el("resultDetail").textContent = `${job.artifact?.name || "文档"} 已准备就绪，可直接下载并进行人工复核。`;
+        const download = el("downloadButton"); download.href = job.artifact?.download_url || "#"; download.hidden = false; download.textContent = `下载 ${job.artifact?.name || "产物"}`;
+        renderLint(job.report); showToast("生成完成，产物可下载");
+      };
+      const finishFailure = (job) => {
+        stopProgress(); setBusy(false);
+        const panel = el("resultPanel"); panel.className = "section result result--error is-visible";
+        el("resultTitle").textContent = "生成未完成"; el("resultDetail").textContent = job.error?.message || "任务执行失败，请检查输入文件或稍后重试。";
+        const details = job.error?.items || []; const list = el("lintItems"); list.replaceChildren();
+        details.slice(0, 3).forEach((item) => { const row = document.createElement("li"); const code = document.createElement("b"); code.textContent = `${item.code || "Error"} `; row.append(code, document.createTextNode(item.message || "校验失败")); list.append(row); });
+        showToast("生成任务失败", true);
+      };
+      const renderLint = (report) => {
+        const summary = report?.summary || {}; const chips = el("lintSummary"); const list = el("lintItems"); chips.replaceChildren(); list.replaceChildren();
+        [["Error", summary.errors || 0, "error"], ["Warning", summary.warnings || 0, "warning"], ["Info", summary.infos || 0, "info"]].forEach(([label, count, kind]) => { const chip = document.createElement("span"); chip.className = `lint-chip lint-chip--${kind}`; chip.textContent = `${label} ${count}`; chips.append(chip); });
+        (report?.items || []).slice(0, 3).forEach((item) => { const row = document.createElement("li"); const code = document.createElement("b"); code.textContent = `${item.code} `; row.append(code, document.createTextNode(item.message)); list.append(row); });
+      };
+      updateActions();
+    })();
+  </script>
+</body>
+</html>

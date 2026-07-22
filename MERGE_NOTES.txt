@@ -1,0 +1,53 @@
+前端接口迁移说明
+================
+
+本迁移包只包含本轮 Web API、同源前端页面及其测试，不包含仓库、.git、output、依赖缓存或审计文档。
+
+一、放置路径
+------------
+
+将包内的以下文件复制到内网仓库的同名相对路径：
+
+- backend/app/web_api.py
+- backend/app/static/index.html
+- backend/tests/test_web_api.py
+- backend/tests/test_web_api_static.py
+
+二、启动与访问
+--------------
+
+在仓库根目录启动：
+
+    PYTHONPATH=backend python -m app.web_api --host 127.0.0.1 --port 5056
+
+浏览器访问：
+
+    http://127.0.0.1:5056/static/index.html
+
+Flask 会自动以同源方式提供 backend/app/static/index.html；前端仅调用相对路径 /api/*，不需要另配 CORS 或前端开发服务器。
+
+三、接口与运行方式
+------------------
+
+- POST /api/analyze：上传 input_file，返回页数/深度分析。
+- POST /api/generate：上传 input_file，并提交 type=word|deck；deck 可额外提交 depth=概览|标准|详细。接口立即返回 202 与 job_id。
+- GET /api/status/<job_id>：轮询异步任务的阶段、百分比、lint 结果或错误。
+- GET /api/download/<job_id>：任务完成后下载 DOCX 或 PPTX。
+
+当前 Mac 验证默认使用确定性的 StubGenerator。内网接入真实模型时，请只替换
+backend/app/web_api.py 的 create_api_app() 中 API_GENERATOR 的默认解析逻辑（当前为
+generator or StubGenerator()），改为调用内网仓库已有的统一 CodeAgent/配置解析器。
+保留 IRTextGenerator.generate(prompt, target=...) 调用契约，以及 API 路由、异步任务、
+剥壳、IR 校验、渲染和 lint 流程。不要直接让模型文本进入渲染器。
+
+本仓库的 NgaGenerator 是内网集成占位实现，不应假定可直接使用；请使用内网现有的真实
+适配器名称与配置方式。
+
+四、迁移后验证
+----------------
+
+    PYTHONPATH=backend python -m pytest backend/tests/test_web_api.py backend/tests/test_web_api_static.py -q
+    python scripts/verify.py
+
+首次接入真实模型后，还应使用脱敏的 md/docx/xlsx/pptx 文件完成一次人工端到端验证，重点检查
+生成耗时、失败状态、错误码、下载产物和中文字体下的视觉效果。
