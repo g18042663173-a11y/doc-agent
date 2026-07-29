@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -85,3 +87,15 @@ def test_desktop_host_binds_loopback_random_port_and_writes_path_free_state(
     assert state["port"] == 54321
     assert state["parent_pid"] == os.getpid()
     assert "session" not in json.dumps(state).lower()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows process handle semantics")
+def test_process_probe_rejects_terminated_process_with_an_open_handle() -> None:
+    process = subprocess.Popen([sys.executable, "-c", "pass"], encoding="utf-8")
+    try:
+        process.wait(timeout=10)
+
+        assert desktop_host._process_exists(process.pid) is False
+        assert desktop_host._process_exists(os.getpid()) is True
+    finally:
+        process._handle.Close()

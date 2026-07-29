@@ -290,7 +290,8 @@
 - NGA Token 只由 WPF 写入 Windows Credential Manager `HuaweiDocumentGenerator/NGA`；非敏感配置位于 `%LOCALAPPDATA%\HuaweiDocumentGenerator\settings.json`。任务状态、失败报告、API 响应和便携包不包含凭据。
 - 桌面宿主使用 Waitress 绑定 `127.0.0.1` 随机端口；一次性 bootstrap 由当前 Windows 用户 ACL 保护，后端读取即删。后端状态文件不含会话密钥，父进程退出后看门狗停止服务。
 - 便携构建脚本锁定 .NET SDK 8.0.423、CPython embeddable 3.12.10 和 Graphviz 15.1.0，输出运行时清单、第三方许可、逐文件 SHA-256 与 ZIP SHA-256；生产包排除 xUnit/FlaUI/Playwright、缓存、设置、凭据和任务。
-- 最新验证：`verify.ps1` 通过，Graphviz 使用 `C:\Program Files\Graphviz\bin\dot.exe`；覆盖率 parsers 93.51%、IR 93.82%、lint 94.34%、整体 88.82%。可靠性报告 `output/qa/windows-native-final/report.json` 为 612 项、597 通过、15 跳过、0 失败；1280x900 与 390x844 浏览器工作台均通过。WPF build 为 0 warning/0 error，xUnit/FlaUI 3/3 通过。
+- 修复 Windows 异常退出生命周期：`OpenProcess` 能打开“已退出但句柄仍被测试框架持有”的进程，旧探测会误判为存活并留下 pythonw。当前同时使用 `GetExitCodeProcess == STILL_ACTIVE` 判定，并增加真实 Windows 进程句柄回归；WPF 测试后确认无遗留 `app.desktop_host`。
+- 最新验证：`verify.ps1` 通过，Graphviz 使用 `C:\Program Files\Graphviz\bin\dot.exe`；覆盖率 parsers 93.51%、IR 93.82%、lint 94.34%、整体 88.82%。可靠性报告 `output/qa/windows-native-final/report.json` 为 613 项、598 通过、15 跳过、0 失败；1280x900 与 390x844 浏览器工作台均通过。WPF build 为 0 warning/0 error，xUnit/FlaUI 3/3 通过。
 
 ### 降级或近似
 
