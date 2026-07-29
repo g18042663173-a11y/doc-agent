@@ -206,6 +206,20 @@
       "default": null,
       "title": "Expires At"
     },
+    "generator_name": {
+      "default": "stub",
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "title": "Generator Name",
+      "type": "string"
+    },
+    "generator_revision": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Generator Revision",
+      "type": "integer"
+    },
     "idempotency_key": {
       "anyOf": [
         {

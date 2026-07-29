@@ -4,6 +4,7 @@ import argparse
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+import hmac
 import json
 from pathlib import Path
 from queue import Full, Queue
@@ -15,14 +16,18 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from flask import Flask, jsonify, request, send_file
+from pydantic import ValidationError
 
 from app.assets.errors import AssetError
 from app.assets.pipeline import AssetRegistry, load_asset_manifest, normalize_assets
 from app.assets.extract import extract_office_image_files
 from app.cli.parse import parse_file
+from app.diagnostics import build_runtime_diagnostics
 from app.generation.analysis import build_analysis_prompt, measure_document, validate_analysis_text
 from app.generation.depth import GenerationOptions, generate_deck
 from app.generators.interface import IRTextGenerator
+from app.generators.manager import GeneratorManager
+from app.generators.nga import NgaGeneratorError, NgaHttpConfig
 from app.generators.stub import StubGenerator
 from app.ir.document_ir import DocumentIR
 from app.ir.errors import ValidationResult
@@ -73,7 +78,7 @@ DEFAULT_JOB_TIMEOUT_SECONDS = 900.0
 DEFAULT_QUEUE_CAPACITY = 4
 DEFAULT_RETENTION_HOURS = 24
 DEFAULT_RATE_LIMIT_PER_MINUTE = 30
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.0"
 API_VERSION = "1.0"
 
 
@@ -83,6 +88,8 @@ class ApiJob:
     target: TargetKind
     depth: Depth | None
     work_dir: Path
+    generator_name: str = "stub"
+    generator_revision: int = 0
     status: JobStatus = "pending"
     stage: str = "queued"
     progress_percent: int = 0
@@ -104,6 +111,10 @@ class ApiJob:
             "job_id": self.job_id,
             "type": self.target,
             "depth": self.depth,
+            "generator": {
+                "name": self.generator_name,
+                "revision": self.generator_revision,
+            },
             "status": self.status,
             "progress": {"stage": self.stage, "percent": self.progress_percent},
         }
@@ -146,6 +157,8 @@ class JobStore:
         target: TargetKind,
         depth: Depth | None,
         work_dir: Path,
+        generator_name: str = "stub",
+        generator_revision: int = 0,
         template_path: Path | None = None,
         asset_manifest_path: Path | None = None,
         idempotency_key: str | None = None,
@@ -155,6 +168,8 @@ class JobStore:
             target=target,
             depth=depth,
             work_dir=work_dir,
+            generator_name=generator_name,
+            generator_revision=generator_revision,
             template_path=template_path,
             asset_manifest_path=asset_manifest_path,
             idempotency_key=idempotency_key,
@@ -202,6 +217,15 @@ class JobStore:
                 counts[job.status] += 1
             counts["total"] = len(self._jobs)
             return counts
+
+    def list_payloads(self) -> list[dict[str, Any]]:
+        with self._lock:
+            ordered = sorted(
+                self._jobs.values(),
+                key=lambda job: (job.created_at, job.job_id),
+                reverse=True,
+            )
+            return [job.payload() for job in ordered]
 
     def interrupted(self) -> list[ApiJob]:
         with self._lock:
@@ -253,6 +277,8 @@ class JobStore:
 class QueuedJob:
     job_id: str
     input_path: Path
+    generator: IRTextGenerator
+    generator_revision: int
 
 
 class JobRunner:
@@ -260,12 +286,10 @@ class JobRunner:
         self,
         *,
         jobs: JobStore,
-        generator: IRTextGenerator,
         timeout_seconds: float,
         queue_capacity: int,
     ) -> None:
         self.jobs = jobs
-        self.generator = generator
         self.timeout_seconds = timeout_seconds
         self.queue_capacity = queue_capacity
         self._queue: Queue[QueuedJob] = Queue(maxsize=queue_capacity + 1)
@@ -308,7 +332,7 @@ class JobRunner:
                         _run_job(
                             job_id=item.job_id,
                             input_path=item.input_path,
-                            generator=self.generator,
+                            generator=item.generator,
                             jobs=self.jobs,
                         )
                     finally:
@@ -364,36 +388,56 @@ def create_api_app(
     *,
     work_dir: Path | None = None,
     generator: IRTextGenerator | None = None,
+    generator_manager: GeneratorManager | None = None,
+    session_token: str | None = None,
     job_timeout_seconds: float = DEFAULT_JOB_TIMEOUT_SECONDS,
     queue_capacity: int = DEFAULT_QUEUE_CAPACITY,
     retention_hours: int = DEFAULT_RETENTION_HOURS,
     rate_limit_per_minute: int = DEFAULT_RATE_LIMIT_PER_MINUTE,
 ) -> Flask:
-    """Create the independent JSON API layer used by the future frontend.
+    """Create the JSON API shared by the browser and protected desktop clients.
 
-    The default is deliberately the deterministic stub. NGA remains an intranet
-    adapter concern and is not selected or implemented by this Mac-side API.
+    The deterministic stub remains the default. NGA is enabled only after an
+    explicit configure, connection-test, and activate sequence.
     """
 
     app = Flask(__name__)
     root = (work_dir or Path("output") / "web_api").resolve()
     root.mkdir(parents=True, exist_ok=True)
-    selected_generator = generator or StubGenerator()
+    if generator is not None and generator_manager is not None:
+        raise ValueError("generator and generator_manager are mutually exclusive")
+    manager = generator_manager or GeneratorManager(initial_generator=generator or StubGenerator())
     jobs = JobStore(root=root, retention=timedelta(hours=retention_hours))
     jobs.cleanup_expired()
     _recover_interrupted_jobs(jobs)
     runner = JobRunner(
         jobs=jobs,
-        generator=selected_generator,
         timeout_seconds=job_timeout_seconds,
         queue_capacity=queue_capacity,
     )
     app.config["API_WORK_DIR"] = root
-    app.config["API_GENERATOR"] = selected_generator
+    app.config["API_GENERATOR_MANAGER"] = manager
     app.config["API_JOBS"] = jobs
     app.config["API_JOB_RUNNER"] = runner
     app.config["API_RATE_LIMITER"] = RateLimiter(max_requests=rate_limit_per_minute)
     app.config["MAX_CONTENT_LENGTH"] = 260 * 1024 * 1024
+
+    @app.before_request
+    def require_desktop_session():
+        if session_token is None or not request.path.startswith("/api/"):
+            return None
+        supplied = request.headers.get("X-Workbench-Session", "")
+        if supplied and hmac.compare_digest(supplied, session_token):
+            return None
+        return _error_response(
+            "E001",
+            "桌面会话凭据无效。",
+            status=401,
+            stage="session_authentication",
+            loc="X-Workbench-Session",
+            suggestion="请重新启动文档生成工作台。",
+            retryable=False,
+        )
 
     @app.get("/api/version")
     def version():
@@ -420,7 +464,8 @@ def create_api_app(
             "status": "ok" if ready else "degraded",
             "ready": ready,
             "version": APP_VERSION,
-            "generator": selected_generator.name,
+            "generator": manager.snapshot().name,
+            "generator_revision": manager.snapshot().revision,
             "jobs": jobs.stats(),
             "runner": runner_state,
             "storage": {
@@ -430,6 +475,128 @@ def create_api_app(
             "recovery_warning_count": len(jobs.recovery_warnings),
         }
         return jsonify(payload), 200 if ready else 503
+
+    @app.get("/api/diagnostics")
+    def diagnostics():
+        try:
+            free_bytes = shutil.disk_usage(root).free
+        except OSError:
+            free_bytes = 0
+        return jsonify(
+            build_runtime_diagnostics(
+                app_version=APP_VERSION,
+                api_version=API_VERSION,
+                deck_ir_version="2.0",
+                generator=manager.snapshot().name,
+                generator_revision=manager.snapshot().revision,
+                jobs=jobs.stats(),
+                runner=runner.stats(),
+                storage_free_bytes=free_bytes,
+                storage_minimum_free_bytes=MIN_FREE_DISK_BYTES,
+            )
+        )
+
+    @app.get("/api/jobs")
+    def list_jobs():
+        jobs.cleanup_expired()
+        return jsonify({"jobs": jobs.list_payloads()})
+
+    @app.get("/api/settings/generator")
+    def generator_settings():
+        return jsonify(manager.status())
+
+    @app.put("/api/settings/generator")
+    def update_generator_settings():
+        try:
+            _enforce_rate_limit(app)
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                raise ApiRequestError(
+                    "E010",
+                    "生成器配置必须是 JSON 对象。",
+                    status=400,
+                    stage="configuring_generator",
+                    retryable=False,
+                )
+            allowed = {"generator", "config", "credential", "clear_credential"}
+            if set(payload) - allowed:
+                raise ApiRequestError(
+                    "E010",
+                    "生成器配置包含未知字段。",
+                    status=400,
+                    stage="configuring_generator",
+                    retryable=False,
+                )
+            generator_name = payload.get("generator")
+            if generator_name not in {"stub", "nga"}:
+                raise ApiRequestError(
+                    "E010",
+                    "generator 只支持 stub 或 nga。",
+                    status=400,
+                    stage="configuring_generator",
+                    loc="generator",
+                    retryable=False,
+                )
+            config = None
+            if generator_name == "nga":
+                config = NgaHttpConfig.model_validate(payload.get("config"))
+            credential = payload.get("credential")
+            if credential is not None and not isinstance(credential, str):
+                raise ApiRequestError(
+                    "E010",
+                    "NGA credential 必须是字符串。",
+                    status=400,
+                    stage="configuring_generator",
+                    loc="credential",
+                    retryable=False,
+                )
+            clear_credential = payload.get("clear_credential", False)
+            if not isinstance(clear_credential, bool):
+                raise ApiRequestError(
+                    "E010",
+                    "clear_credential 必须是布尔值。",
+                    status=400,
+                    stage="configuring_generator",
+                    loc="clear_credential",
+                    retryable=False,
+                )
+            return jsonify(
+                manager.configure(
+                    generator=generator_name,
+                    config=config,
+                    credential=credential,
+                    clear_credential=clear_credential,
+                )
+            )
+        except ValidationError:
+            return _error_response(
+                "E010",
+                "NGA 配置字段无效。",
+                status=400,
+                stage="configuring_generator",
+                suggestion="请检查地址、接口路径、模型、超时和 TLS 设置。",
+                retryable=False,
+            )
+        except NgaGeneratorError as exc:
+            return _generator_error_response(exc, stage="configuring_generator")
+        except ApiRequestError as exc:
+            return _api_request_error_response(exc)
+
+    @app.post("/api/settings/generator/test")
+    def test_generator_settings():
+        try:
+            _enforce_rate_limit(app)
+            return jsonify({"connection": manager.test_draft(), **manager.status()})
+        except NgaGeneratorError as exc:
+            return _generator_error_response(exc, stage="testing_generator")
+
+    @app.post("/api/settings/generator/activate")
+    def activate_generator_settings():
+        try:
+            _enforce_rate_limit(app)
+            return jsonify(manager.activate())
+        except NgaGeneratorError as exc:
+            return _generator_error_response(exc, stage="activating_generator", conflict=True)
 
     @app.post("/api/analyze")
     def analyze():
@@ -441,13 +608,12 @@ def create_api_app(
             input_path = _save_upload(analysis_dir)
             document = parse_file(input_path)
             metrics = measure_document(document)
-            raw = app.config["API_GENERATOR"].generate(
-                build_analysis_prompt(document, metrics), target="analysis"
-            )
+            generator_snapshot = manager.snapshot()
+            raw = generator_snapshot.generator.generate(build_analysis_prompt(document, metrics), target="analysis")
             result = repair_generated_text(
                 raw,
                 target="analysis",
-                generator=app.config["API_GENERATOR"],
+                generator=generator_snapshot.generator,
                 validator=lambda current: validate_analysis_text(
                     current,
                     expected_metrics=metrics,
@@ -469,6 +635,8 @@ def create_api_app(
                 suggestion="请确认文件未损坏、扩展名与实际格式一致后重试。",
                 retryable=False,
             )
+        except NgaGeneratorError as exc:
+            return _generator_error_response(exc, stage="analyzing")
         except TimeoutError:
             return _error_response(
                 "E002",
@@ -528,15 +696,25 @@ def create_api_app(
             return _api_request_error_response(exc)
 
         try:
+            generator_snapshot = manager.snapshot()
             job = jobs.create(
                 target=target,
                 depth=depth,
                 work_dir=job_dir,
+                generator_name=generator_snapshot.name,
+                generator_revision=generator_snapshot.revision,
                 template_path=template_path,
                 asset_manifest_path=asset_manifest_path,
                 idempotency_key=idempotency_key,
             )
-            runner.submit_reserved(QueuedJob(job_id=job.job_id, input_path=input_path))
+            runner.submit_reserved(
+                QueuedJob(
+                    job_id=job.job_id,
+                    input_path=input_path,
+                    generator=generator_snapshot.generator,
+                    generator_revision=generator_snapshot.revision,
+                )
+            )
             reserved = False
         except ValueError:
             if reserved:
@@ -851,6 +1029,17 @@ def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs:
             suggestion="请检查输入资料后重试；若持续失败，请下载失败报告并提供支持编号。",
             items=exc.items,
         )
+    except NgaGeneratorError as exc:
+        _fail_job(
+            job,
+            jobs,
+            code=exc.code,
+            stage="generating",
+            retryable=exc.retryable,
+            message=_generator_error_message(exc),
+            suggestion=_generator_error_suggestion(exc),
+            loc="generator",
+        )
     except TimeoutError:
         _fail_job(
             job,
@@ -983,6 +1172,10 @@ def _write_failure_report(job: ApiJob, error: dict[str, Any]) -> Path:
             "support_id": error["support_id"],
             "type": job.target,
             "depth": job.depth,
+            "generator": {
+                "name": job.generator_name,
+                "revision": job.generator_revision,
+            },
             "stage": error["stage"],
         },
         "error": error,
@@ -1002,6 +1195,8 @@ def _job_state(job: ApiJob) -> JobState:
         job_id=job.job_id,
         target=job.target,
         depth=job.depth,
+        generator_name=job.generator_name,
+        generator_revision=job.generator_revision,
         status=job.status,
         stage=job.stage,
         progress_percent=job.progress_percent,
@@ -1026,6 +1221,8 @@ def _api_job_from_state(work_dir: Path, state: JobState) -> ApiJob:
         target=state.target,
         depth=state.depth,
         work_dir=work_dir.resolve(),
+        generator_name=state.generator_name,
+        generator_revision=state.generator_revision,
         status=state.status,
         stage=state.stage,
         progress_percent=state.progress_percent,
@@ -1069,7 +1266,7 @@ def _recover_interrupted_jobs(jobs: JobStore) -> None:
         _fail_job(
             job,
             jobs,
-            code="E010",
+            code="E015",
             stage="interrupted",
             retryable=True,
             message="服务重启前任务未正常结束。",
@@ -1364,6 +1561,52 @@ def _api_request_error_response(exc: ApiRequestError):
         suggestion=exc.suggestion,
         retryable=exc.retryable,
     )
+
+
+def _generator_error_response(
+    exc: NgaGeneratorError,
+    *,
+    stage: str,
+    conflict: bool = False,
+):
+    status = {
+        "E010": 400,
+        "E011": 401,
+        "E012": 503,
+        "E013": 429 if exc.http_status == 429 else 503,
+        "E014": 502,
+    }[exc.code]
+    if conflict and exc.code == "E010":
+        status = 409
+    return _error_response(
+        exc.code,
+        _generator_error_message(exc),
+        status=status,
+        stage=stage,
+        loc="generator",
+        suggestion=_generator_error_suggestion(exc),
+        retryable=exc.retryable,
+    )
+
+
+def _generator_error_message(exc: NgaGeneratorError) -> str:
+    return {
+        "E010": "NGA 配置无效或尚未完成连接测试。",
+        "E011": "NGA 鉴权失败。",
+        "E012": "无法连接 NGA，或 TLS 校验失败。",
+        "E013": "NGA 已限流或服务暂时不可用。",
+        "E014": "NGA 返回内容无法安全解析。",
+    }[exc.code]
+
+
+def _generator_error_suggestion(exc: NgaGeneratorError) -> str:
+    return {
+        "E010": "请在设置中检查地址、模型、凭据和 TLS 配置，并先通过连接测试。",
+        "E011": "请更新 NGA Token 后重新测试连接。",
+        "E012": "请检查内网连通性、证书和网关地址后重试。",
+        "E013": "请等待限流窗口或服务恢复后重试。",
+        "E014": "请确认网关兼容 OpenAI Chat Completions，并返回 choices[0].message.content。",
+    }[exc.code]
 
 
 def _default_error_suggestion(status: int) -> str:

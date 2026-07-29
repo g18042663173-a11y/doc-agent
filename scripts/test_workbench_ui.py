@@ -21,7 +21,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.generators.stub import StubGenerator
-from app.web_api import create_api_app
+from app.web_api import APP_VERSION, create_api_app
 
 
 VIEWPORTS = (("desktop", 1280, 900), ("mobile", 390, 844))
@@ -97,7 +97,7 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             template = _write_template(fixture_root / "template.pptx")
             unsafe_template = _write_ole_template(fixture_root / "template-with-ole.pptx")
             page.goto(f"http://127.0.0.1:{server.server_port}/static/index.html", wait_until="networkidle")
-            page.get_by_test_id("service-status").get_by_text("本地服务 v2.0.0").wait_for(timeout=5_000)
+            page.get_by_test_id("service-status").get_by_text(f"本地服务 v{APP_VERSION}").wait_for(timeout=5_000)
             page.get_by_test_id("input-file").set_input_files(str(source))
             page.get_by_test_id("type-word").click()
             page.get_by_test_id("generate-button").click()

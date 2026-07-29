@@ -280,3 +280,27 @@
 ### 仍不确定
 
 - 自动化范围内未发现未解决的软件失败。真实业务内容语义、目标字体环境审美及干净内网机器安装结果只能由后续人工验收确认。
+
+## 2026-07-30 Windows 原生 EXE 与 NGA 配置
+
+### 已完成并通过验收
+
+- 从交付基线 `a99f4bf` 创建 `codex/windows-native-app`。新增 .NET 8 WPF 原生客户端，未使用 WebView2、Electron、PySide6 或第三方 UI 框架；生成、任务、设置、诊断、关于及 NGA 二级设置页已落地。
+- 新增 `NgaHttpConfig 1.0`、OpenAI-compatible Chat Completions adapter、`GeneratorManager`、配置测试/激活 API、E010-E014、任务 generator 名称/修订快照和桌面会话鉴权。启用 NGA 后配置失败阻断，不回退 Stub。
+- NGA Token 只由 WPF 写入 Windows Credential Manager `HuaweiDocumentGenerator/NGA`；非敏感配置位于 `%LOCALAPPDATA%\HuaweiDocumentGenerator\settings.json`。任务状态、失败报告、API 响应和便携包不包含凭据。
+- 桌面宿主使用 Waitress 绑定 `127.0.0.1` 随机端口；一次性 bootstrap 由当前 Windows 用户 ACL 保护，后端读取即删。后端状态文件不含会话密钥，父进程退出后看门狗停止服务。
+- 便携构建脚本锁定 .NET SDK 8.0.423、CPython embeddable 3.12.10 和 Graphviz 15.1.0，输出运行时清单、第三方许可、逐文件 SHA-256 与 ZIP SHA-256；生产包排除 xUnit/FlaUI/Playwright、缓存、设置、凭据和任务。
+- 最新验证：`verify.ps1` 通过，Graphviz 使用 `C:\Program Files\Graphviz\bin\dot.exe`；覆盖率 parsers 93.51%、IR 93.82%、lint 94.34%、整体 88.82%。可靠性报告 `output/qa/windows-native-final/report.json` 为 612 项、597 通过、15 跳过、0 失败；1280x900 与 390x844 浏览器工作台均通过。WPF build 为 0 warning/0 error，xUnit/FlaUI 3/3 通过。
+
+### 降级或近似
+
+- NGA 首版仅支持 OpenAI-compatible、非流式 Chat Completions；自定义协议需新增 adapter。真实 NGA 未配置时默认 Stub，明确启用后不允许降级。
+- WPF 自动化覆盖原生启动、导航、键盘可达和设置持久化；完整模板/图片/取消/恢复/审计下载已由后端与浏览器回归覆盖，并在本机 WPF Stub PPT 实跑通过。干净机器上的完整原生交互仍属于人工便携验收。
+
+### 阻塞待人输入
+
+- 真实 NGA 地址、模型、Token、证书链和实际响应兼容性冒烟；内网代码签名证书；干净物理断网 Windows 10/11 x64 便携包验收；真实脱敏业务语料、授权图片和 PowerPoint 最终审美签字，均见 `QUESTIONS.md`。
+
+### 仍不确定
+
+- 自动测试无法证明目标内网网关完全兼容 OpenAI Chat Completions，也不能替代企业签名策略、目标机安全软件兼容性和 Office 最终审美结论。

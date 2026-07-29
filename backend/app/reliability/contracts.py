@@ -44,6 +44,8 @@ class JobState(FailureContractModel):
     job_id: str = Field(pattern=r"^job-[0-9a-f]{32}$")
     target: Literal["word", "deck"]
     depth: Literal["概览", "标准", "详细"] | None = None
+    generator_name: str = Field(default="stub", min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_-]*$")
+    generator_revision: int = Field(default=0, ge=0)
     status: Literal["pending", "running", "done", "failed", "canceled"]
     stage: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
     progress_percent: int = Field(ge=0, le=100)

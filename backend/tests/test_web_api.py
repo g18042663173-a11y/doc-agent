@@ -45,7 +45,7 @@ def test_health_and_version_expose_release_compatibility_without_paths(tmp_path:
     assert version.status_code == 200
     assert version.get_json() == {
         "service": "huawei-document-generator",
-        "app_version": "2.0.0",
+        "app_version": "2.1.0",
         "api_version": "1.0",
         "deck_ir_version": "2.0",
         "failure_envelope_version": "1.0",
@@ -58,6 +58,36 @@ def test_health_and_version_expose_release_compatibility_without_paths(tmp_path:
     assert payload["runner"]["worker_alive"] is True
     assert payload["runner"]["queue_capacity"] == 4
     assert str(tmp_path) not in health.get_data(as_text=True)
+
+
+def test_desktop_diagnostics_and_job_list_are_sanitized(tmp_path: Path) -> None:
+    client = create_api_app(work_dir=tmp_path).test_client()
+    created = client.post(
+        "/api/generate",
+        data={
+            "type": "word",
+            "input_file": (BytesIO(b"# Diagnostic report"), "diagnostic.md"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    diagnostics = client.get("/api/diagnostics")
+    jobs = client.get("/api/jobs")
+
+    assert diagnostics.status_code == 200
+    payload = diagnostics.get_json()
+    assert payload["diagnostics_version"] == "1.0"
+    assert payload["application"]["version"] == "2.1.0"
+    assert payload["application"]["deck_ir_version"] == "2.0"
+    assert payload["generator"]["name"] == "stub"
+    assert payload["graphviz"]["source"] in {"bundled", "system", "missing"}
+    assert "executable" not in payload["graphviz"]
+    assert str(tmp_path) not in diagnostics.get_data(as_text=True)
+
+    assert jobs.status_code == 200
+    listed = jobs.get_json()["jobs"]
+    assert listed[0]["job_id"] == created.get_json()["job_id"]
+    assert "input" not in json.dumps(listed, ensure_ascii=False).lower()
 
 
 def test_analyze_failure_is_sanitized_and_cleans_workspace(tmp_path: Path) -> None:
@@ -592,6 +622,8 @@ def test_completed_job_persists_across_app_restart_and_removes_sensitive_interme
     state = JobState.model_validate_json(state_path.read_text(encoding="utf-8"))
     assert state.status == "done"
     assert state.artifact_path == "word.docx"
+    assert state.generator_name == "stub"
+    assert state.generator_revision == 0
     assert not (job_dir / "input.md").exists()
     assert not (job_dir / "document_ir.json").exists()
     assert not (job_dir / "prompt.txt").exists()
@@ -602,6 +634,7 @@ def test_completed_job_persists_across_app_restart_and_removes_sensitive_interme
     restored = restarted.get(f"/api/status/{completed['job_id']}")
     assert restored.status_code == 200
     assert restored.get_json()["status"] == "done"
+    assert restored.get_json()["generator"] == {"name": "stub", "revision": 0}
     assert restarted.get(f"/api/download/{completed['job_id']}").status_code == 200
 
 
@@ -626,7 +659,7 @@ def test_restart_marks_interrupted_job_failed_and_removes_input(tmp_path: Path) 
     recovered = client.get(f"/api/status/{job_id}").get_json()
 
     assert recovered["status"] == "failed"
-    assert recovered["error"]["code"] == "E010"
+    assert recovered["error"]["code"] == "E015"
     assert recovered["error"]["stage"] == "interrupted"
     assert "failure-report" in recovered["assets"]
     assert not (job_dir / "input.md").exists()

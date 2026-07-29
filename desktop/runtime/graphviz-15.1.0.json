@@ -1,0 +1,9 @@
+{
+  "runtime": "Graphviz",
+  "version": "15.1.0",
+  "platform": "windows-x64",
+  "package_id": "Graphviz.Graphviz",
+  "expected_executable": "bin/dot.exe",
+  "dot_sha256": "0558bf0840bbeff1192925e2bab783e236d4cc150facf697ae69a84a35132e51",
+  "source_note": "Use an independently approved Graphviz 15.1.0 runtime directory when building for the intranet."
+}

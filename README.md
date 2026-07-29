@@ -161,6 +161,34 @@ Set-Location ..\..
 失败任务会显示稳定错误码、阶段、是否可重试、支持编号和受控的失败报告下载；报告不保存输入正文、Prompt、密钥或异常堆栈。
 任务状态会落盘并在刷新后恢复；服务为单 worker、4 个等待位、900 秒总超时，产物与脱敏审计保留 24 小时。
 
+## Windows 原生工作台与 NGA
+
+`desktop/DocumentWorkbench` 是 .NET 8 WPF 原生客户端，不使用 WebView2、Electron、PySide6
+或第三方 UI 框架。它完整复用同一个 Flask API 和确定性生成链路，支持分析、Word/PPT、
+模板、多图片、三档深度、任务恢复/取消、产物与审计下载。桌面进程只启动自身的隐藏
+`pythonw.exe` 后端，绑定 `127.0.0.1` 随机端口，并用每次启动随机生成的
+`X-Workbench-Session` 保护全部 API。
+
+NGA 采用 OpenAI-compatible Chat Completions，默认路径 `/v1/chat/completions`、非流式、
+`temperature=0`。用户必须在“设置 > NGA”完成保存、连接测试和启用；已明确启用但配置
+或凭据失效时会阻断生成，不会静默切回 Stub。Token 只保存在 Windows Credential Manager
+的 `HuaweiDocumentGenerator/NGA`，非敏感配置保存在
+`%LOCALAPPDATA%\HuaweiDocumentGenerator\settings.json`。
+
+构建原生测试和便携包：
+
+```powershell
+$dotnet = "$env:LOCALAPPDATA\Codex\dotnet-sdk-8.0.423\dotnet.exe"
+& $dotnet test desktop\DocumentWorkbench.Tests\DocumentWorkbench.Tests.csproj -c Debug
+.\.venv\Scripts\python.exe scripts\package_document_workbench.py `
+  --python-embed "$env:TEMP\python-3.12.10-embed-amd64.zip" `
+  --graphviz-root "C:\Program Files\Graphviz" --overwrite
+```
+
+输出为 `dist/document-workbench-windows-x64-2.1.0.zip` 及同名 SHA-256 文件。便携包自带
+.NET、Python 3.12、锁定 Python 依赖与 Graphviz，解压后双击 `DocumentWorkbench.exe`，
+无需管理员权限。正式推广前仍须完成内网代码签名和干净 Windows 10/11 断网验收。
+
 ## 交付资产
 
 - 固定 Office 输入:`samples/input/需求说明.docx`、`销售台账.xlsx`、`项目汇报.pptx`

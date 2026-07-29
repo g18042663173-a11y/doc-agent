@@ -8,6 +8,11 @@ wheelhouse/
 dist/
 .venv/
 experiments/html2pptx/node_modules/
+desktop/.packages/
+desktop/**/bin/
+desktop/**/obj/
+desktop/**/TestResults/
+desktop/runtime-cache/
 .DS_Store
 .coverage*
 task_plan*.md

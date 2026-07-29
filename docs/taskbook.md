@@ -11,8 +11,8 @@
 | 项目方向 | 企业文档生成 Agent、AICoding 输入输出桥接、华为风格 PPTX 生成工具 |
 | 实施周期 | 5 周(排期细化到天,含 4 个检查点评审) |
 | 总体目标 | 把现有本地能力整合成可演示、可验收、可迁移的命令行文档生成工具链 |
-| 技术基线 | 命令行(CLI)直连 AICoding 产 IR;本地 Python 确定性渲染;不接真实 NGA、不做 Web 强约束 |
-| 边界说明 | 不接真实 NGA;不复刻完整 PowerPoint 母版;不做多人在线协作;不采用手工 HTML 编写 PPT |
+| 技术基线 | CLI/Web/WPF 共用 IR 契约与本地 Python 确定性渲染;stub 默认离线;NGA 使用可配置 OpenAI-compatible adapter |
+| 边界说明 | 不让模型文本直连渲染器;不做多人在线协作;不采用手工 HTML 编写 PPT;真实 NGA 与 Office 审美须独立验收 |
 | 本版用途 | 开工评审依据、过程对照清单、验收对账清单 |
 
 ## 0  阅读指引
@@ -26,7 +26,10 @@
 
 ## 0.5  架构总览与核心设计原则
 
-在当前环境下,AICoding 就是命令行里的 AI 模型本身,现网已具备 Python 3.12、成熟的 MD→DOCX 转换与基础 Flask 服务。整体架构据此定为“命令行(CLI)直连 + AICoding 产 IR + 本地确定性渲染”:用户在命令行提供输入,AICoding 产出结构化中间表示(IR),本地 Python 程序对 IR 做校验与渲染,产出可编辑的 DOCX / 华为风格 PPTX 并做合规检查。详细主链路见 2.1,模块划分见 2.2,不接真实 NGA、不做 Web 强约束(Web 界面为可选 P2)。
+在当前环境下，CLI、浏览器工作台和 Windows WPF 客户端共用同一条流水线：generator 只产
+结构化中间表示(IR)，本地 Python 程序剥壳、Schema 校验、渲染和合规检查。stub 是断网
+默认值；NGA 通过隔离的 OpenAI-compatible adapter 接入，并受配置测试、显式激活、任务
+快照、错误码和凭据脱敏约束。任何界面都不能绕过 IR 契约直连 renderer。
 
 ### 0.5.1  三块基石
 
@@ -43,7 +46,7 @@
 | 术语 | 本项目内约定含义 |
 | --- | --- |
 | AICoding | AI 模型助手,通过命令行(CMD)直接对话交互:能理解需求、生成内容、产出结构化 JSON,无需本地安装或 Web 服务——即当前对话中的 AI 本身。本项目把它抽象为“产出 IR 的默认 generator”,通过 Prompt 输入、JSON 输出完成桥接。 |
-| NGA | 内网大模型网关 / 服务(协议外网完全未知)。本阶段不做任何实现,仅在 generator 层预留接口与 TODO,待内网部署确认协议后再补充。 |
+| NGA | 内网大模型网关。首版按 OpenAI-compatible Chat Completions 实现；实际协议不兼容时新增 adapter，不改变 IR 或 renderer。 |
 | 黄区 | 华为内网办公安全区。本项目所有设计需满足:进黄区后只替换 generator 与渲染 Skill 两处即可运行。 |
 | IR(中间表示) | 模型与渲染器之间的结构化 JSON 契约,共三份:DocumentIR(输入侧)、WordIR(Word 输出侧)、DeckIR(PPT 输出侧)。 |
 | stub 模式 | 不依赖任何真实模型,由规则模板直接产出合法 IR(stub generator)。用于离线演示、CI 回归和进内网前自测,是“无 AI 也能全量验收”的支柱。 |
@@ -55,12 +58,12 @@
 
 | 编号 | 假设与默认值 |
 | --- | --- |
-| A1 | 双环境:开发机为 macOS / 类 Unix(实习生与编码 agent 都在此写代码、跑测试),目标机为内网 Windows(离线运行)。核心代码为纯 Python、跨平台;Python 3.12;主交互为命令行 + 本地目录,不强制引入 Web 框架。 |
+| A1 | 核心后端为 Python 3.12、跨平台；目标机为内网 Windows。原生客户端为 .NET 8 WPF，便携包自带 .NET、Python、依赖和 Graphviz。 |
 | A2 | AICoding 输出形态:基本能稳定输出一个 json 代码块,但可能夹带解释文字,必须经“剥壳 + Schema 校验”后方可进入渲染。 |
 | A3 | 密级文案默认:DOCX 页脚为“内部公开”,PPTX 页脚为“HUAWEI CONFIDENTIAL”,均在配置中可改。 |
 | A4 | 中文字体:外网以微软雅黑为主选,HarmonyOS Sans 作为内网目标字体;不追求与母版逐像素一致,字体集中在主题配置,内网只改一处。 |
 | A5 | DeckIR v2.0 已评审冻结:本文 3.3 节和导出的 JSON Schema 为权威版;1.4-1.9 输入先在内存迁移,再按 2.0 校验,不覆盖用户原文件。 |
-| A6 | 主界面为 CLI + 本地文件目录(input/ 放输入、output/ 取产物);Web 工作台为可选项(P2),如需可复用现有 Flask,不作为核心交付。 |
+| A6 | CLI、Flask 浏览器工作台和 WPF 原生客户端均已交付，底层必须调用相同 parse/generate/render/lint 函数。 |
 | A7 | AICoding 输入约束:单次输入按 8K–16K 字符规划(Prompt 截断上限据此设定);以“把内容贴进 Prompt”为准,不假设 AICoding 能直接读取本地文件路径。 |
 
 ### 1.3  三条工程不变量(整个实习期间不允许破坏)
@@ -121,7 +124,7 @@ web/(可选,P2)     # 若做轻量界面再建;可复用现有 Flask,不属核�
 | pptx 解析与渲染 | python-pptx | 版式全部自绘,不依赖母版占位符;替代此前手工 HTML + html2pptx 方案,使用者无需接触 HTML / CSS。动画/转场检测读取 slide 底层 XML。 |
 | Markdown 解析 | markdown-it-py(或轻量自写) | 只需标题/段落/列表/表格四类,产出与 WordIR 同构的 blocks。 |
 | IR 定义与校验 | pydantic v2 | model_json_schema 一键导出 JSON Schema,CLI、Prompt 模板与(可选)界面共用同一份。 |
-| 交互方式 / 服务 | 命令行(CLI)+ 本地目录;Web 可选 | 核心不依赖 Web 框架;不引入 FastAPI 强约束。若做 P2 界面可复用现有 Flask,保持轻量。 |
+| 交互方式 / 服务 | CLI + Flask 浏览器工作台 + .NET 8 WPF | 三个入口共用业务函数；WPF 不用 WebView2，桌面后端仅监听随机本地端口。 |
 | 测试 | pytest + coverage | golden 断言一律用“回读产物”方式,不比对二进制;stub 通道支撑无 AI 全量测试。 |
 | 部署 | pip wheelhouse(Windows 平台)+ Python 脚本(平台薄封装) | wheelhouse 必须为 Windows 目标构建(见下方约定与 §7.4);满足内网离线安装,第 5 周前完整演练一次。 |
 
@@ -140,13 +143,13 @@ class IRGenerator(Protocol):
 
 - **StubGenerator(默认测试通道,P0):** 读取 DocumentIR / 按规则直接映射成合法 IR,毫秒级、确定性。是自动化测试、CI 与断网演示的支柱,也是“无 AI 也能全量验收”的关键。
 - **AICodingGenerator(默认生产通道,P0):** 由当前命令行中的 AI 产出 IR:基本能稳定输出一个 json 代码块,偶夹解释文字,交由剥壳器统一处理。落盘方式与自动化程度见下方分级。
-- **NgaGenerator(仅预留接口,内网再实现):** 只写接口签名、配置项(NGA_BASE_URL / NGA_TOKEN / 超时 / 重试)与 TODO 注释;外网阶段不实现、不猜协议。
+- **NgaGenerator(可选生产通道):** OpenAI-compatible Chat Completions；Bearer Token、超时/TLS/CA、有限重试、10 MB 响应上限和 E010-E014 已实现。启用前必须测试，启用后失败不得回退 stub。
 
 **AICodingGenerator 自动化分级(先保证可用,再逐步提升):**
 
 - **P0(默认,当前实现):** 人工把 Prompt 交给 AICoding,再把返回的 json 代码块另存为 ir/*.json;端到端可用,零额外依赖。
 - **P1(半自动,时间富余再做):** 写一小段捕获脚本读取 AICoding 输出、自动提取 json 代码块并落盘,省去手工复制。
-- **P2(全自动,依赖内网):** 当 AICoding / NGA 提供可调用接口时,generator 直接程序化调用,无人工介入。
+- **P2(全自动):** NGA 的 OpenAI-compatible HTTP adapter 已落地；真实地址、模型、Token 和证书由内网配置并单独冒烟。
 
 > **注** 落地顺序:先做 P0 确保功能跑通,再视余量做 P1;P2 待内网条件具备。无论哪一级,下游 parse / prompt / render / check 完全不变——这正是 generator 分层的价值。渲染器 / 校验器 / 检查器都不依赖具体 generator,因此可在 stub 通道下被全量测试,是本项目可评分、可 CI、可迁移的技术基础。
 
@@ -162,9 +165,10 @@ class IRGenerator(Protocol):
 
 退出码约定:0 = 成功;非 0 = 失败并打印错误码(E / W 系,见第 3 章)。所有面向使用者的错误文案不暴露堆栈。把每个命令的入参 / 出参 / 退出码固定下来,即构成稳定接口。generator 用哪种(stub / aicoding)由 render 前的一步决定,命令签名不变。
 
-### 2.6  日常使用方式与可选 Web 界面(P2)
+### 2.6  日常使用方式与工作台
 
-核心交付是 CLI;当前不存在现成工作台,也不强制开发。日常使用即:把输入文件放进 input/,依次运行 2.5 的命令,产物落在 output/,报告在同目录。与 AI 的衔接是“把 prompt.txt 交给 AICoding、把返回的 json 存成 ir/*.json”这一步(见下)。
+CLI 继续作为可审计核心入口；浏览器工作台提供兼容诊断，Windows WPF 是普通用户入口。
+三者共用同一 API/业务函数，输出仍落入受控任务目录并按 24 小时策略清理。
 
 **AICoding 交互流程(以 deck 为例;步骤 3–5 当前需人工,未来可脚本半自动化,见 2.4 分级):**
 
@@ -176,12 +180,12 @@ class IRGenerator(Protocol):
 
 > **注** 纯生成场景(无输入文件)跳过 --context,直接口述主题让 AICoding 产 IR;其余步骤一致。
 
-**Web 界面优先级:P2(可选,建议暂缓)**
+**工作台实现约束**
 
-- **原因:** 当前环境无现成工作台,从零开发成本高;CLI + 本地目录已满足核心需求。
-- **实现时机:** 核心功能稳定、且排期有余量时再考虑;不占用 P0/P1 任务的时间。
-- **技术选择:** 复用现有 Flask,仅做“上传 + 结果展示 + 报告查看”三块;底层调用与 CLI 完全相同的 parse / prompt / render / check 函数,保证有无界面行为一致、都可测试。
-- **明确不做:** FastAPI 全套服务、历史管理、多模型、在线协作等重功能——当前环境不需要,保持轻量。
+- **浏览器:** 复用 Flask，只绑定本机，保留上传、任务状态、结果与审计下载。
+- **原生:** .NET 8 WPF，不使用 WebView2/Electron/PySide6；启动隐藏 pythonw 后端和随机本地端口。
+- **安全:** 每次桌面启动随机会话密钥；Token 只进 Windows Credential Manager；任务固定 generator 修订快照。
+- **明确不做:** 多人在线协作、远程局域网监听、模型输出直连 renderer。
 
 ### 2.7  健壮性与可自动化机制
 
@@ -497,7 +501,7 @@ lint 只管硬指标。可再加一层:把渲染出的 PPTX 每页导出为图�
 
 ### 6.4  黄区接入说明(docs/内网接入.md 必备内容)
 
-- **只动两处:** 其一,generators/nga.py 实现 generate(鉴权、超时、重试、日志脱敏;密钥仅走环境变量 NGA_BASE_URL / NGA_TOKEN,严禁落盘)。其二,若使用华为官方渲染 Skill,则以 DeckIR 为输入契约对接,本地渲染器保留为回退开关。
+- **隔离边界:** `generators/nga.py` 负责协议、鉴权、超时、TLS、重试和脱敏；WPF 负责 Credential Manager。若使用官方渲染 Skill，仍以 DeckIR 为输入，本地 renderer 保留。两者都不得改动上游契约。
 - **明确不动:** parsers、prompting、ir、lint、CLI 命令与本地渲染器;这份“不动清单”写进文档,接入者照单核对。
 - **内网自测顺序:** 离线 wheelhouse 安装,先跑 stub 全链路证明环境正常,再切 NgaGenerator 做单页冒烟,最后全量演示。
 - **安全约定:** 历史记录默认不保存模型密钥与原始敏感提示词(可配);示例数据全部使用脱敏样例。
@@ -509,6 +513,8 @@ lint 只管硬指标。可再加一层:把渲染出的 PPTX 每页导出为图�
 - **单元测试:** 解析器每格式至少 5 例;IR 校验正例加全部错误码反例;lint 每条规则正反例各至少 1;渲染 golden 用回读断言。
 - **契约测试:** 三份 JSON Schema 做快照比对;改字段而未升 ir_version 或未过评审即挂测试(见 §3.0),防止“悄悄改契约”。
 - **端到端:** CLI 级 stub 全链路(四格式各一条:parse → prompt → render → check 一条命令跑通);另保留 1 条“文件到 PPTX”的完整演示链路。
+- **NGA/API:** 模拟成功、401/403、429/5xx、超时、TLS/CA、非法/超大响应、重试边界、配置测试/激活、会话鉴权和任务快照隔离。
+- **WPF:** xUnit/FlaUI 验证原生窗口、导航、键盘可达与设置持久化；真实 Stub 生成、模板/图片、取消/恢复和审计下载纳入 Windows 桌面验收。
 - **覆盖率:** parsers + ir + lint 三包不低于 80%,后端整体不低于 70%;因不依赖 AI,覆盖率可在 stub 通道下稳定复现。
 
 ### 7.2  一键验收命令
@@ -530,6 +536,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 | 华为风格约束 | 对上一步产物执行 check.py;再对人工注入违规的样例执行 check.py | 正常产物零 Error;注入样例逐条命中对应 Error / Warning |
 | 可迁移性 | 断网且无任何密钥环境执行 verify.py(Mac)/ verify.ps1(Windows),stub 通道 | 全链路通过,证明不依赖真实 NGA、华为 Skill 与联网 AI |
 | 测试覆盖 | 查看覆盖率报告 | 后端全绿且核心三包不低于 80% |
+| 原生工作台 | WPF 在 1366x768/1920x1080、100%/150%/200% DPI 启动并完成 Stub 任务 | 无裁切/重叠/越界，键盘可达；Token 不进入设置、日志、任务或失败报告 |
 
 ### 7.4  Windows 离线验收 checklist(一次性人工在真机执行)
 
@@ -541,6 +548,8 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 4. 断网执行 verify.ps1:stub 全链路 + pytest + 覆盖率全绿。
 5. 用真实样例各跑一次 word / deck,产物能在 Word / PowerPoint 正常打开编辑。
 6. 记录 Python 版本、机器环境与结果截图,纳入验收手册。
+7. 解压 WPF 便携 ZIP，在无系统 Python/.NET、无管理员权限下完成 Stub Word/PPT 与模拟 NGA；核对 bundled Graphviz 和文件哈希清单。
+8. 联网/内网条件具备时单独完成真实 NGA 冒烟；正式推广前对 `DocumentWorkbench.exe` 使用内网证书签名。
 
 ## 8  排期(按天,含 4 个检查点)
 
@@ -588,7 +597,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 
 ## 10  最终交付清单与完成定义
 
-1. 可运行的命令行文档生成工具链:支持 Word 输出与华为风格 PPTX 输出两条主流程,含 stub 断网演示模式;Web 界面为可选 P2。
+1. 可运行的 CLI、浏览器与 WPF 文档生成工具链：支持 Word/PPT、stub 断网模式、可选 NGA、模板、图片、任务恢复、取消和审计下载。
 2. 三份 IR 规范:文档 + JSON Schema 文件 + 正 / 反样例,契约测试保护。
 3. 四个输入解析器(md / docx / xlsx / pptx)与配套样例、warnings 降级清单。
 4. Prompt 模板库与组装器:四段式模板、截断策略、确定性输出。
@@ -600,6 +609,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 10. 演示材料包:输入样例、生成结果、命令行运行截图、失败提示截图、录屏脚本。
 11. 真实文件测试语料:各 ≥ 3 个脱敏真实 docx / xlsx / pptx 纳入 fixtures,解析回归以它们为准(见 §5.4)。
 12. 健壮性机制落地:契约快照测试、IR 修复回路、可测量版式 lint 规则(HW-W06~W09)、边界样例降级契约、Windows 离线验收记录,均随代码入库(见 §2.7)。
+13. Windows WPF 便携包：self-contained single-file 客户端、CPython 3.12 embeddable、锁定依赖、Graphviz、运行时/文件哈希清单和第三方许可。
 
 **通用完成定义(适用于每一张任务卡):**五件套齐备——代码、样例、失败提示、最小测试、文档;任何一件缺失,该任务卡视为未完成,不进入下一张。
 
@@ -623,7 +633,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 | AICoding 输入 | 单次输入按 8K–16K 字符规划;以贴入 Prompt 内容为准,不假设直接读取本地文件。 |
 | AICoding 输出 | 基本稳定输出一个 json 代码块,偶夹解释文字,由剥壳器统一处理。 |
 | JSON 落盘 | 先人工另存(P0);排期有余量再做脚本半自动(P1);全自动(P2)待内网接口。 |
-| Web 界面 | 暂缓,专注 CLI 核心;如做则复用 Flask、仅“上传 + 展示 + 报告”三块(P2)。 |
+| 工作台 | Flask 浏览器兼容入口与 .NET 8 WPF 原生入口并存；WPF 不使用 WebView2，便携包不要求管理员权限。 |
 
 ### A.2  决议与剩余内网确认
 
@@ -637,6 +647,8 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 1. 历史 / 运行记录是否需要?若需要,保存范围如何(是否含原始 Prompt 与输入内容)?当前 P2 默认不做。
 2. DOCX 输出是否需要图片透传(输入文档中的图片带到输出)?当前列为 P2。
 3. 内网渲染 Skill 的调用形态(同步 HTTP、文件落盘还是其他)?以便接入实现按真实协议落地。
+4. 真实 NGA 的地址、模型名、证书链和 Chat Completions 兼容差异；自动测试只覆盖模拟协议。
+5. 正式推广使用的内网代码签名证书与签名发布流程。
 
 ## 附录 B  样例文件清单(samples/ 规划)
 

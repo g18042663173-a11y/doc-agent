@@ -8,6 +8,25 @@
 - `GET /static/index.html`：文档生成工作台。
 - `GET /api/health`：服务、单 worker、队列和磁盘就绪状态；正常返回 200，降级返回 503。
 - `GET /api/version`：应用、API、DeckIR、FailureEnvelope 和 JobState 版本。
+- `GET /api/jobs`：最近 24 小时任务列表，用于原生客户端恢复和任务页。
+- `GET /api/diagnostics`：应用、API、DeckIR、generator、队列、磁盘与 Graphviz 脱敏诊断。
+
+桌面宿主使用 `127.0.0.1` 随机端口，并要求所有 `/api/*` 请求携带
+`X-Workbench-Session`。会话密钥每次启动随机生成，只经受当前 Windows 用户 ACL 保护的
+一次性 bootstrap 文件传递；后端读取后立即删除。普通 5056 浏览器工作台保持原有同源模式。
+
+## Generator 配置
+
+- `GET /api/settings/generator`：读取 active/draft 的脱敏状态、配置修订号和测试状态。
+- `PUT /api/settings/generator`：更新 `stub` 或 NGA 草稿。NGA 请求包含
+  `NgaHttpConfig 1.0` 与当前会话 credential；响应绝不回显 credential。
+- `POST /api/settings/generator/test`：发送最小 JSON 请求，返回鉴权、结构、延迟结果，不返回模型正文。
+- `POST /api/settings/generator/activate`：仅激活本会话已测试成功且未被修改的草稿。
+
+NGA 默认使用 `/v1/chat/completions`、Bearer Token、非流式响应和 `temperature=0`，从
+`choices[0].message.content` 取原始文本。默认超时 120 秒、最多重试 2 次；只重试真正超时、
+429、502、503、504。`E010-E014` 分别表示配置、鉴权、连接/TLS、限流/服务和响应结构错误。
+启用 NGA 后不会静默回退 Stub；模型输出仍必须经过剥壳、Schema 校验和修复回路。
 
 ## 分析
 
@@ -51,6 +70,7 @@ OLE，也不会把这种错误提示为“稍后重试”。
   "job_id": "job-...",
   "type": "deck",
   "depth": "标准",
+  "generator": {"name": "nga", "revision": 3},
   "status": "running",
   "progress": {"stage": "planning_template", "percent": 66}
 }
@@ -62,6 +82,9 @@ OLE，也不会把这种错误提示为“稍后重试”。
 `validating_package`、`linting`、`done`。终态为 `done/failed/canceled`；超时阶段为
 `timed_out`，服务重启恢复到未完成任务时为 `interrupted`。错误统一符合
 `FailureEnvelope 1.0`：
+
+`generator` 是任务提交瞬间固定的非敏感快照标识。后续切换 generator 不会影响排队中、
+运行中或修复回路中的任务；该名称和修订号会随 `job_state.json` 持久化。
 
 ```json
 {

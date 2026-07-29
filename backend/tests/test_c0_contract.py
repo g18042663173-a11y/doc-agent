@@ -525,14 +525,18 @@ def test_stub_generator_outputs_valid_target_ir() -> None:
 
 
 def test_nga_generator_requires_intranet_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.generators.nga import NgaGenerator
+    from app.generators.nga import NgaGenerator, NgaGeneratorError
 
     monkeypatch.delenv("NGA_BASE_URL", raising=False)
+    monkeypatch.delenv("NGA_MODEL", raising=False)
     monkeypatch.delenv("NGA_TOKEN", raising=False)
     generator = NgaGenerator(base_url=None, token=None)
 
-    with pytest.raises(RuntimeError, match="NGA_BASE_URL"):
+    with pytest.raises(NgaGeneratorError) as captured:
         generator.generate("prompt", target="deck_ir")
+
+    assert captured.value.code == "E010"
+    assert captured.value.retryable is False
 
 
 def test_verify_main_runs_stub_chain_when_all_gates_pass(monkeypatch: pytest.MonkeyPatch) -> None:

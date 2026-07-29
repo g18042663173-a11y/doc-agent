@@ -2,6 +2,11 @@
 
 本指南对应由 `scripts/package_windows_dev.py` 生成的 Windows 开发快照。该快照用于把当前项目从 Mac 带入内网 Windows，并在解压后继续开发、测试和生成 DOCX/PPTX。
 
+面向普通使用者另有 WPF 便携交付包：`document-workbench-windows-x64-2.1.0.zip`。它内置
+.NET 8、Python 3.12 embeddable、锁定 Python 依赖和 Graphviz，解压后直接双击
+`DocumentWorkbench.exe`，不要求管理员权限、系统 Python 或仓库 `.venv`。开发快照与
+便携包用途不同，不要混用验收结论。
+
 ## 1. 包的边界
 
 压缩包默认包含：
@@ -18,7 +23,9 @@
 - macOS 的 Graphviz 二进制。架构图自动布局需要另行放入 Windows Graphviz 运行时；
 - 任何 NGA token、真实业务文件或模型响应记录。
 
-`wheelhouse/` 已随包带走，但其可安装性仍必须在目标 Windows 真机断网验证。`NGA` 适配器仍是预留接口，不能因包内存在环境变量名就认定真实模型已接通。
+`wheelhouse/` 已随包带走，但其可安装性仍必须在目标 Windows 真机断网验证。`NGA`
+OpenAI-compatible adapter 已实现；是否接通真实内网模型仍取决于实际地址、模型、Token、
+证书和网关兼容性，自动 stub 绿灯不能替代真实 NGA 冒烟。
 
 ## 2. 迁移前检查
 
@@ -136,7 +143,23 @@ $env:PYTHONPATH = (Join-Path $PWD "backend")
 `127.0.0.1`，提供健康/版本探测、持久任务恢复、取消、限流和 24 小时产物保留。模板任务会
 额外提供 profile、plan、structure、replacement-audit、package-report 与 lint 审计下载。
 
-真实 NGA 接入只能在 `backend/app/generators/nga.py` 实现，并且 token 仅经环境变量传入。当前 `NgaGenerator` 会明确抛出 `NotImplementedError`，这是预期的内网待办而非安装故障。
+原生 WPF 入口位于 `desktop/DocumentWorkbench`。它启动隐藏的本地后端，绑定
+`127.0.0.1` 随机端口并使用 `X-Workbench-Session`；任务目录为
+`%LOCALAPPDATA%\HuaweiDocumentGenerator\jobs`。NGA Token 只存入 Windows Credential
+Manager 的 `HuaweiDocumentGenerator/NGA`，非敏感配置存入同级 `settings.json`。显式启用
+NGA 后，配置、鉴权、TLS 或响应错误会按 `E010-E014` 阻断，不会回退 Stub。
+
+构建便携包：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\package_document_workbench.py `
+  --python-embed "$env:TEMP\python-3.12.10-embed-amd64.zip" `
+  --graphviz-root "C:\Program Files\Graphviz" --overwrite
+```
+
+打包器校验固定运行时版本和 SHA-256，使用锁定 NuGet/Python 依赖，生成
+`runtime-manifest.json`、第三方许可、逐文件 `SHA256SUMS.txt` 和 ZIP SHA-256；测试依赖、
+配置、凭据、任务与缓存不得进入产物。
 
 ## 8. 打包后的自检清单
 
@@ -146,6 +169,8 @@ $env:PYTHONPATH = (Join-Path $PWD "backend")
 2. `.\.venv\Scripts\python.exe -m pytest backend/tests -q` 与 `.\verify.ps1` 均为零失败。
 3. `output/environment_report.json` 中的 Graphviz 版本、SHA-256 和 fallback 状态与实际部署一致。
 4. Word 和 PowerPoint 能打开 stub 生成产物，中文显示、页眉页脚和可编辑形状正常。
-5. 真实脱敏 `.md/.docx/.xlsx/.pptx` 解析、真实 NGA 协议、Windows 离线安装和视觉终审均单独记录，不得标为 Mac 阶段已完成。
+5. 真实脱敏 `.md/.docx/.xlsx/.pptx` 解析、真实 NGA、Windows 离线安装和视觉终审均单独记录，不得由 stub 或本机测试冒充。
+6. 便携版在干净 Windows 10/11 x64 断网机器上完成 Stub Word/PPT、模拟 NGA、真实 NGA 与 Office 打开验收。
+7. 正式推广包使用内网代码签名证书；首版无签名 ZIP 只允许受控内部试点。
 
 更完整的内网接入边界、NGA 替换点和验收要求见 `DEPLOY_AND_USAGE.md` 与 `docs/内网接入.md`。
