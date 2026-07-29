@@ -1,0 +1,5 @@
+[lint]
+# Existing code predates a formatting baseline. Keep this gate focused on
+# correctness errors until a separately reviewed formatting migration occurs.
+select = ["E9", "F"]
+ignore = ["F841"]

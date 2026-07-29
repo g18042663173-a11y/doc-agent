@@ -1,5 +1,7 @@
 pydantic==2.12.5
 Flask==3.0.0
+waitress==3.0.2
+colorama==0.4.6
 graphviz==0.21
 pytest==9.0.3
 pytest-cov==7.0.0

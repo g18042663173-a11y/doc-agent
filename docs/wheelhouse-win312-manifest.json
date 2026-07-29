@@ -2,14 +2,14 @@
   "hash_algorithm": "sha256",
   "schema_version": 1,
   "source_requirements": "requirements.txt",
-  "source_requirements_sha256": "fb3f6d24c851259d99c35a12867f9c6f7035148a8247002e964a125088f26ce0",
+  "source_requirements_sha256": "7b82d3f7166dac62f11ffccce3b0b1d358da26e5a343ed0489b36e6d5935884c",
   "target": {
     "implementation": "CPython",
     "platform": "win_amd64",
     "python_version": "3.12"
   },
-  "verification_boundary": "Hashes were generated from downloaded Windows wheels on macOS; offline installation still requires Windows true-machine validation.",
-  "wheel_count": 27,
+  "verification_boundary": "Hashes were generated from downloaded Windows wheels on Windows; clean-machine physical-offline Windows true-machine validation is still required.",
+  "wheel_count": 29,
   "wheels": [
     {
       "bytes": 13643,
@@ -31,6 +31,13 @@
       "name": "click",
       "sha256": "e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76",
       "version": "8.4.2"
+    },
+    {
+      "bytes": 25335,
+      "filename": "colorama-0.4.6-py2.py3-none-any.whl",
+      "name": "colorama",
+      "sha256": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+      "version": "0.4.6"
     },
     {
       "bytes": 223429,
@@ -185,6 +192,13 @@
       "name": "typing-inspection",
       "sha256": "4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7",
       "version": "0.4.2"
+    },
+    {
+      "bytes": 56232,
+      "filename": "waitress-3.0.2-py3-none-any.whl",
+      "name": "waitress",
+      "sha256": "c56d67fd6e87c2ee598b76abdd4e96cfad1f24cacdea5078d382b1f9d7b5ed2e",
+      "version": "3.0.2"
     },
     {
       "bytes": 226459,

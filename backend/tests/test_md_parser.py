@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from docx import Document
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
@@ -90,3 +91,33 @@ def test_parse_markdown_preserves_fenced_code_block_indentation() -> None:
     assert ir.ir_version == "1.2"
     assert code.language == "c"
     assert code.code == "typedef struct {\n    uint16_t frame_id;\n    uint8_t payload[32];\n} FrameHeader;"
+
+
+def test_parse_markdown_enforces_file_resource_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.parsers import md_parser
+    from app.parsers.errors import ParseFailure
+
+    monkeypatch.setattr(md_parser, "MAX_MD_FILE_BYTES", 8)
+    path = tmp_path / "large.md"
+    path.write_bytes(b"123456789")
+
+    with pytest.raises(ParseFailure) as captured:
+        md_parser.parse_markdown(path)
+    assert captured.value.code == "E001"
+    assert captured.value.loc == "source.resource"
+
+
+def test_parse_markdown_limits_long_text_with_locations(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    long_text = "文" * 2100
+    path = tmp_path / "long.md"
+    path.write_text(f"# 标题\n\n{long_text}\n\n- {long_text}\n", encoding="utf-8")
+
+    result = parse_markdown(path)
+    paragraph = next(block for block in result.content.blocks if block.type == "paragraph")
+    bullet = next(block for block in result.content.blocks if block.type == "bullet_list")
+    assert len(paragraph.text) == 2000
+    assert len(bullet.items[0].text) == 2000
+    assert any("markdown paragraph" in warning for warning in result.warnings)
+    assert any("markdown list item" in warning for warning in result.warnings)

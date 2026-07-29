@@ -63,6 +63,34 @@ def test_render_cli_reports_validation_code_for_invalid_word_ir(tmp_path: Path) 
     assert "E004" in result.stderr
 
 
+def test_render_cli_rejects_template_for_word_with_a_structured_argument_error(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.cli.render",
+            "--type",
+            "word",
+            "samples/ir/word_valid_01_plain.json",
+            "--template",
+            str(tmp_path / "ignored.pptx"),
+            "--output",
+            str(tmp_path / "word.docx"),
+        ],
+        cwd=ROOT,
+        env={**os.environ, "PYTHONPATH": str(ROOT / "backend")},
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert '"code": "E001"' in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_render_cli_writes_deck_pptx_and_runs_lint(tmp_path: Path) -> None:
     ir_path = tmp_path / "deck.json"
     output = tmp_path / "sample.pptx"

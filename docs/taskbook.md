@@ -59,7 +59,7 @@
 | A2 | AICoding 输出形态:基本能稳定输出一个 json 代码块,但可能夹带解释文字,必须经“剥壳 + Schema 校验”后方可进入渲染。 |
 | A3 | 密级文案默认:DOCX 页脚为“内部公开”,PPTX 页脚为“HUAWEI CONFIDENTIAL”,均在配置中可改。 |
 | A4 | 中文字体:外网以微软雅黑为主选,HarmonyOS Sans 作为内网目标字体;不追求与母版逐像素一致,字体集中在主题配置,内网只改一处。 |
-| A5 | DeckIR v1.9 已定稿:本文 3.3 节给出的字段表为权威版;1.4/1.5/1.6/1.7/1.8 输入先做兼容读取,再按本表校验。 |
+| A5 | DeckIR v2.0 已评审冻结:本文 3.3 节和导出的 JSON Schema 为权威版;1.4-1.9 输入先在内存迁移,再按 2.0 校验,不覆盖用户原文件。 |
 | A6 | 主界面为 CLI + 本地文件目录(input/ 放输入、output/ 取产物);Web 工作台为可选项(P2),如需可复用现有 Flask,不作为核心交付。 |
 | A7 | AICoding 输入约束:单次输入按 8K–16K 字符规划(Prompt 截断上限据此设定);以“把内容贴进 Prompt”为准,不假设 AICoding 能直接读取本地文件路径。 |
 
@@ -280,9 +280,9 @@ class IRGenerator(Protocol):
 | PPT 图表 | 只取图表标题与类型,不反解数据(P2 再议)。 |
 | 嵌入图片(全格式) | 记录存在与尺寸,不搬运二进制(DOCX 图片透传列为 P2)。 |
 
-### 3.3  DeckIR v1.9(PPT 输出契约,Step 3 核心)
+### 3.3  DeckIR v2.0(PPT 输出契约,Step 3 核心)
 
-meta 字段:title(必填)、subtitle、author、date、classification(默认 HUAWEI CONFIDENTIAL)、theme(默认 hw_v1)。slides[].layout 枚举 14 种,覆盖 v1.0 要求并受控新增流程、时间线与左右组合页:
+meta 字段:title(必填)、subtitle、author、date、classification(默认 HUAWEI CONFIDENTIAL)、theme(默认 hw_v1)。slides[].layout 枚举 17 种,在 1.9 基础上冻结真实图片、信息图和高级图表能力:
 
 | layout | 必填字段(可选项加问号) | 渲染要点 |
 | --- | --- | --- |
@@ -293,19 +293,22 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 | two_column | title, left, right(列 = heading? + bullets 或 text) | 左右等宽,列内小标题加粗。 |
 | table | title, table{ header, rows; column_groups?, row_groups?, cell_spans?, col_widths?, conclusion_col? }(数据区至多 12x8) | 方案对比表 / 决策矩阵;表头红底白字,支持分组表头、合并单元格、重点单元格黄 / 青强调、短列表与结论列。 |
 | cards | title, cards[2..4]{ title, desc, tag? };variant:default\|kpi | 等宽卡片;KPI 模式中 title/desc/tag 分别表示指标名、核心数值、趋势或口径。 |
-| chart | title, chart{ kind: bar\|line\|pie, orientation:vertical\|horizontal, categories, series; unit?, thresholds?, show_data_labels?, legend_position?, side_conclusion?, side_table? } | 指标 / 性能图表页;horizontal 仅适用于 bar 并生成原生横向数据条;阈值线方向跟随数值轴;line/pie 保持 vertical。 |
+| chart | title, chart{ kind:bar\|line\|pie\|scatter\|combo, categories, series; orientation?, unit?, axis titles?, number formats?, source?, methodology?, note?, thresholds?, legend/data labels/side content? } | 原生可编辑图表;scatter 使用 series.x_values;combo 要求显式 bar/line、primary/secondary 和不同量纲,渲染为两张对齐的原生图表。不得改写、排序、合并或删除业务数据。 |
 | architecture_diagram | title, nodes[{id,text,type,group?,position?,size?}], edges[{from,to,label?,style,direction}], groups[{id,label,node_ids}], manual_hints? | 架构图可编辑骨架;type 支持 primary/secondary/emphasis/data/job/module，未知 type 回退主题 default 色;节点、连接符、虚线分组框均为独立 PPT 对象。 |
 | composite | title, regions[2]{slot:left\|right, components[1..3]};每块为 table / architecture_diagram / title_bullets / cards 之一 | 左右组合页;一栏从上到下堆叠 1-3 块,区域与块坐标由主题确定,嵌入组件复用原字段、渲染与合规检查;累计超高触发 HW-W03 建议人工拆分;process_flow 等待组合架构稳定后再纳入。 |
 | process_flow | title, steps[2..7]{id,title,description?}, orientation:horizontal\|vertical | 线性流程;按数组顺序连接,步骤框与箭头均为独立可编辑对象;分支流程继续使用 architecture_diagram。 |
 | timeline | title, milestones[2..8]{label,title,description?,status}, orientation:horizontal\|vertical | 时间线 / 简化路线图;status 限 completed/current/planned;不表达精确 Gantt。 |
-| image | title;image_ref 或 placeholder, caption? | 外网使用 16:9 灰底占位框 + 题注,明确等比放入且禁止随意裁切;真实图片透传仍为 P2。 |
+| image | title;image_ref 或 placeholder;fit?, focal_x/y?, alt?, caption?, credit? | image_ref 必须在 AssetManifest 中解析并嵌入真实图片;仅 IR 明确给出 placeholder 时允许占位。contain/cover 均保持比例并记录裁切审计。 |
+| image_text | title,image{image_ref,fit?,focal_x/y?,alt?,caption?,credit?};image_position?;heading?;text 或 bullets | 单图与文字并列,图片左右可选;缺失引用以 A005 阻断。 |
+| image_grid | title,images[2..4] | 2-4 张真实图片网格,引用不得重复,每张图片独立记录适配、裁切和有效 DPI。 |
+| infographic | title,infographic{kind:funnel\|quadrant\|cycle\|matrix,...} | 漏斗 3-6 阶段、象限最多 12 项、循环 3-6 步、矩阵 2-4 行 x 2-4 列;使用原生 shape、文本和 connector。 |
 | conclusion | title, bullets(至多 5 条);cta? | 结尾页,可带行动号召一句。 |
 
 最小合法样例(4 页演示):
 
 ```
 {
-  "ir_type": "deck", "ir_version": "1.9",
+  "ir_type": "deck", "ir_version": "2.0",
   "meta": { "title": "Q3 业务汇报", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1" },
   "slides": [
     { "layout": "cover", "title": "Q3 业务汇报", "subtitle": "命令行文档工具链",
@@ -323,6 +326,16 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 ```
 
 DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法、D002 缺 meta.title、D003 未知 layout、D004 该 layout 缺必填字段、D005 表格超限 / 行列不规整 / 分组或合并越界、D006 bullets 超条数;W1xx 为可自动降级项(如 agenda 超 8 条截断)。页数合法范围 1-30,演示目标 5-12 页。
+
+1.4-1.9 输入在校验入口深拷贝并迁移为 2.0 后重新执行完整 Schema 校验;迁移不会覆写原文件,renderer 不直接兼容非法旧字段。1.7 composite 单 component 会转换为单元素 components 列表;架构图未知 type 使用主题 default 色。
+
+### 3.4  图片资产与视觉决策独立契约
+
+- `AssetManifest 1.0` 与 DeckIR 解耦,记录 asset_id、来源、媒体类型、相对路径、原始/规范化 SHA-256、宽高、像素数、大小、透明度、标签、替代文本、署名和安全处理结果。只接受 PNG/JPEG/WebP;单图 20 MB、40MP,总计 100 MB、最多 20 张;拒绝伪装扩展名、动画、路径穿越、外部 URL 和解码炸弹。
+- `AssetUsageAudit 1.0` 记录最终页码、区域、contain/cover、裁切比例和有效 DPI。图片错误使用 A001-A006:格式不支持、损坏、容量超限、ID 冲突、引用缺失和不安全来源。
+- `VisualPlan 1.0` 根据 DocumentIR、表格和 AssetManifest 形成候选版式、置信度、证据和理由;`VisualSelectionAudit 1.0` 记录 DeckIR 是否采用。VisualPlan 不能直连 renderer,模型仍只能输出通过 DeckIR Schema 的 JSON。
+- 时间序列用 line,类目比较用 bar,2-6 个非负占比用 pie,实体关系/线性步骤/时间节点分别使用 architecture/process/timeline,阶段递减/双维定位/闭环/交叉分类分别使用 funnel/quadrant/cycle/matrix,有安全图片时使用 image_text/image_grid;没有合适视觉时保留文字页。
+- `ImageProvider` 仅预留协议,默认 `DisabledImageProvider` 离线拒绝生成;未来生成图片也必须进入同一安全、哈希和审计流程。
 
 ## 4  Step 1 细化:AICoding 搞定 Word 输出(对应 v1.0 第 3.1 节)
 
@@ -359,7 +372,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 ```
 [角色] 你是企业文档结构化助手。
-[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.2(或 DeckIR v1.9)Schema。
+[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.2(或 DeckIR v2.0)Schema。
 [输出纪律] 只输出一个裸 JSON 对象,不得使用代码围栏或附加文字;不得新增 Schema 之外的字段;
           表格不超过 <上限>;要点每页不超过 7 条。
 [目标 Schema 摘要] <内嵌字段说明或精简 JSON Schema,由 ir 包自动生成,禁止手抄>
@@ -404,7 +417,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 | --- | --- | --- | --- | --- |
 | S3-1 | 风格调研与 tokens 定稿 | 产出 docs/风格规范.md 与 themes/hw_theme.json;标注来源与近似声明 | 评审通过;渲染器取值零硬编码,改 json 即改全局 | 1.0 天 |
 | S3-2 | P0 版式渲染(五种) | cover / agenda / section / title_bullets / table;页脚三段式 | 五版式样例渲染后 lint 零 Error | 2.0 天 |
-| S3-3 | P1 版式渲染(三种 + chart 增强 + image 降级) | two_column / cards / conclusion;chart 走原生图表,image 走占位降级并输出说明文案 | 十一版式样例全部可渲染;chart 为可编辑原生图表;image 降级页有明确说明 | 1.0 天 |
+| S3-3 | P1/扩展版式渲染 | two_column / cards / conclusion;真实图片与图文页;原生信息图;bar/line/pie/scatter/combo | 十七版式样例全部可渲染;chart/信息图可编辑;合法 image_ref 嵌入真实图片 | 1.0 天 |
 | S3-4 | 合规检查器与报告 | 6.3 规则表全部落码;对渲染产物回读检查;JSON + 可读双格式报告 | 每条规则正反例各至少 1;人工注入违规即刻命中 | 1.0 天 |
 | S3-5 | stub 端到端演示 | md 摘要经 stub generator 到 DeckIR 到 PPTX 到 lint,一条命令 | 断网环境跑通;产出 5-12 页可编辑 PPTX | 0.5 天 |
 | S3-6 | 黄区接入说明 | 两个替换点清单、环境变量、内网自测步骤、离线安装指引 | 评审通过;他人按文档可独立执行 | 0.5 天 |
@@ -433,7 +446,8 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 - 全部版式自绘(文本框 + 形状),不依赖模板母版占位符,避免“母版找不到”类环境问题;主题值一律读 hw_theme.json。
 - 每页固定绘制页脚三段式与顶部标题区;cover 与 section 使用红色装饰条形成家族感。
 - 产物必须可编辑:文本是真文本框、表格是真表格;禁止把内容画成图片。
-- chart 版式使用 python-pptx 原生图表;bar / line 支持阈值线、数据标签、图例、单位、侧边结论 / 小表;pie 保留基础图兼容。
+- chart 版式使用 python-pptx 原生可编辑图表;bar / line 支持阈值线、数据标签、图例、单位、侧边结论 / 小表;pie/scatter 保持原生可编辑;combo 由主轴 bar 和次轴 line 两张对齐的原生图表组成。
+- 图片由 AssetManifest 安全导入后嵌入;信息图与 24 个企业语义图标由原生 AutoShape、文本框和 connector 构成,不栅格化整页。
 
 ### 6.3  合规检查规则表(lint;对渲染产物回读检查,外部 PPTX 亦可复检)
 
@@ -451,9 +465,29 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 | HW-W07 | Warning | 元素间距或到页边距小于下限(拥挤 / 重叠) | 两两包围盒间距 + 到页边距计算 |
 | HW-W08 | Warning | 关键框坐标偏离 theme 规定(标题 / 页脚不在位) | shape.top / left 与 theme 坐标比对 |
 | HW-W09 | Warning | 正文与背景对比度低于 4.5:1 | 前景 / 背景 RGB 算相对亮度比 |
+| HW-W10 | Warning | 图表轴范围、major unit 或数字格式不符合数据范围/字面量单位 | 回读 chart XML 与 cache,检查零轴、漂亮刻度和整数/小数/千分位/字面量单位格式 |
+| HW-W11 | Warning | 类目标签、数据标签或图例预计拥挤 | 检查类目长度/数量、系列数、legend_position、tick skip 与标签策略 |
+| HW-W12 | Warning | 饼图类别少于 2、超过 6、含负值或总和不为正 | 回读原生图表 cache,不自动合并、删除或改写业务数据 |
+| HW-W13 | Warning | 图片有效分辨率不足或放大过度 | 根据规范化像素和最终区域计算 effective DPI |
+| HW-W14 | Warning | 图片裁切、焦点、来源或署名存在风险 | 检查 usage audit 与 AssetManifest 元数据 |
+| HW-W15 | Warning | 信息图容量、标签碰撞或结构不适用 | 回读信息图标记形状、标签数量与几何关系 |
+| HW-W16 | Warning | 组合图次轴、量纲或数字格式存在风险 | 检查主次轴系列、单位和 number format |
 | HW-I01 | Info | agenda 条目数与 section 页数不一致 | 结构统计,提示但不拦截 |
 
 报告结构:{ summary: { errors, warnings, infos, pass }, items: [ { code, level, slide, message, suggestion } ] };存在任一 Error 则 pass = false。报告同时输出 JSON(机器用)与可读文本(演示用),命令行直接打印,若有 P2 界面则按级别分组展示。
+
+### 6.3.1  模板驱动 PPTX 扩展
+
+- DeckIR 固定为 2.0。上传 `.pptx` 时先生成独立的 `TemplateProfile 1.0`,再生成 `TemplatePlan 1.1`;两份契约均严格校验并导出 JSON Schema,不向 DeckIR 自造字段。
+- 模板输入限制为压缩包 50 MB、解包 500 MB、200 页和 5000 个形状;路径穿越、宏、ActiveX、OLE、外部关系、损坏 XML 或悬空关系以 E003 阻断。
+- 原型评分固定为角色 40、内容槽 25、容量 25、样式安全 10;重复使用依次扣 5 分、最多扣 15 分。低于 70 分、关系不安全或最小字号仍溢出时,以 W201 记录并在相同 master/layout/theme 下重绘。
+- 缺失模板字体必须实际替换为本机可用兼容字体并以 W202 聚合记录;输出重新写入当前密级和页码,不复制 transition、timing、notes、comments、外部超链接、chart/OLE/embedding 等复杂关系。
+- 每次模板渲染生成 `template_profile.json`、`template_plan.json`、`template_structure.json`、`template_replacement_audit.json` 和 `pptx_package_report.json`。替换审计含资产哈希、图片槽、fit/crop/focal 和回退原因;包校验覆盖 Content Types、XML 可解析性、`.rels` 目标以及 XML 中非空 `r:id/r:embed/r:link` 的反向引用。
+- 实现使用 Python 3.12、python-pptx、Pillow 和 Pydantic v2,不依赖 HTML、PptxGenJS、浏览器渲染或外部 presentation skill。
+
+### 6.3.2  DeckIR 2.0 已冻结扩展
+
+DeckIR 2.0 已通过 Schema、正反样例、迁移器和快照测试冻结 scatter、组合图、类目轴/数值轴标题、显式 number format、数据来源/口径字段、真实图片新布局和 infographic 判别联合。组合图仅在主次量纲不同且确有比较价值时使用次轴;数据大小不同本身不是启用双轴的理由。任何后续字段仍须先升版本和评审,不得通过 renderer 私有字段绕过契约。
 
 ### 6.5  视觉自评回路(P1 可选,把审美部分部分纳入自动循环)
 
@@ -503,7 +537,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 
 1. 构建 Windows 平台 wheelhouse:在 Windows 机上 make_wheelhouse.py,或在 Mac 上用 pip download --platform win_amd64 --python-version 3.12 --only-binary=:all: 拉全依赖(含 lxml、pydantic-core 等平台 wheel),产出带 requirements 锁定与 hash 的 wheelhouse/。
 2. 拷贝项目 + wheelhouse 到一台干净、断网的 Windows 机。
-3. pip install --no-index --find-links wheelhouse -r requirements.txt:安装成功、无缺包。
+3. 运行 `bootstrap_windows.ps1`:用 `py -3.12` 创建仓库 `.venv`,再以 `--no-index --find-links wheelhouse --require-hashes -r requirements-win312.lock` 安装成功、无缺包。
 4. 断网执行 verify.ps1:stub 全链路 + pytest + 覆盖率全绿。
 5. 用真实样例各跑一次 word / deck,产物能在 Word / PowerPoint 正常打开编辑。
 6. 记录 Python 版本、机器环境与结果截图,纳入验收手册。
@@ -559,7 +593,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 3. 四个输入解析器(md / docx / xlsx / pptx)与配套样例、warnings 降级清单。
 4. Prompt 模板库与组装器:四段式模板、截断策略、确定性输出。
 5. DOCX 渲染器:样式表集中、失败提示齐全、3 个官方样例。
-6. 华为风格主题(hw_theme.json)+ PPTX 渲染器:14 版式(chart 为原生图表,image 允许占位降级,process_flow / timeline / composite 为原生可编辑形状)。
+6. 华为风格主题(hw_theme.json)+ PPTX 渲染器:17 版式(chart/信息图为原生可编辑对象,image_ref 嵌入 AssetManifest 真图,仅显式 placeholder 允许占位,process_flow / timeline / composite 保持原生可编辑)。
 7. 合规检查器与双格式报告,支持外部 PPTX 复检。
 8. 测试套件与覆盖率报告:单元 + 契约 + 端到端,一键 verify 脚本。
 9. 文档四件:README、使用说明、内网接入说明、验收手册(含全部验收命令)。
@@ -595,8 +629,8 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 
 已决事项:
 
-1. DeckIR 以当前 v1.9 Schema 与本文 3.3 节为权威;1.4/1.5/1.6/1.7/1.8 在校验入口确定性迁移到 1.9,其中 1.7 composite 的单 component 会转换为单元素 components 列表;架构图 type 的未知值使用主题 default 色;更早数据如需长期保存须显式迁移,renderer 不暗自兼容非法 IR。
-2. chart 版式使用 python-pptx 原生可编辑图表;bar/line 增强和基础 pie 已落地,不再作为未决项。
+1. DeckIR 以当前 v2.0 Schema 与本文 3.3 节为权威;1.4-1.9 在校验入口确定性迁移到 2.0,不覆盖原文件;renderer 不暗自兼容非法 IR。
+2. chart 使用 python-pptx 原生可编辑对象;bar/line/pie/scatter 已落地,combo 使用两张对齐的原生图表表达主轴与次轴。真实图片、信息图、AssetManifest 和 VisualPlan 已冻结,不再作为未决项。
 
 仍需导师 / 内网确认:
 

@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>文档生成工作台</title>
   <style>
     :root {
@@ -89,6 +90,9 @@
       white-space: nowrap;
     }
     .state-dot { width: 7px; height: 7px; background: var(--success); border-radius: 50%; }
+    .topbar__state.is-connecting .state-dot { background: var(--warning); }
+    .topbar__state.is-disconnected .state-dot,
+    .topbar__state.is-incompatible .state-dot { background: var(--hw-red); }
 
     main { width: min(var(--page-max), calc(100% - 48px)); margin: 0 auto; padding: var(--space-5) 0 var(--space-6); }
     .page-heading { margin-bottom: var(--space-4); display: flex; justify-content: space-between; align-items: end; gap: var(--space-3); }
@@ -155,6 +159,17 @@
     .segment button:last-child { border-right: 0; }
     .segment button.is-selected { color: var(--hw-red); background: #fff5f5; font-weight: 700; box-shadow: inset 0 -2px 0 var(--hw-red); }
     .segment.is-disabled { opacity: .42; pointer-events: none; }
+    .template-picker { display: flex; align-items: center; gap: 12px; margin-top: var(--space-3); padding: 12px 14px; border: 1px solid var(--line); background: var(--surface-soft); }
+    .template-picker.is-disabled { opacity: .45; pointer-events: none; }
+    .template-picker__meta { min-width: 0; flex: 1; }
+    .template-picker__meta strong, .template-picker__meta span { display: block; }
+    .template-picker__meta strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .template-picker__meta span { color: var(--muted); font-size: 11px; }
+    .template-picker__remove { border: 0; background: transparent; color: var(--muted); font-size: 18px; }
+    .asset-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .asset-item { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 4px 8px; border: 1px solid var(--line); background: var(--surface); font-size: 11px; }
+    .asset-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .asset-item button { border: 0; background: transparent; color: var(--muted); font-size: 14px; }
     .action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: var(--space-4); }
     .action-note { color: var(--muted); font-size: 12px; }
 
@@ -175,6 +190,7 @@
     .progress-panel { display: none; }
     .progress-panel.is-visible { display: block; }
     .progress-top { display: flex; justify-content: space-between; gap: var(--space-3); align-items: center; }
+    .progress-actions { display: flex; align-items: center; gap: 10px; }
     .progress-title { font-weight: 700; }
     .elapsed { color: var(--muted); font-size: 12px; }
     .progress-track { height: 5px; margin: 14px 0 13px; background: #e8ecee; overflow: hidden; }
@@ -193,6 +209,11 @@
     .result__row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
     .result__title { margin: 0; font-size: 16px; }
     .result__detail { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .failure-diagnostic { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(180, 35, 24, .22); color: var(--muted); font-size: 12px; }
+    .failure-diagnostic__head { display: flex; gap: 9px; align-items: baseline; color: var(--ink); }
+    .failure-diagnostic__head strong { color: var(--hw-red); }
+    .failure-diagnostic p { margin: 7px 0 0; }
+    .failure-diagnostic .button { margin-top: 10px; }
     .lint-summary { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
     .lint-chip { padding: 3px 7px; border: 1px solid transparent; font-size: 11px; font-weight: 700; }
     .lint-chip--error { color: #aa2632; border-color: #efc4c9; background: #fff; }
@@ -201,6 +222,8 @@
     .lint-items { margin: 11px 0 0; padding: 0; list-style: none; }
     .lint-items li { padding: 7px 0; border-top: 1px solid rgba(47, 125, 75, .16); color: var(--muted); font-size: 12px; }
     .lint-items b { color: var(--ink); }
+    .audit-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .audit-links a { color: var(--info); font-size: 12px; font-weight: 700; text-decoration: none; border-bottom: 1px solid currentColor; }
 
     .side-panel { padding: var(--space-4); }
     .side-panel + .side-panel { border-top: 1px solid var(--line); }
@@ -232,7 +255,8 @@
       .topbar { height: auto; }
       .topbar__inner, main { width: min(100% - 28px, var(--page-max)); }
       .topbar__inner { padding: 14px 0; }
-      .brand__divider, .brand__product, .topbar__state { display: none; }
+      .brand__divider, .brand__product { display: none; }
+      .topbar__state { font-size: 11px; }
       main { padding: 26px 0 36px; }
       .page-heading { align-items: start; }
       .contract-note { display: none; }
@@ -242,6 +266,7 @@
       .side-panel + .side-panel { border-top: 1px solid var(--line); border-left: 0; }
       .metrics, .tier-list { grid-template-columns: 1fr; }
       .result__row, .analysis-summary { align-items: flex-start; flex-direction: column; }
+      .progress-top { align-items: flex-start; flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -254,7 +279,7 @@
         <span class="brand__divider" aria-hidden="true"></span>
         <span class="brand__product">离线智能文档工具链</span>
       </div>
-      <div class="topbar__state"><span class="state-dot" aria-hidden="true"></span>本地服务已连接</div>
+      <div id="serviceState" class="topbar__state is-connecting" data-testid="service-status"><span class="state-dot" aria-hidden="true"></span><span id="serviceStateText">正在连接本地服务</span></div>
     </div>
   </header>
 
@@ -272,15 +297,15 @@
       <section class="surface workflow" aria-label="生成工作流">
         <div class="section">
           <div class="section-heading"><span class="section-number">01</span><div><h2>导入资料</h2><p class="section-subtitle">支持 Markdown、Word、Excel、PowerPoint</p></div></div>
-          <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="上传资料，支持拖放">
+          <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="上传资料，支持拖放" data-testid="input-dropzone">
             <div id="dropzoneEmpty">
               <div class="upload-icon" aria-hidden="true"></div>
               <p class="dropzone__title">拖放文件到此处，或选择本地文件</p>
               <p class="dropzone__hint">.md &nbsp; .docx &nbsp; .xlsx &nbsp; .pptx</p>
-              <button id="browseButton" class="button button--secondary" type="button">选择文件</button>
+              <button id="browseButton" class="button button--secondary" type="button" data-testid="browse-input">选择文件</button>
             </div>
             <div id="dropzoneFile" hidden></div>
-            <input id="fileInput" class="file-input" type="file" accept=".md,.docx,.xlsx,.pptx">
+            <input id="fileInput" class="file-input" type="file" accept=".md,.docx,.xlsx,.pptx" data-testid="input-file">
           </div>
         </div>
 
@@ -290,22 +315,38 @@
             <div>
               <span class="field-label">生成类型</span>
               <div class="segment" role="group" aria-label="生成类型">
-                <button class="type-option" type="button" data-type="word">Word 详设</button>
-                <button class="type-option is-selected" type="button" data-type="deck">PPT 汇报</button>
+                <button class="type-option" type="button" data-type="word" data-testid="type-word">Word 详设</button>
+                <button class="type-option is-selected" type="button" data-type="deck" data-testid="type-deck">PPT 汇报</button>
               </div>
             </div>
             <div>
               <span class="field-label">PPT 生成深度</span>
               <div id="depthSegment" class="segment segment--three" role="group" aria-label="PPT 生成深度">
-                <button class="depth-option" type="button" data-depth="概览">概览</button>
-                <button class="depth-option is-selected" type="button" data-depth="标准">标准</button>
-                <button class="depth-option" type="button" data-depth="详细">详细</button>
+                <button class="depth-option" type="button" data-depth="概览" data-testid="depth-overview">概览</button>
+                <button class="depth-option is-selected" type="button" data-depth="标准" data-testid="depth-standard">标准</button>
+                <button class="depth-option" type="button" data-depth="详细" data-testid="depth-detailed">详细</button>
               </div>
             </div>
           </div>
+          <div id="templatePicker" class="template-picker">
+            <div class="template-picker__meta"><strong id="templateName">使用默认华为自绘主题</strong><span id="templateDetail">可选上传 .pptx 模板，系统将生成可审计页面映射</span></div>
+            <button id="templateBrowse" class="button button--secondary" type="button" data-testid="browse-template">选择模板</button>
+            <button id="templateRemove" class="template-picker__remove" type="button" aria-label="移除模板" hidden data-testid="remove-template">×</button>
+            <input id="templateInput" class="file-input" type="file" accept=".pptx" data-testid="template-file">
+          </div>
+          <div id="assetPicker" class="template-picker">
+            <div class="template-picker__meta">
+              <strong id="assetName">未添加图片资产</strong>
+              <span id="assetDetail">PNG、JPEG 或 WebP，最多 20 张</span>
+              <div id="assetList" class="asset-list" data-testid="asset-list"></div>
+            </div>
+            <button id="assetBrowse" class="button button--secondary" type="button" data-testid="browse-assets">选择图片</button>
+            <button id="assetRemoveAll" class="template-picker__remove" type="button" aria-label="移除全部图片" hidden data-testid="remove-all-assets">×</button>
+            <input id="assetInput" class="file-input" type="file" accept=".png,.jpg,.jpeg,.webp" multiple data-testid="asset-files">
+          </div>
           <div class="action-row">
-            <button id="analyzeButton" class="button button--secondary" type="button" disabled>分析资料</button>
-            <button id="generateButton" class="button button--primary" type="button" disabled>开始生成</button>
+            <button id="analyzeButton" class="button button--secondary" type="button" disabled data-testid="analyze-button">分析资料</button>
+            <button id="generateButton" class="button button--primary" type="button" disabled data-testid="generate-button">开始生成</button>
             <span id="actionNote" class="action-note">请先选择一份资料</span>
           </div>
         </div>
@@ -320,8 +361,8 @@
           <div id="tierList" class="tier-list"></div>
         </div>
 
-        <div id="progressPanel" class="section progress-panel" aria-live="polite">
-          <div class="progress-top"><div><span class="field-label">生成进度</span><div id="progressTitle" class="progress-title">等待任务启动</div></div><span id="elapsed" class="elapsed">已用时 00:00</span></div>
+        <div id="progressPanel" class="section progress-panel" aria-live="polite" data-testid="progress-panel">
+          <div class="progress-top"><div><span class="field-label">生成进度</span><div id="progressTitle" class="progress-title">等待任务启动</div></div><div class="progress-actions"><span id="elapsed" class="elapsed">已用时 00:00</span><button id="cancelButton" class="button button--secondary" type="button" hidden data-testid="cancel-job">取消任务</button></div></div>
           <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
           <div class="stepper" aria-label="生成阶段">
             <div class="step" data-step="parsing">解析资料</div>
@@ -331,10 +372,17 @@
           </div>
         </div>
 
-        <div id="resultPanel" class="section result" aria-live="polite">
-          <div class="result__row"><div><h2 id="resultTitle" class="result__title">生成完成</h2><p id="resultDetail" class="result__detail"></p></div><a id="downloadButton" class="button button--primary" href="#" hidden>下载产物</a></div>
+        <div id="resultPanel" class="section result" aria-live="polite" data-testid="result-panel">
+          <div class="result__row"><div><h2 id="resultTitle" class="result__title">生成完成</h2><p id="resultDetail" class="result__detail" data-testid="result-detail"></p></div><a id="downloadButton" class="button button--primary" href="#" hidden data-testid="artifact-download">下载产物</a></div>
+          <div id="failureDiagnostic" class="failure-diagnostic" hidden data-testid="failure-diagnostic">
+            <div class="failure-diagnostic__head"><strong id="failureCode" data-testid="failure-code"></strong><span id="failureStage"></span></div>
+            <p id="failureSuggestion"></p>
+            <p id="failureSupport"></p>
+            <a id="failureReportLink" class="button button--secondary" href="#" hidden data-testid="failure-report-link">下载失败报告</a>
+          </div>
           <div id="lintSummary" class="lint-summary"></div>
           <ul id="lintItems" class="lint-items"></ul>
+          <div id="auditLinks" class="audit-links"></div>
         </div>
       </section>
 
@@ -357,30 +405,75 @@
 
   <script>
     (() => {
-      const state = { file: null, type: "deck", depth: "标准", jobId: null, timer: null, elapsedTimer: null, startedAt: null, busy: false };
-      const stageText = { queued: "任务已创建，等待执行", parsing: "正在解析源文件", generating: "正在生成结构化内容", rendering: "正在渲染可编辑文档", linting: "正在执行合规检查", done: "交付件已准备完成", validation_failed: "IR 校验未通过", failed: "任务执行失败" };
+      const storageKey = "huawei-workbench-last-job-v1";
+      const state = { file: null, template: null, assets: [], type: "deck", depth: "标准", jobId: null, idempotencyKey: null, timer: null, elapsedTimer: null, startedAt: null, busy: false, jobRunning: false, pollFailures: 0, connected: false, compatible: false };
+      const stageText = { queued: "任务已创建，等待执行", parsing: "正在解析源文件", normalizing_assets: "正在校验图片资产", planning_visuals: "正在规划视觉表达", generating: "正在生成结构化内容", profiling_template: "正在分析模板母版与页面原型", planning_template: "正在规划页面与模板映射", rendering: "正在渲染可编辑文档", validating_package: "正在检查 PPTX 包关系", linting: "正在执行合规检查", done: "交付件已准备完成", validation_failed: "IR 校验未通过", failed: "任务执行失败", canceled: "任务已取消", timed_out: "任务执行超时", interrupted: "服务重启导致任务中断", rate_limited: "请求频率受限" };
       const stageOrder = ["parsing", "generating", "rendering", "linting"];
       const el = (id) => document.getElementById(id);
       const dropzone = el("dropzone");
       const fileInput = el("fileInput");
       const browseButton = el("browseButton");
+      const templateInput = el("templateInput");
+      const templateBrowse = el("templateBrowse");
+      const assetInput = el("assetInput");
+      const assetBrowse = el("assetBrowse");
       const typeOptions = [...document.querySelectorAll(".type-option")];
       const depthOptions = [...document.querySelectorAll(".depth-option")];
 
       const setBusy = (busy) => {
         state.busy = busy;
         fileInput.disabled = busy;
+        templateInput.disabled = busy;
+        templateBrowse.disabled = busy;
+        assetInput.disabled = busy;
+        assetBrowse.disabled = busy;
         typeOptions.forEach((button) => button.disabled = busy);
         depthOptions.forEach((button) => button.disabled = busy);
+        el("cancelButton").hidden = !state.jobRunning || !state.jobId;
+        el("cancelButton").disabled = !state.jobRunning;
         updateActions();
       };
 
       const updateActions = () => {
-        const available = Boolean(state.file) && !state.busy;
+        const available = Boolean(state.file) && !state.busy && state.connected && state.compatible;
         el("analyzeButton").disabled = !available;
         el("generateButton").disabled = !available;
-        el("actionNote").textContent = state.busy ? "任务运行中，请保留此页面以查看进度" : state.file ? "可先分析内容规模，再开始生成" : "请先选择一份资料";
+        el("actionNote").textContent = state.busy ? "任务运行中，可刷新页面后继续查看" : !state.connected ? "本地服务未连接" : !state.compatible ? "前后端版本不兼容" : state.file ? "可先分析内容规模，再开始生成" : "请先选择一份资料";
       };
+
+      const setConnection = (mode, text) => {
+        const indicator = el("serviceState");
+        indicator.className = `topbar__state${mode === "connected" ? "" : ` is-${mode}`}`;
+        el("serviceStateText").textContent = text;
+        state.connected = mode === "connected" || mode === "incompatible";
+        state.compatible = mode === "connected";
+        updateActions();
+      };
+
+      const loadServiceVersion = async () => {
+        try {
+          const response = await fetch("/api/version", { cache: "no-store" });
+          const version = await readJson(response);
+          if (version.api_version !== "1.0" || version.deck_ir_version !== "2.0") {
+            setConnection("incompatible", `版本不兼容 · 后端 ${version.app_version || "未知"}`);
+            return;
+          }
+          setConnection("connected", `本地服务 v${version.app_version}`);
+        } catch (_error) {
+          setConnection("disconnected", "本地服务未连接");
+        }
+      };
+
+      const persistJob = (status = "running") => {
+        if (!state.jobId) return;
+        localStorage.setItem(storageKey, JSON.stringify({ jobId: state.jobId, idempotencyKey: state.idempotencyKey, startedAt: state.startedAt, status }));
+      };
+      const clearStoredJob = () => {
+        localStorage.removeItem(storageKey);
+        state.jobId = null;
+        state.idempotencyKey = null;
+      };
+      const newIdempotencyKey = () => window.crypto?.randomUUID ? `ui-${window.crypto.randomUUID()}` : `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
       const formatBytes = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
       const extension = (file) => (file.name.split(".").pop() || "FILE").toUpperCase();
@@ -396,6 +489,7 @@
         if (!file) return;
         const allowed = ["md", "docx", "xlsx", "pptx"];
         if (!allowed.includes(extension(file).toLowerCase())) { showToast("仅支持 .md、.docx、.xlsx、.pptx 文件", true); return; }
+        if (!state.jobRunning) clearStoredJob();
         state.file = file;
         dropzone.classList.add("is-file");
         el("dropzoneEmpty").hidden = true;
@@ -419,19 +513,38 @@
         dropzone.classList.remove("is-file"); el("dropzoneEmpty").hidden = false; el("dropzoneFile").hidden = true;
         el("analysisPanel").classList.remove("is-visible"); hideResult(); updateActions();
       };
-      const hideResult = () => { el("resultPanel").className = "section result"; el("downloadButton").hidden = true; el("lintItems").replaceChildren(); el("lintSummary").replaceChildren(); };
+      const hideResult = () => {
+        el("resultPanel").className = "section result";
+        el("downloadButton").hidden = true;
+        el("failureDiagnostic").hidden = true;
+        el("failureCode").textContent = "";
+        el("failureStage").textContent = "";
+        el("failureSuggestion").textContent = "";
+        el("failureSupport").textContent = "";
+        el("failureReportLink").hidden = true;
+        el("failureReportLink").href = "#";
+        el("lintItems").replaceChildren();
+        el("lintSummary").replaceChildren();
+        el("auditLinks").replaceChildren();
+      };
       const formDataForFile = () => { const data = new FormData(); data.append("input_file", state.file); return data; };
-      const readJson = async (response) => { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error?.message || `请求失败（${response.status}）`); return data; };
+      const readJson = async (response) => { const data = await response.json().catch(() => ({})); if (!response.ok) { const error = new Error(data.error?.message || `请求失败（${response.status}）`); error.payload = data; throw error; } return data; };
 
       browseButton.addEventListener("click", (event) => { event.stopPropagation(); fileInput.click(); });
       dropzone.addEventListener("click", () => { if (!state.file && !state.busy) fileInput.click(); });
       dropzone.addEventListener("keydown", (event) => { if ((event.key === "Enter" || event.key === " ") && !state.file && !state.busy) { event.preventDefault(); fileInput.click(); } });
       fileInput.addEventListener("change", () => selectFile(fileInput.files?.[0]));
+      templateBrowse.addEventListener("click", () => templateInput.click());
+      templateInput.addEventListener("change", () => selectTemplate(templateInput.files?.[0]));
+      el("templateRemove").addEventListener("click", clearTemplate);
+      assetBrowse.addEventListener("click", () => assetInput.click());
+      assetInput.addEventListener("change", () => selectAssets([...(assetInput.files || [])]));
+      el("assetRemoveAll").addEventListener("click", clearAssets);
       ["dragenter", "dragover"].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); if (!state.busy) dropzone.classList.add("is-dragover"); }));
       ["dragleave", "drop"].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); dropzone.classList.remove("is-dragover"); }));
       dropzone.addEventListener("drop", (event) => { if (!state.busy) selectFile(event.dataTransfer.files?.[0]); });
 
-      typeOptions.forEach((button) => button.addEventListener("click", () => { state.type = button.dataset.type; typeOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); el("depthSegment").classList.toggle("is-disabled", state.type !== "deck"); updateActions(); }));
+      typeOptions.forEach((button) => button.addEventListener("click", () => { state.type = button.dataset.type; typeOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); el("depthSegment").classList.toggle("is-disabled", state.type !== "deck"); el("templatePicker").classList.toggle("is-disabled", state.type !== "deck"); el("assetPicker").classList.toggle("is-disabled", state.type !== "deck"); if (state.type !== "deck") { clearTemplate(); clearAssets(); } updateActions(); }));
       depthOptions.forEach((button) => button.addEventListener("click", () => { state.depth = button.dataset.depth; depthOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); }));
 
       el("analyzeButton").addEventListener("click", async () => {
@@ -468,56 +581,138 @@
 
       el("generateButton").addEventListener("click", async () => {
         if (!state.file || state.busy) return;
-        hideResult(); setBusy(true); startProgress();
+        hideResult(); state.jobRunning = true; state.idempotencyKey = state.idempotencyKey || newIdempotencyKey(); setBusy(true); startProgress();
         try {
-          const data = formDataForFile(); data.append("type", state.type); if (state.type === "deck") data.append("depth", state.depth);
-          const response = await fetch("/api/generate", { method: "POST", body: data });
+          const data = formDataForFile(); data.append("type", state.type); if (state.type === "deck") { data.append("depth", state.depth); if (state.template) data.append("template_file", state.template); state.assets.forEach((file) => data.append("asset_files", file)); }
+          const response = await fetch("/api/generate", { method: "POST", headers: { "Idempotency-Key": state.idempotencyKey }, body: data });
           const job = await readJson(response);
-          state.jobId = job.job_id; renderProgress(job); pollJob();
-        } catch (error) { finishFailure({ error: { message: error.message || "无法创建生成任务" } }); }
+          state.jobId = job.job_id; persistJob(job.status); setBusy(true); renderProgress(job); pollJob();
+        } catch (error) { state.jobRunning = false; state.idempotencyKey = null; finishFailure(error.payload || { error: { message: error.message || "无法创建生成任务" } }); }
       });
 
-      const startProgress = () => {
-        state.startedAt = Date.now(); el("progressPanel").classList.add("is-visible"); el("progressFill").style.width = "0%"; el("progressTitle").textContent = "正在创建任务";
+      const startProgress = (startedAt = Date.now()) => {
+        state.startedAt = startedAt; el("progressPanel").classList.add("is-visible"); el("progressFill").style.width = "0%"; el("progressTitle").textContent = "正在创建任务";
+        el("cancelButton").hidden = !state.jobRunning || !state.jobId;
         window.clearInterval(state.elapsedTimer); state.elapsedTimer = window.setInterval(() => { const seconds = Math.floor((Date.now() - state.startedAt) / 1000); el("elapsed").textContent = `已用时 ${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }, 1000);
       };
       const renderProgress = (job) => {
         const progress = job.progress || {}; const stage = progress.stage || "queued"; const percent = Number(progress.percent || 0);
         el("progressTitle").textContent = stageText[stage] || "正在处理"; el("progressFill").style.width = `${Math.max(0, Math.min(100, percent))}%`;
-        const current = stageOrder.indexOf(stage);
+        const stageAlias = { normalizing_assets: "parsing", planning_visuals: "generating", profiling_template: "rendering", planning_template: "rendering", validating_package: "linting" };
+        const current = stageOrder.indexOf(stageAlias[stage] || stage);
         document.querySelectorAll(".step").forEach((step, index) => { step.classList.toggle("is-active", index === current && stage !== "done"); step.classList.toggle("is-done", stage === "done" || (current > index)); });
       };
       const pollJob = async () => {
         window.clearTimeout(state.timer);
         try {
           const response = await fetch(`/api/status/${encodeURIComponent(state.jobId)}`); const job = await readJson(response); renderProgress(job);
+          state.pollFailures = 0; persistJob(job.status); setConnection("connected", el("serviceStateText").textContent.startsWith("本地服务 v") ? el("serviceStateText").textContent : "本地服务已连接");
           if (job.status === "done") return finishSuccess(job);
-          if (job.status === "failed") return finishFailure(job);
+          if (job.status === "failed" || job.status === "canceled") return finishFailure(job);
           state.timer = window.setTimeout(pollJob, 700);
-        } catch (error) { finishFailure({ error: { message: error.message || "无法查询任务状态" } }); }
+        } catch (error) {
+          if (error.payload) return finishFailure(error.payload);
+          state.pollFailures += 1; setConnection("disconnected", "连接中断，正在重试"); el("progressTitle").textContent = "连接中断，正在恢复任务状态";
+          state.timer = window.setTimeout(pollJob, Math.min(5000, 700 * (2 ** Math.min(state.pollFailures, 3))));
+        }
       };
       const stopProgress = () => { window.clearTimeout(state.timer); window.clearInterval(state.elapsedTimer); };
       const finishSuccess = (job) => {
-        stopProgress(); setBusy(false); renderProgress({ progress: { stage: "done", percent: 100 } });
+        stopProgress(); state.jobRunning = false; persistJob("done"); state.idempotencyKey = null; setBusy(false); renderProgress({ progress: { stage: "done", percent: 100 } });
         const panel = el("resultPanel"); panel.className = "section result result--success is-visible";
-        el("resultTitle").textContent = "生成完成，产物已通过流程检查"; el("resultDetail").textContent = `${job.artifact?.name || "文档"} 已准备就绪，可直接下载并进行人工复核。`;
+        el("resultTitle").textContent = "生成完成，产物已通过流程检查"; el("resultDetail").textContent = job.template ? `${job.artifact?.name || "文档"} 已按模板生成：${job.template.prototype_replace} 页复用原型，${job.template.master_redraw} 页安全重绘。` : `${job.artifact?.name || "文档"} 已准备就绪，可直接下载并进行人工复核。`;
         const download = el("downloadButton"); download.href = job.artifact?.download_url || "#"; download.hidden = false; download.textContent = `下载 ${job.artifact?.name || "产物"}`;
-        renderLint(job.report); showToast("生成完成，产物可下载");
+        renderLint(job.report); renderAssets(job.assets); showToast("生成完成，产物可下载");
       };
       const finishFailure = (job) => {
-        stopProgress(); setBusy(false);
+        stopProgress(); state.jobRunning = false; if (state.jobId) persistJob(job.status || "failed"); state.idempotencyKey = null; setBusy(false);
+        const error = job.error || {};
+        renderProgress({ progress: { stage: error.stage || job.progress?.stage || "failed", percent: 100 } });
         const panel = el("resultPanel"); panel.className = "section result result--error is-visible";
-        el("resultTitle").textContent = "生成未完成"; el("resultDetail").textContent = job.error?.message || "任务执行失败，请检查输入文件或稍后重试。";
-        const details = job.error?.items || []; const list = el("lintItems"); list.replaceChildren();
+        el("resultTitle").textContent = job.status === "canceled" ? "任务已取消" : "生成未完成"; el("resultDetail").textContent = error.message || "任务执行失败，请检查输入文件或稍后重试。";
+        const diagnostic = el("failureDiagnostic");
+        diagnostic.hidden = false;
+        el("failureCode").textContent = error.code || "E001";
+        el("failureStage").textContent = error.loc ? `定位：${error.loc}` : (error.stage ? `阶段：${stageText[error.stage] || error.stage}` : "");
+        el("failureSuggestion").textContent = error.suggestion || "请检查输入文件或稍后重试。";
+        el("failureSupport").textContent = error.support_id ? `支持编号：${error.support_id}${error.retryable ? "（可重试）" : ""}` : "";
+        const failureReport = job.assets?.["failure-report"];
+        const failureReportLink = el("failureReportLink");
+        failureReportLink.hidden = !failureReport?.download_url;
+        failureReportLink.href = failureReport?.download_url || "#";
+        const details = error.items || []; const list = el("lintItems"); list.replaceChildren();
         details.slice(0, 3).forEach((item) => { const row = document.createElement("li"); const code = document.createElement("b"); code.textContent = `${item.code || "Error"} `; row.append(code, document.createTextNode(item.message || "校验失败")); list.append(row); });
         showToast("生成任务失败", true);
       };
+
+      el("cancelButton").addEventListener("click", async () => {
+        if (!state.jobRunning || !state.jobId) return;
+        el("cancelButton").disabled = true;
+        try {
+          const response = await fetch(`/api/jobs/${encodeURIComponent(state.jobId)}/cancel`, { method: "POST" });
+          const job = await readJson(response);
+          finishFailure(job);
+        } catch (error) {
+          el("cancelButton").disabled = false;
+          showToast(error.message || "取消任务失败", true);
+        }
+      });
       const renderLint = (report) => {
         const summary = report?.summary || {}; const chips = el("lintSummary"); const list = el("lintItems"); chips.replaceChildren(); list.replaceChildren();
         [["Error", summary.errors || 0, "error"], ["Warning", summary.warnings || 0, "warning"], ["Info", summary.infos || 0, "info"]].forEach(([label, count, kind]) => { const chip = document.createElement("span"); chip.className = `lint-chip lint-chip--${kind}`; chip.textContent = `${label} ${count}`; chips.append(chip); });
         (report?.items || []).slice(0, 3).forEach((item) => { const row = document.createElement("li"); const code = document.createElement("b"); code.textContent = `${item.code} `; row.append(code, document.createTextNode(item.message)); list.append(row); });
       };
-      updateActions();
+      const renderAssets = (assets = {}) => {
+        const labels = { profile: "模板 Profile", plan: "页面映射 Plan", structure: "模板结构报告", "replacement-audit": "替换审计报告", lint: "合规报告", "package-report": "包关系报告", "asset-manifest": "图片资产清单", "asset-usage-audit": "图片使用审计", "visual-plan": "视觉计划", "visual-selection-audit": "视觉选择审计" };
+        const links = el("auditLinks"); links.replaceChildren();
+        Object.entries(assets).forEach(([name, asset]) => { const link = document.createElement("a"); link.href = asset.download_url; link.textContent = labels[name] || asset.name; links.append(link); });
+      };
+      function selectTemplate(file) {
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith(".pptx")) { showToast("模板仅支持 .pptx 文件", true); return; }
+        if (file.size > 50 * 1024 * 1024) { showToast("模板不能超过 50 MB", true); return; }
+        state.template = file; el("templateName").textContent = file.name; el("templateDetail").textContent = `${formatBytes(file.size)} · 将继承母版、主题和安全原型页`; el("templateRemove").hidden = false;
+      }
+      function clearTemplate() {
+        if (state.busy) return;
+        state.template = null; templateInput.value = ""; el("templateName").textContent = "使用默认华为自绘主题"; el("templateDetail").textContent = "可选上传 .pptx 模板，系统将生成可审计页面映射"; el("templateRemove").hidden = true;
+      }
+      function selectAssets(files) {
+        if (!files.length) return;
+        const allowed = ["png", "jpg", "jpeg", "webp"];
+        if (files.some((file) => !allowed.includes(extension(file).toLowerCase()))) { showToast("图片只支持 PNG、JPEG 或 WebP", true); return; }
+        if (files.some((file) => file.size > 20 * 1024 * 1024)) { showToast("单张图片不能超过 20 MB", true); return; }
+        const merged = [...state.assets];
+        files.forEach((file) => { if (!merged.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) merged.push(file); });
+        if (merged.length > 20 || merged.reduce((sum, file) => sum + file.size, 0) > 100 * 1024 * 1024) { showToast("图片最多 20 张且总计不超过 100 MB", true); return; }
+        state.assets = merged; assetInput.value = ""; renderAssetList();
+      }
+      function removeAsset(index) { if (state.busy) return; state.assets.splice(index, 1); renderAssetList(); }
+      function clearAssets() { if (state.busy) return; state.assets = []; assetInput.value = ""; renderAssetList(); }
+      function renderAssetList() {
+        el("assetName").textContent = state.assets.length ? `已添加 ${state.assets.length} 张图片` : "未添加图片资产";
+        el("assetDetail").textContent = state.assets.length ? `${formatBytes(state.assets.reduce((sum, file) => sum + file.size, 0))} · 将生成资产与使用审计` : "PNG、JPEG 或 WebP，最多 20 张";
+        el("assetRemoveAll").hidden = !state.assets.length;
+        const list = el("assetList"); list.replaceChildren();
+        state.assets.forEach((file, index) => { const item = document.createElement("span"); item.className = "asset-item"; const name = document.createElement("span"); name.textContent = file.name; const remove = document.createElement("button"); remove.type = "button"; remove.setAttribute("aria-label", `移除 ${file.name}`); remove.textContent = "×"; remove.addEventListener("click", () => removeAsset(index)); item.append(name, remove); list.append(item); });
+      }
+      const restoreLastJob = async () => {
+        let saved;
+        try { saved = JSON.parse(localStorage.getItem(storageKey) || "null"); } catch (_error) { localStorage.removeItem(storageKey); return; }
+        if (!saved?.jobId) return;
+        state.jobId = saved.jobId; state.idempotencyKey = saved.idempotencyKey || null; state.startedAt = Number(saved.startedAt || Date.now()); state.jobRunning = !["done", "failed", "canceled"].includes(saved.status);
+        if (state.jobRunning) { setBusy(true); startProgress(state.startedAt); }
+        try {
+          const response = await fetch(`/api/status/${encodeURIComponent(state.jobId)}`); const job = await readJson(response); renderProgress(job);
+          if (job.status === "done") finishSuccess(job);
+          else if (job.status === "failed" || job.status === "canceled") finishFailure(job);
+          else { state.jobRunning = true; setBusy(true); startProgress(state.startedAt); pollJob(); }
+        } catch (error) {
+          if (error.payload?.error?.code === "E001") clearStoredJob();
+          else if (!error.payload) { state.jobRunning = true; setBusy(true); startProgress(state.startedAt); pollJob(); }
+        }
+      };
+      updateActions(); loadServiceVersion(); restoreLastJob(); window.setInterval(loadServiceVersion, 15000);
     })();
   </script>
 </body>

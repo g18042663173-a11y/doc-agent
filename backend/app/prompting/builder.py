@@ -7,10 +7,12 @@ import re
 from typing import Literal
 
 from app.generation.layout_policy import LAYOUT_SELECTION_RULES
+from app.assets.contracts import AssetManifest
 from app.ir.deck_ir import DeckIR
 from app.ir.document_ir import DocumentIR
 from app.ir.schema_export import normalized_schema
 from app.ir.word_ir import WordIR
+from app.visual.contracts import VisualPlan
 
 
 Kind = Literal["word", "deck"]
@@ -70,7 +72,7 @@ TARGETS = {
         "model": WordIR,
     },
     "deck": {
-        "label": "DeckIR v1.9",
+        "label": "DeckIR v2.0",
         "description": "华为风格 PPTX 演示文稿",
         "model": DeckIR,
     },
@@ -86,6 +88,8 @@ def build_prompt(
     depth: Depth | None = None,
     pages: int | None = None,
     genre: str | None = None,
+    visual_plan: VisualPlan | None = None,
+    asset_manifest: AssetManifest | None = None,
 ) -> str:
     if max_context_chars <= 0:
         raise ValueError("max_context_chars must be positive")
@@ -102,7 +106,7 @@ def build_prompt(
         max_context_chars=max_context_chars,
     )
     template = _template_text()
-    return template.format(
+    prompt = template.format(
         target_label=target["label"],
         target_description=target["description"],
         contract_guide=_contract_guide(kind),
@@ -120,6 +124,30 @@ def build_prompt(
         context_est_chars=len(context_json),
         truncation_notice=truncation_notice,
     )
+    if kind == "deck" and visual_plan is not None:
+        prompt += (
+            "\n[VisualPlan 1.0]\n"
+            + visual_plan.model_dump_json(exclude_none=True)
+            + "\n[视觉决策纪律] VisualPlan 只提供候选和理由；仍只能输出通过下方 DeckIR Schema 的 JSON。"
+            "没有适合视觉时允许使用文字页，不得强行配图或编造资产引用。"
+        )
+    if kind == "deck" and asset_manifest is not None:
+        prompt += "\n[可用图片资产]\n" + json.dumps(
+            [
+                {
+                    "asset_id": item.asset_id,
+                    "width": item.width,
+                    "height": item.height,
+                    "label": item.label,
+                    "alt": item.alt,
+                    "credit": item.credit,
+                }
+                for item in asset_manifest.assets
+            ],
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    return prompt
 
 
 def _contract_guide(kind: Kind) -> str:
@@ -135,12 +163,14 @@ def _contract_guide(kind: Kind) -> str:
         )
     return (
         "顶层只能有 ir_type、ir_version、meta、slides。"
-        "ir_type 固定为 deck，ir_version 固定为 1.9，meta.title 必填且非空，slides 至少 1 页。\n"
+        "ir_type 固定为 deck，ir_version 固定为 2.0，meta.title 必填且非空，slides 至少 1 页。\n"
         "slides[].layout 只能是 cover、agenda、section、title_bullets、two_column、table、cards、chart、"
-        "architecture_diagram、process_flow、timeline、image、conclusion、composite；每种 layout 只填写 Schema 为它定义的字段。\n"
+        "architecture_diagram、process_flow、timeline、image、image_text、image_grid、infographic、conclusion、composite；"
+        "每种 layout 只填写 Schema 为它定义的字段。\n"
         "agenda.items 为 2-8 条；title_bullets.bullets 至少 1 条；table.rows 每行列数等于 header；"
         "chart.series[].values 数量等于 categories；architecture_diagram 的 edge.from/to 必须引用已有 node.id；"
         "process_flow.steps 为 2-7 个且 id 唯一；timeline.milestones 为 2-8 个；"
+        "image_ref 必须引用可用 AssetManifest 中的 asset_id；infographic.kind 只能是 funnel/quadrant/cycle/matrix；"
         "chart.orientation=horizontal 只允许 kind=bar；cards.variant=kpi 时 title/desc/tag 分别表示指标名/数值/口径；"
         "architecture_diagram.nodes[].type 可使用 primary/secondary/emphasis/data/job/module；未知 type 使用主题 default 配色；"
         "composite.regions 必须恰含 left/right，components 为 1-3 块从上到下堆叠，首版仅允许 table/architecture_diagram/title_bullets/cards。"
@@ -163,7 +193,7 @@ def _field_quick_reference(kind: Kind) -> str:
         "3. architecture_diagram.nodes[].position/size 是架构图内容区的 0-1 比例：position 是节点中心，"
         "size 是宽高比例。type 决定主题色，只能用 primary、secondary、emphasis、data、job、module。\n"
         "4. chart.thresholds[].value 与 chart.series[].values 必须使用同一数值单位；chart.unit 只显示单位后缀，"
-        "不换算数据。\n"
+        "不换算数据。scatter 使用 series[].x_values；combo 每个 series 必须声明 bar/line、primary/secondary 和真实量纲。\n"
         "5. composite.regions 必须刚好有 left 与 right 各一栏；每栏 components 是从上到下的 1-3 个组件列表，"
         "仅可嵌入 table、architecture_diagram、title_bullets、cards。组件字段完全复用其原有 layout。"
     )
@@ -183,6 +213,10 @@ def _content_rules(kind: Kind, *, depth: Depth | None = None, pages: int | None 
         "- 版式选择：章节导航用 agenda/section；观点用 title_bullets；对比用 two_column/table；"
         "并列要素用 cards；数值趋势用 chart；图片说明用 image；收束用 conclusion。"
         f"{LAYOUT_SELECTION_RULES}\n"
+        "- 图表选择：长类目标签优先使用 kind=bar 且 orientation=horizontal；单系列图表设置 "
+        "legend_position=none，避免冗余图例；pie 仅用于 2-6 个非负类别；时间序列折线至少提供两个数据点。\n"
+        "- 阶段递减用 infographic/funnel，双维定位用 quadrant，闭环用 cycle，交叉分类用 matrix；"
+        "只有存在合法 asset_id 时才使用 image/image_text/image_grid。\n"
         "- chart 的结论必须与 series/thresholds 一致；table 不得缺行或出现合并区冲突；"
         "architecture_diagram 不得有缺失节点或自环 edge。"
         " composite 仅用于两个需要同页联读且都能在半页内表达的组件，禁止用它把两页内容硬塞成一页。"
@@ -252,7 +286,7 @@ def _few_shot(kind: Kind) -> str:
         path = SAMPLE_DIR / filename
         payload = json.loads(path.read_text(encoding="utf-8"))
         validated = TARGETS[kind]["model"].model_validate(payload)
-        prompt_payload = validated.model_dump(mode="json") if kind == "word" else payload
+        prompt_payload = validated.model_dump(mode="json", by_alias=True)
         compact = json.dumps(prompt_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         examples.append(f"示例 {index}：{compact}")
     return "\n".join(examples)

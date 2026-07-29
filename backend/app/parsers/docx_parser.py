@@ -15,6 +15,7 @@ from docx.text.paragraph import Paragraph
 
 from app.ir.document_ir import DocumentIR
 from app.parsers.errors import parser_error_boundary
+from app.parsers.office_preflight import preflight_source_office
 from app.parsers.source_metadata import deterministic_parsed_at
 from app.parsers.text_limits import TextLimiter
 
@@ -26,10 +27,11 @@ MONOSPACE_FONT_NAMES = {"consolas", "courier new", "courier", "menlo", "monaco"}
 
 @parser_error_boundary
 def parse_docx(path: Path) -> DocumentIR:
+    warnings = preflight_source_office(path)
     document = Document(str(path))
     blocks: list[dict] = []
     outline: list[dict] = []
-    warnings = _unsupported_warnings(path)
+    warnings.extend(_unsupported_warnings(path))
     warnings.extend(_image_warnings(document))
     limiter = TextLimiter(warnings)
     current_list: dict | None = None

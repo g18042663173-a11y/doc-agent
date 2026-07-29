@@ -25,6 +25,9 @@ from app.lint.pptx_lint import check_pptx, write_reports
 from app.prompting.builder import build_prompt
 from app.rendering.docx_renderer import render_word_ir
 from app.rendering.pptx_renderer import render_deck_ir
+from app.template.renderer import render_deck_ir_with_template
+from app.assets.pipeline import load_asset_manifest
+from app.visual.planner import audit_visual_selection, build_visual_plan
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,6 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-output-chars", type=int, default=6000)
     parser.add_argument("--pages", type=int)
     parser.add_argument("--depth", choices=["概览", "标准", "详细"])
+    parser.add_argument("--template", type=Path, help="Optional .pptx template for deck rendering.")
+    parser.add_argument("--asset-manifest", type=Path, help="Optional AssetManifest 1.0 for deck image references.")
     return parser
 
 
@@ -55,6 +60,12 @@ def main(argv: list[str] | None = None) -> int:
     generation_options = GenerationOptions(pages=args.pages, depth=args.depth)
     if args.target == "word" and generation_options.enabled:
         build_parser().error("--pages/--depth are only supported for --target deck")
+    if args.target == "word" and (args.template is not None or args.asset_manifest is not None):
+        build_parser().error("--template/--asset-manifest are only supported for --target deck")
+    asset_registry = load_asset_manifest(args.asset_manifest) if args.asset_manifest is not None else None
+    visual_plan = build_visual_plan(document_ir, asset_registry.manifest if asset_registry is not None else None) if args.target == "deck" else None
+    if visual_plan is not None:
+        (output_dir / "visual_plan.json").write_text(visual_plan.model_dump_json(indent=2) + "\n", encoding="utf-8")
     prompt_path = output_dir / "prompt.txt"
     try:
         if args.target == "deck" and generation_options.enabled:
@@ -64,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
                 options=generation_options,
                 max_context_chars=args.max_context_chars,
                 max_output_chars=args.max_output_chars,
+                visual_plan=visual_plan,
+                asset_manifest=asset_registry.manifest if asset_registry is not None else None,
             )
             prompt_path.write_text(next(iter(attempt.prompts.values())), encoding="utf-8")
             prompts_dir = output_dir / "prompts"
@@ -82,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
                 context=document_ir,
                 max_context_chars=args.max_context_chars,
                 max_output_chars=args.max_output_chars,
+                visual_plan=visual_plan,
+                asset_manifest=asset_registry.manifest if asset_registry is not None else None,
             )
             prompt_path.write_text(prompt, encoding="utf-8")
             raw_ir = generator.generate(prompt, target=generator_target)
@@ -106,9 +121,26 @@ def main(argv: list[str] | None = None) -> int:
         deck_ir = DeckIR.model_validate(validation.value)
         generated_ir_path = output_dir / "deck_ir.json"
         generated_ir_path.write_text(deck_ir.model_dump_json(indent=2, by_alias=True) + "\n", encoding="utf-8")
-        artifact = render_deck_ir(deck_ir, output_dir / "deck.pptx")
+        selection = audit_visual_selection(visual_plan, deck_ir)
+        (output_dir / "visual_selection_audit.json").write_text(selection.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        template_result = None
+        if args.template is not None:
+            template_result = render_deck_ir_with_template(
+                deck_ir,
+                args.template,
+                output_dir / "deck.pptx",
+                audit_dir=output_dir,
+                asset_registry=asset_registry,
+            )
+            artifact = template_result.artifact_path
+        else:
+            artifact = render_deck_ir(deck_ir, output_dir / "deck.pptx", asset_registry=asset_registry)
         if args.lint:
-            report_obj = check_pptx(artifact, classification=deck_ir.meta.classification)
+            report_obj = check_pptx(
+                artifact,
+                classification=deck_ir.meta.classification,
+                template_profile=template_result.profile if template_result is not None else None,
+            )
             report, _ = write_reports(report_obj, output_dir)
         else:
             report = write_placeholder_report([artifact], output_dir)

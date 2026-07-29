@@ -448,7 +448,7 @@ def test_render_horizontal_data_bar_kpi_and_image_slot_as_editable_objects(tmp_p
     assert chart_shape.chart.chart_type == XL_CHART_TYPE.BAR_CLUSTERED
     assert chart_shape.chart.category_axis.reverse_order is True
     assert chart_shape.chart.value_axis.minimum_scale == 0
-    assert chart_shape.chart.value_axis.maximum_scale == pytest.approx(100.1)
+    assert chart_shape.chart.value_axis.maximum_scale == pytest.approx(100.0)
     assert threshold_line.height > threshold_line.width
     assert "通过率目标阈值 75%" in threshold_label.text
     assert threshold_label.text_frame.margin_left == 0
@@ -464,7 +464,7 @@ def test_render_horizontal_data_bar_kpi_and_image_slot_as_editable_objects(tmp_p
     threshold = theme["layouts"]["chart"]["threshold"]
     plot_left = plot["left_in"] + threshold["plot_left_offset_in"]
     plot_width = plot["width_in"] - threshold["plot_left_offset_in"] - threshold["plot_right_offset_in"]
-    expected_threshold_x = plot_left + plot_width * 75 / 100.1
+    expected_threshold_x = plot_left + plot_width * 75 / chart_shape.chart.value_axis.maximum_scale
     assert threshold_line.left / 914400 == pytest.approx(expected_threshold_x, abs=0.02)
 
     image_slot = next(shape for shape in prs.slides[2].shapes if shape.name == "HW_IMAGE_PLACEHOLDER")
@@ -705,7 +705,8 @@ def test_pptx_renderer_keeps_layout_dimensions_in_theme() -> None:
                     raw_literal_calls.append((node.func.id, arg.value, node.lineno))
 
     assert raw_literal_calls == []
-    assert ".add_picture(" not in source
+    assert source.count(".add_picture(") == 2
+    assert "HW_ASSET_IMAGE:" in source
     assert "shadow" not in source.lower()
     assert "gradient" not in source.lower()
 

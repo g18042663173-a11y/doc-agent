@@ -12,7 +12,18 @@ IR 是唯一契约。模型文本必须先剥壳和校验,非法 IR 不进入 re
 
 - Python 3.12
 - 依赖见 `requirements.txt`
-- 目标环境为内网 Windows 离线运行;Mac 用于开发和自动验收
+- 目标环境为内网 Windows 离线运行;开发与验收固定使用仓库 `.venv` 中的 Python 3.12
+
+Windows 首次配置与验收:
+
+```powershell
+.\bootstrap_windows.ps1
+.\verify.ps1
+```
+
+两条脚本都会固定 UTF-8、`PYTHONPATH=backend`,并生成
+`output/environment_report.json`。Graphviz 按 `tools\graphviz\bin\dot.exe`、系统
+`dot.exe` 的顺序选择;不可用时报告会明确标记 deterministic fallback。
 
 ```bash
 python -m pip install -r requirements.txt
@@ -44,6 +55,7 @@ PYTHONPATH=backend python -m app.cli.prompt --kind word --context output/documen
 ```bash
 PYTHONPATH=backend python -m app.cli.render --type word samples/ir/word_valid_03_table.json --output output/word.docx
 PYTHONPATH=backend python -m app.cli.render --type deck samples/ir/deck_valid_full.json --output output/deck.pptx
+PYTHONPATH=backend python -m app.cli.render --type deck samples/ir/deck_valid_full.json --template template.pptx --output output/deck-template.pptx
 PYTHONPATH=backend python -m app.cli.check output/deck.pptx --classification "HUAWEI CONFIDENTIAL" --output-dir output/check-deck
 ```
 
@@ -61,6 +73,28 @@ Windows:
 
 通过条件:pytest 全绿,parsers/ir/lint 各不低于 80%,整体不低于 70%,四格式到 Word/Deck 的 stub 链路均通过多事实内容核对。
 
+可靠性汇总（默认不联网、不调用真实模型）:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\reliability_test.py
+```
+
+该命令输出 `output/qa/report.json`、JUnit XML 和本地 HTML 摘要。工作台浏览器测试是开发专用依赖，不进入离线生产 lock：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev-ui.txt
+.\.venv\Scripts\python.exe scripts\reliability_test.py --ui
+```
+
+真实模型冒烟必须显式传入 `--real-model` 且已配置生成器；它是独立健康检查，不替代离线发布门禁。
+
+静态检查同样是开发专用，不进入生产依赖闭包:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev-quality.txt
+.\.venv\Scripts\python.exe -m ruff check backend scripts
+```
+
 ## 先分析、再生成 Deck
 
 ```bash
@@ -72,6 +106,60 @@ python scripts/generate.py samples/input/需求说明.docx --generator stub --de
 `analyze` 只给基于 parser 实测数据的页数建议。`generate` 可选 `--depth 概览|标准|详细`
 和 `--pages N`;均不传时保持原有生成行为。详细档采用大纲加分批 DeckIR 的方式避免弱模型
 一次输出被截断,见 `GENERATION_NOTES.md`。
+
+## 图片、信息图与视觉规划
+
+DeckIR 2.0 支持真实图片、`image_text`、2-4 图 `image_grid`、漏斗/象限/循环/矩阵信息图、
+scatter 和 combo。图片必须先规范化为独立 `AssetManifest 1.0`：
+
+```powershell
+$env:PYTHONPATH = Join-Path $PWD "backend"
+.\.venv\Scripts\python.exe -m app.cli.assets C:\path\photo.png C:\path\evidence.webp --output-dir output\assets
+.\.venv\Scripts\python.exe -m app.cli.render --type deck C:\path\deck-with-images.json `
+  --asset-manifest output\assets\asset_manifest.json --output output\deck-with-images.pptx
+```
+
+合法 `image_ref` 会嵌入真实图片；缺失引用返回 `A005`，不会静默生成占位框。只有 IR 明确给出
+`placeholder` 才绘制占位。渲染输出 `asset_usage_audit.json`，记录页码、适配方式、裁切和有效
+DPI。生成链路同时输出 `visual_plan.json` 与 `visual_selection_audit.json`，说明系统为何推荐或
+未采用某种图。1.4-1.9 DeckIR 只在内存迁移到 2.0，不覆盖用户原文件。
+
+组合图由两张对齐的原生可编辑图表实现：主轴 bar 与次轴 line 各自保留为 PowerPoint 图表
+对象。它不是单一 OOXML combo chart，但不栅格化，也不改写业务数据。
+
+模板模式使用 DeckIR 2.0，并输出独立的 `template_profile.json`、`template_plan.json`、
+`template_structure.json`、`template_replacement_audit.json` 和 `pptx_package_report.json`。
+原型不安全或容量不足时记录 W201 并在模板母版/主题下重绘；字体替代记录 W202。实现为
+纯 Python，不依赖 HTML、PptxGenJS、浏览器或外部 presentation skill。
+
+## HTML 对照实验（非生产）
+
+生产渲染固定为 `DeckIR 2.0 -> python-pptx`。`experiments/html2pptx/` 是隔离的
+DeckIR -> HTML -> PptxGenJS 对照实验，不接入 CLI 默认生成、API、工作台或 Windows
+离线依赖闭包，也不接收上传模板。
+
+```powershell
+Set-Location experiments\html2pptx
+npm ci
+Set-Location ..\..
+.\.venv\Scripts\python.exe scripts\html2pptx_benchmark.py --suite --output-dir output\html2pptx-benchmark --skip-office
+```
+
+可传入已通过模板安全校验的源文件做模板基准：`--template <safe-template.pptx>`。报告
+`engine_assessment.json` 会记录两套引擎的版本、PPTX/HTML SHA-256、HTML 溢出检查、
+包校验、lint、原生对象统计、Office 视觉状态及不可自动切换的推荐。详见
+`docs/HTML_EXPERIMENT.md`。
+
+本地工作台:
+
+```powershell
+.\start_workbench.ps1
+```
+
+打开 `http://127.0.0.1:5056/static/index.html`；停止服务使用 `.\stop_workbench.ps1`。
+
+失败任务会显示稳定错误码、阶段、是否可重试、支持编号和受控的失败报告下载；报告不保存输入正文、Prompt、密钥或异常堆栈。
+任务状态会落盘并在刷新后恢复；服务为单 worker、4 个等待位、900 秒总超时，产物与脱敏审计保留 24 小时。
 
 ## 交付资产
 

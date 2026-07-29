@@ -17,3 +17,26 @@ def test_web_api_serves_frontend_from_same_origin(tmp_path: Path) -> None:
     assert 'fetch("/api/generate"' in text
     assert "api/status" in text
     assert "job.artifact?.download_url" in text
+    assert 'data.append("template_file", state.template)' in text
+    assert 'data.append("asset_files", file)' in text
+    assert 'data-testid="asset-files"' in text
+    assert 'data-testid="asset-list"' in text
+    assert "模板 Profile" in text
+    assert "package-report" in text
+    assert "模板结构报告" in text
+    assert "替换审计报告" in text
+    assert "图片资产清单" in text
+    assert "视觉选择审计" in text
+    assert 'data-testid="generate-button"' in text
+    assert 'data-testid="failure-diagnostic"' in text
+    assert 'data-testid="failure-report-link"' in text
+    assert "error.payload = data" in text
+    assert "finishFailure(error.payload ||" in text
+    assert "定位：${error.loc}" in text
+    assert 'data-testid="service-status"' in text
+    assert 'fetch("/api/version"' in text
+    assert 'data-testid="cancel-job"' in text
+    assert 'localStorage.setItem(storageKey' in text
+    assert 'Idempotency-Key' in text
+    assert '连接中断，正在恢复任务状态' in text
+    assert '/api/jobs/${encodeURIComponent(state.jobId)}/cancel' in text

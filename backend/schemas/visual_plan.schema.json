@@ -1,0 +1,112 @@
+{
+  "$defs": {
+    "VisualOpportunity": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Asset Ids",
+          "type": "array"
+        },
+        "chart_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "bar",
+                "line",
+                "pie",
+                "scatter",
+                "combo"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chart Kind"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "recommended_layout": {
+          "enum": [
+            "chart",
+            "architecture_diagram",
+            "process_flow",
+            "timeline",
+            "infographic_funnel",
+            "infographic_quadrant",
+            "infographic_cycle",
+            "infographic_matrix",
+            "image_text",
+            "image_grid",
+            "text_only"
+          ],
+          "title": "Recommended Layout",
+          "type": "string"
+        },
+        "visual_id": {
+          "pattern": "^visual-[0-9]{3}$",
+          "title": "Visual Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "visual_id",
+        "recommended_layout",
+        "confidence",
+        "reason"
+      ],
+      "title": "VisualOpportunity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "opportunities": {
+      "items": {
+        "$ref": "#/$defs/VisualOpportunity"
+      },
+      "maxItems": 12,
+      "title": "Opportunities",
+      "type": "array"
+    },
+    "source_filename": {
+      "minLength": 1,
+      "title": "Source Filename",
+      "type": "string"
+    },
+    "visual_plan_version": {
+      "const": "1.0",
+      "title": "Visual Plan Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "visual_plan_version",
+    "source_filename"
+  ],
+  "title": "VisualPlan",
+  "type": "object"
+}

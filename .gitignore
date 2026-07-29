@@ -5,10 +5,14 @@ __pycache__/
 htmlcov/
 output/
 wheelhouse/
+dist/
 .venv/
+experiments/html2pptx/node_modules/
 .DS_Store
 .coverage*
 task_plan*.md
 findings.md
 GENERATION_NOTES.md
 docs/临时*.md
+samples/input/real/*
+!samples/input/real/README.md

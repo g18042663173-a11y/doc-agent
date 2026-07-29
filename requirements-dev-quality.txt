@@ -1,0 +1,2 @@
+# Development-only static analysis. This is not part of the offline production lock.
+ruff==0.16.0

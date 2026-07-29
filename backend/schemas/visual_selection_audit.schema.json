@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "VisualSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "recommended_layout": {
+          "enum": [
+            "chart",
+            "architecture_diagram",
+            "process_flow",
+            "timeline",
+            "infographic_funnel",
+            "infographic_quadrant",
+            "infographic_cycle",
+            "infographic_matrix",
+            "image_text",
+            "image_grid",
+            "text_only"
+          ],
+          "title": "Recommended Layout",
+          "type": "string"
+        },
+        "selected": {
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "slide_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Slide Indices",
+          "type": "array"
+        },
+        "visual_id": {
+          "pattern": "^visual-[0-9]{3}$",
+          "title": "Visual Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "visual_id",
+        "recommended_layout",
+        "selected",
+        "reason"
+      ],
+      "title": "VisualSelection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "audit_version": {
+      "const": "1.0",
+      "title": "Audit Version",
+      "type": "string"
+    },
+    "selections": {
+      "items": {
+        "$ref": "#/$defs/VisualSelection"
+      },
+      "title": "Selections",
+      "type": "array"
+    }
+  },
+  "required": [
+    "audit_version"
+  ],
+  "title": "VisualSelectionAudit",
+  "type": "object"
+}

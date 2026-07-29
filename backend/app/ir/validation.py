@@ -42,7 +42,10 @@ from app.ir.deck_ir import (
     DeckIR,
     DiagramPosition,
     DiagramSize,
+    ImageGridSlide,
     ImageSlide,
+    ImageTextSlide,
+    InfographicSlide,
     ProcessFlowSlide,
     ProcessStep,
     SectionSlide,
@@ -90,6 +93,9 @@ DECK_SLIDE_MODELS: dict[str, Type[BaseModel]] = {
     "process_flow": ProcessFlowSlide,
     "timeline": TimelineSlide,
     "image": ImageSlide,
+    "image_text": ImageTextSlide,
+    "image_grid": ImageGridSlide,
+    "infographic": InfographicSlide,
     "conclusion": ConclusionSlide,
     "composite": CompositeSlide,
 }
@@ -692,13 +698,13 @@ def validate_deck_ir(
         return ValidationResult(value=None, errors=parse_errors)
     data, migrated_from = migrate_deck_payload(data)
     warnings = _collect_deck_unknowns(data)
-    if migrated_from is not None:
+    if migrated_from is not None and migrated_from != "1.9":
         warnings.append(
             _warning(
                 "D004",
                 "ir_version",
-                f"DeckIR {migrated_from} 已在内存中兼容迁移到 1.9，并按 1.9 契约重新校验。",
-                f"重新生成或序列化为 1.9 可消除该兼容提示；原始 {migrated_from} 文件不会被覆写。",
+                f"DeckIR {migrated_from} 已在内存中兼容迁移到 2.0，并按 2.0 契约重新校验。",
+                f"重新生成或序列化为 2.0 可消除该兼容提示；原始 {migrated_from} 文件不会被覆写。",
             )
         )
     data, normalization_warnings = _normalize_deck_data(data)

@@ -1,0 +1,9 @@
+{
+  "installed_version": "15.1.0",
+  "package_id": "Graphviz.Graphviz",
+  "source": "winget",
+  "executable": "C:\\Program Files\\Graphviz\\bin\\dot.exe",
+  "executable_sha256": "0558BF0840BBEFF1192925E2BAB783E236D4CC150FACF697AE69A84A35132E51",
+  "verified_on": "2026-07-29",
+  "offline_boundary": "The intranet target must provide an independently approved runtime or tools/graphviz/bin/dot.exe with its own recorded hash."
+}

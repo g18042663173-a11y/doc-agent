@@ -48,7 +48,7 @@ def test_build_prompt_truncates_context_and_declares_it() -> None:
     prompt = build_prompt(kind="deck", context=context, max_context_chars=300)
     context_json = prompt.split("[输入 DocumentIR]", 1)[1].split("[字符估算]", 1)[0].strip()
 
-    assert "DeckIR v1.9" in prompt
+    assert "DeckIR v2.0" in prompt
     assert "已截断说明" in prompt
     assert "最终 JSON 中禁止出现“原文未提供”" in prompt
     assert len(context_json) <= 300
@@ -214,15 +214,22 @@ def test_build_deck_prompt_contains_weak_model_rules_and_few_shot() -> None:
         "components 是从上到下的 1-3 个组件列表",
     ):
         assert phrase in prompt
+    from app.ir.deck_ir import DeckIR
+
     for filename in (
         "deck_few_shot_table_v19.json",
         "deck_few_shot_architecture_v19.json",
         "deck_few_shot_composite_v19.json",
     ):
         sample = json.loads((ROOT / "samples" / "ir" / filename).read_text(encoding="utf-8"))
-        compact_sample = json.dumps(sample, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        compact_sample = json.dumps(
+            DeckIR.model_validate(sample).model_dump(mode="json", by_alias=True),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         assert compact_sample in prompt
-        assert '"ir_version":"1.9"' in compact_sample
+        assert '"ir_version":"2.0"' in compact_sample
     assert "est_chars=2" in prompt
     assert "```" not in prompt
 
@@ -331,6 +338,17 @@ def test_default_genre_templates_define_deck_and_word_skeletons() -> None:
     assert "architecture_diagram 最多 4 个节点、4 条边" in deck
     assert "技术方案文档" in word
     assert "概述 → 方案设计（模块/接口/数据流/关键算法） → 关键取舍与风险 → 结论" in word
+
+
+def test_deck_prompt_defines_chart_selection_quality_rules() -> None:
+    from app.prompting.builder import build_prompt
+
+    prompt = build_prompt(kind="deck", context=None)
+
+    assert "长类目标签优先使用 kind=bar 且 orientation=horizontal" in prompt
+    assert "单系列图表设置 legend_position=none" in prompt
+    assert "pie 仅用于 2-6 个非负类别" in prompt
+    assert "时间序列折线至少提供两个数据点" in prompt
 
 
 def test_genre_template_is_file_configurable_without_builder_code_change(tmp_path: Path, monkeypatch) -> None:
@@ -518,13 +536,13 @@ def test_deck_prompt_optional_depth_rules_keep_default_path_deterministic() -> N
     detailed = build_prompt(kind="deck", context=context, depth="详细", pages=16)
 
     assert hashlib.sha256(legacy.encode("utf-8")).hexdigest() == (
-        "4f5967a24f0ce69e4ecb3094158a31727eed075f0cfce283b7c3a8d62ea8f264"
+        "094d0ee4b86674b30ab40e569429d2c19e7c6c853261eb397c1fda7cb9d5afdd"
     )
     from app.generators.stub import StubGenerator
 
     legacy_raw = StubGenerator().generate(legacy, target="deck_ir")
     assert hashlib.sha256(legacy_raw.encode("utf-8")).hexdigest() == (
-        "966dd32d5a907ac9f7f131b6a6fa5ae403bb3816b4e284e7e9e333b939d34aa5"
+        "cca87539907ea9b837aa011abaec99802cf07b89c130a1abf042b58d3d3c8c26"
     )
     assert "[生成深度与目标页数]" not in legacy
     assert "结论句 + 1个关键支撑" in standard

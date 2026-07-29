@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import math
 from pathlib import Path
 import warnings
 
-from pptx.chart.data import CategoryChartData
+from pptx.chart.data import CategoryChartData, XyChartData
 from pptx import Presentation
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE, XL_DATA_LABEL_POSITION, XL_LEGEND_POSITION
+from pptx.enum.chart import XL_CHART_TYPE, XL_DATA_LABEL_POSITION, XL_LEGEND_POSITION, XL_MARKER_STYLE
 from pptx.enum.dml import MSO_LINE_DASH_STYLE
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.shapes import MSO_CONNECTOR
@@ -16,6 +18,9 @@ from pptx.oxml.ns import qn
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches, Pt
 
+from app.assets.contracts import AssetUsage
+from app.assets.errors import AssetError
+from app.assets.pipeline import AssetRegistry
 from app.ir.deck_ir import (
     AgendaSlide,
     ArchitectureDiagramSlide,
@@ -30,7 +35,10 @@ from app.ir.deck_ir import (
     CoverSlide,
     DeckTableCell,
     DeckIR,
+    ImageGridSlide,
     ImageSlide,
+    ImageTextSlide,
+    InfographicSlide,
     ProcessFlowSlide,
     SectionSlide,
     TableSlide,
@@ -44,6 +52,7 @@ from app.rendering.architecture_graphviz import (
     layout_architecture_with_graphviz,
 )
 from app.rendering.theme import load_theme
+from app.rendering.semantic_icons import add_semantic_icon
 from app.rendering.typography import constrained_stack_heights, fit_text_stack
 
 
@@ -70,7 +79,7 @@ class _CompositeStackBlock:
     height_in: float
 
 
-def render_deck_ir(deck: DeckIR, output_path: Path) -> Path:
+def render_deck_ir(deck: DeckIR, output_path: Path, *, asset_registry: AssetRegistry | None = None) -> Path:
     theme = load_theme(deck.meta.theme)
     prs = Presentation()
     prs.slide_width = Inches(theme["slide"]["width_in"])
@@ -79,41 +88,60 @@ def render_deck_ir(deck: DeckIR, output_path: Path) -> Path:
 
     for slide_number, slide_ir in enumerate(deck.slides, start=1):
         slide = prs.slides.add_slide(prs.slide_layouts[6])
-        if isinstance(slide_ir, CoverSlide):
-            _render_cover(slide, slide_ir, theme)
-        elif isinstance(slide_ir, AgendaSlide):
-            _render_agenda(slide, slide_ir, theme)
-        elif isinstance(slide_ir, SectionSlide):
-            _render_section(slide, slide_ir, theme)
-        elif isinstance(slide_ir, TitleBulletsSlide):
-            _render_title_bullets(slide, slide_ir, theme)
-        elif isinstance(slide_ir, TableSlide):
-            _render_table_slide(slide, slide_ir, theme)
-        elif isinstance(slide_ir, TwoColumnSlide):
-            _render_two_column(slide, slide_ir, theme)
-        elif isinstance(slide_ir, CardsSlide):
-            _render_cards(slide, slide_ir, theme)
-        elif isinstance(slide_ir, ConclusionSlide):
-            _render_conclusion(slide, slide_ir, theme)
-        elif isinstance(slide_ir, ChartSlide):
-            _render_chart_slide(slide, slide_ir, theme)
-        elif isinstance(slide_ir, ArchitectureDiagramSlide):
-            _render_architecture_diagram(slide, slide_ir, theme)
-        elif isinstance(slide_ir, ProcessFlowSlide):
-            _render_process_flow(slide, slide_ir, theme)
-        elif isinstance(slide_ir, TimelineSlide):
-            _render_timeline(slide, slide_ir, theme)
-        elif isinstance(slide_ir, ImageSlide):
-            _render_image_placeholder(slide, slide_ir, theme)
-        elif isinstance(slide_ir, CompositeSlide):
-            _render_composite(slide, slide_ir, theme)
-        else:
-            _render_placeholder(slide, slide_ir.layout, theme)
+        _render_slide_content(slide, slide_ir, theme, asset_registry=asset_registry, slide_number=slide_number)
         _add_footer(slide, deck.meta.classification, slide_number, total_slides, theme)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     prs.save(output_path)
+    if asset_registry is not None:
+        asset_registry.write_usage_audit(output_path.parent / "asset_usage_audit.json")
     return output_path
+
+
+def _render_slide_content(
+    slide,
+    slide_ir,
+    theme: dict,
+    *,
+    asset_registry: AssetRegistry | None = None,
+    slide_number: int = 1,
+) -> None:
+    if isinstance(slide_ir, CoverSlide):
+        _render_cover(slide, slide_ir, theme)
+    elif isinstance(slide_ir, AgendaSlide):
+        _render_agenda(slide, slide_ir, theme)
+    elif isinstance(slide_ir, SectionSlide):
+        _render_section(slide, slide_ir, theme)
+    elif isinstance(slide_ir, TitleBulletsSlide):
+        _render_title_bullets(slide, slide_ir, theme)
+    elif isinstance(slide_ir, TableSlide):
+        _render_table_slide(slide, slide_ir, theme)
+    elif isinstance(slide_ir, TwoColumnSlide):
+        _render_two_column(slide, slide_ir, theme)
+    elif isinstance(slide_ir, CardsSlide):
+        _render_cards(slide, slide_ir, theme)
+    elif isinstance(slide_ir, ConclusionSlide):
+        _render_conclusion(slide, slide_ir, theme)
+    elif isinstance(slide_ir, ChartSlide):
+        _render_chart_slide(slide, slide_ir, theme)
+    elif isinstance(slide_ir, ArchitectureDiagramSlide):
+        _render_architecture_diagram(slide, slide_ir, theme)
+    elif isinstance(slide_ir, ProcessFlowSlide):
+        _render_process_flow(slide, slide_ir, theme)
+    elif isinstance(slide_ir, TimelineSlide):
+        _render_timeline(slide, slide_ir, theme)
+    elif isinstance(slide_ir, ImageSlide):
+        _render_image_slide(slide, slide_ir, theme, asset_registry=asset_registry, slide_number=slide_number)
+    elif isinstance(slide_ir, ImageTextSlide):
+        _render_image_text_slide(slide, slide_ir, theme, asset_registry=asset_registry, slide_number=slide_number)
+    elif isinstance(slide_ir, ImageGridSlide):
+        _render_image_grid_slide(slide, slide_ir, theme, asset_registry=asset_registry, slide_number=slide_number)
+    elif isinstance(slide_ir, InfographicSlide):
+        _render_infographic_slide(slide, slide_ir, theme)
+    elif isinstance(slide_ir, CompositeSlide):
+        _render_composite(slide, slide_ir, theme)
+    else:
+        _render_placeholder(slide, slide_ir.layout, theme)
 
 
 def _render_cover(slide, slide_ir: CoverSlide, theme: dict) -> None:
@@ -794,6 +822,10 @@ def _render_chart_slide(slide, slide_ir: ChartSlide, theme: dict) -> None:
     layout = theme["layouts"]["chart"]
     _chart_title(slide, slide_ir.title, layout, theme)
     chart_layout = layout["plot"]
+    if slide_ir.chart.kind == "combo":
+        _render_combo_chart(slide, slide_ir.chart, chart_layout, theme)
+        _add_chart_side_content(slide, slide_ir.chart, layout, theme)
+        return
     chart_data = _chart_data(slide_ir.chart)
     chart_shape = slide.shapes.add_chart(
         _chart_type(slide_ir.chart),
@@ -809,7 +841,14 @@ def _render_chart_slide(slide, slide_ir: ChartSlide, theme: dict) -> None:
     _add_chart_side_content(slide, slide_ir.chart, layout, theme)
 
 
-def _chart_data(chart_ir: ChartSpec) -> CategoryChartData:
+def _chart_data(chart_ir: ChartSpec):
+    if chart_ir.kind == "scatter":
+        chart_data = XyChartData()
+        for source in chart_ir.series:
+            series = chart_data.add_series(source.name)
+            for x_value, y_value in zip(source.x_values or [], source.values):
+                series.add_data_point(x_value, y_value)
+        return chart_data
     chart_data = CategoryChartData()
     chart_data.categories = chart_ir.categories
     for series in chart_ir.series:
@@ -824,7 +863,103 @@ def _chart_type(chart_ir: ChartSpec):
         return XL_CHART_TYPE.COLUMN_CLUSTERED
     if chart_ir.kind == "line":
         return XL_CHART_TYPE.LINE_MARKERS
+    if chart_ir.kind == "scatter":
+        return XL_CHART_TYPE.XY_SCATTER
     return XL_CHART_TYPE.PIE
+
+
+def _render_combo_chart(slide, chart_ir: ChartSpec, chart_layout: dict, theme: dict) -> None:
+    primary = [
+        series.model_copy(update={"axis": "primary", "chart_type": None})
+        for series in chart_ir.series
+        if series.axis == "primary"
+    ]
+    secondary = [
+        series.model_copy(update={"axis": "primary", "chart_type": None})
+        for series in chart_ir.series
+        if series.axis == "secondary"
+    ]
+    primary_spec = chart_ir.model_copy(
+        update={"kind": "bar", "series": primary, "legend_position": "none", "thresholds": []}
+    )
+    secondary_spec = chart_ir.model_copy(
+        update={
+            "kind": "line",
+            "series": secondary,
+            "legend_position": "none",
+            "thresholds": [],
+            "number_format": chart_ir.secondary_number_format,
+            "value_axis_title": chart_ir.secondary_value_axis_title,
+        }
+    )
+    shapes = []
+    for name, spec in (("primary", primary_spec), ("secondary", secondary_spec)):
+        shape = slide.shapes.add_chart(
+            _chart_type(spec),
+            Inches(chart_layout["left_in"]),
+            Inches(chart_layout["top_in"]),
+            Inches(chart_layout["width_in"]),
+            Inches(chart_layout["height_in"]),
+            _chart_data(spec),
+        )
+        shape.name = f"HW_COMBO_CHART:{name}"
+        shape.element.nvGraphicFramePr.cNvPr.set(
+            "descr",
+            json.dumps(
+                {
+                    "role": name,
+                    "number_format": spec.number_format,
+                    "axis_title": spec.value_axis_title,
+                    "units": sorted({series.unit or "" for series in spec.series}),
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+        _format_chart(shape.chart, spec, theme)
+        shapes.append(shape)
+    secondary_chart = shapes[1].chart
+    secondary_chart.category_axis.visible = False
+    axis_position = secondary_chart.value_axis._element.find(qn("c:axPos"))
+    if axis_position is not None:
+        axis_position.set("val", "r")
+    _add_combo_legend(slide, chart_ir, chart_layout, theme)
+
+
+def _add_combo_legend(slide, chart_ir: ChartSpec, chart_layout: dict, theme: dict) -> None:
+    if chart_ir.legend_position == "none":
+        return
+    legend = theme["layouts"]["chart"]["combo_legend"]
+    left = chart_layout["left_in"] + legend["left_offset_in"]
+    top = chart_layout["top_in"] + legend["top_offset_in"]
+    for index, series in enumerate(chart_ir.series):
+        color_key = "hw_red" if series.emphasis else f"accent{index % 6 + 1}"
+        marker = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(left + index * legend["item_width_in"]),
+            Inches(top),
+            Inches(legend["marker_width_in"]),
+            Inches(legend["marker_height_in"]),
+        )
+        marker.name = f"HW_COMBO_LEGEND_MARKER:{index + 1}"
+        marker.fill.solid()
+        marker.fill.fore_color.rgb = _rgb(theme["colors"][color_key])
+        marker.line.fill.background()
+        _add_text_box(
+            slide,
+            series.name,
+            {
+                "left_in": left + index * legend["item_width_in"] + legend["text_gap_in"],
+                "top_in": top,
+                "width_in": legend["text_width_in"],
+                "height_in": legend["marker_height_in"],
+            },
+            theme,
+            size=legend["font_size_pt"],
+            color_key="secondary",
+            name=f"HW_COMBO_LEGEND_TEXT:{index + 1}",
+        )
 
 
 def _chart_title(slide, text: str, layout: dict, theme: dict) -> None:
@@ -848,7 +983,16 @@ def _format_chart(chart, chart_ir: ChartSpec, theme: dict) -> None:
     if chart_ir.show_data_labels:
         plot.has_data_labels = True
         labels = plot.data_labels
-        labels.position = XL_DATA_LABEL_POSITION.OUTSIDE_END if chart_ir.kind == "bar" else XL_DATA_LABEL_POSITION.ABOVE
+        if chart_ir.kind == "pie":
+            labels.position = XL_DATA_LABEL_POSITION.BEST_FIT
+            labels.show_category_name = True
+            labels.show_percentage = True
+            labels.show_value = False
+            labels.number_format = "0%"
+        else:
+            labels.position = XL_DATA_LABEL_POSITION.OUTSIDE_END if chart_ir.kind == "bar" else XL_DATA_LABEL_POSITION.ABOVE
+            labels.number_format = _chart_number_format(chart_ir)
+            labels.number_format_is_linked = False
         _format_chart_font(labels.font, theme, size=theme["layouts"]["chart"]["data_label_font_size_pt"], color_key="secondary")
     if chart_ir.kind != "pie":
         _format_chart_axes(chart, chart_ir, theme)
@@ -866,9 +1010,14 @@ def _format_chart_series(chart, chart_ir: ChartSpec, theme: dict) -> None:
         source = chart_ir.series[index]
         color_key = "hw_red" if source.emphasis else accent_keys[index % len(accent_keys)]
         rgb = _rgb(theme["colors"][color_key])
-        if chart_ir.kind == "line":
+        if chart_ir.kind in {"line", "scatter"}:
             series.format.line.color.rgb = rgb
             series.format.line.width = Pt(theme["layouts"]["chart"]["series_line_width_pt"])
+            series.marker.style = XL_MARKER_STYLE.CIRCLE
+            series.marker.size = 6
+            series.marker.format.fill.solid()
+            series.marker.format.fill.fore_color.rgb = rgb
+            series.marker.format.line.color.rgb = rgb
         else:
             series.format.fill.solid()
             series.format.fill.fore_color.rgb = rgb
@@ -879,18 +1028,33 @@ def _format_chart_axes(chart, chart_ir: ChartSpec, theme: dict) -> None:
     axis_size = theme["layouts"]["chart"]["axis_font_size_pt"]
     for axis in (chart.category_axis, chart.value_axis):
         _format_chart_font(axis.tick_labels.font, theme, size=axis_size, color_key="secondary")
-    minimum, maximum = _chart_value_range(chart_ir)
+    minimum, maximum, major = _chart_axis_scale(chart_ir)
     chart.value_axis.minimum_scale = minimum
     chart.value_axis.maximum_scale = maximum
+    chart.value_axis.major_unit = major
+    chart.value_axis.tick_labels.number_format = _chart_number_format(chart_ir)
+    chart.value_axis.tick_labels.number_format_is_linked = False
     if chart_ir.kind == "bar" and chart_ir.orientation == "horizontal":
         chart.category_axis.reverse_order = True
+    if len(chart_ir.categories) > 8:
+        _set_category_tick_label_skip(chart.category_axis, math.ceil(len(chart_ir.categories) / 8))
+    if (
+        chart_ir.orientation == "vertical"
+        and max((_visual_text_length(category) for category in chart_ir.categories), default=0) > 10
+    ):
+        _set_axis_label_rotation(chart.category_axis, -45)
     chart.value_axis.has_major_gridlines = True
     gridline = chart.value_axis.major_gridlines.format.line
     gridline.color.rgb = _rgb(theme["colors"]["border"])
     gridline.dash_style = MSO_LINE_DASH_STYLE.DASH
-    if chart_ir.unit:
+    if chart_ir.category_axis_title:
+        chart.category_axis.has_title = True
+        chart.category_axis.axis_title.text_frame.text = chart_ir.category_axis_title
+        _format_chart_text_frame(chart.category_axis.axis_title.text_frame, theme, size=axis_size, color_key="secondary")
+    value_axis_title = chart_ir.value_axis_title or chart_ir.unit
+    if value_axis_title:
         chart.value_axis.has_title = True
-        chart.value_axis.axis_title.text_frame.text = chart_ir.unit
+        chart.value_axis.axis_title.text_frame.text = value_axis_title
         _format_chart_text_frame(chart.value_axis.axis_title.text_frame, theme, size=axis_size, color_key="secondary")
 
 
@@ -1026,14 +1190,120 @@ def _snap_to_baseline_in(value: float, theme: dict) -> float:
 
 
 def _chart_value_range(chart_ir: ChartSpec) -> tuple[float, float]:
+    minimum, maximum, _major = _chart_axis_scale(chart_ir)
+    return minimum, maximum
+
+
+def _chart_axis_scale(chart_ir: ChartSpec) -> tuple[float, float, float]:
     values = [value for series in chart_ir.series for value in series.values]
     values.extend(threshold.value for threshold in chart_ir.thresholds)
-    minimum = min(values, default=0)
-    maximum = max(values, default=1)
-    if minimum > 0:
-        minimum = 0
-    padding = (maximum - minimum) * 0.1 or 1
-    return minimum, maximum + padding
+    data_minimum = min(values, default=0)
+    data_maximum = max(values, default=1)
+    if chart_ir.kind == "bar":
+        span = data_maximum - data_minimum
+        padding = span * 0.1 or max(abs(data_minimum), abs(data_maximum), 1) * 0.1
+        minimum = 0 if data_minimum >= 0 else data_minimum - padding
+        maximum = 0 if data_maximum <= 0 else data_maximum + padding
+    else:
+        span = data_maximum - data_minimum
+        magnitude = max(abs(data_minimum), abs(data_maximum), 1)
+        if span == 0:
+            padding = magnitude * 0.1
+        elif span / magnitude < 0.25:
+            padding = max(span * 0.2, magnitude * 0.03)
+        else:
+            padding = span * 0.1
+        minimum = data_minimum - padding
+        maximum = data_maximum + padding
+        if data_minimum >= 0 and minimum < 0:
+            minimum = 0
+        if data_maximum <= 0 and maximum > 0:
+            maximum = 0
+    if maximum <= minimum:
+        maximum = minimum + 1
+    major = _nice_number((maximum - minimum) / 5)
+    nice_minimum = math.floor(minimum / major) * major
+    nice_maximum = math.ceil(maximum / major) * major
+    if chart_ir.kind == "bar":
+        if data_minimum >= 0:
+            nice_minimum = 0
+        if data_maximum <= 0:
+            nice_maximum = 0
+    if nice_maximum <= nice_minimum:
+        nice_maximum = nice_minimum + major
+    return _clean_float(nice_minimum), _clean_float(nice_maximum), _clean_float(major)
+
+
+def _nice_number(value: float) -> float:
+    value = max(abs(value), 1e-12)
+    exponent = math.floor(math.log10(value))
+    fraction = value / (10**exponent)
+    if fraction <= 1:
+        nice_fraction = 1
+    elif fraction <= 2:
+        nice_fraction = 2
+    elif fraction <= 2.5:
+        nice_fraction = 2.5
+    elif fraction <= 5:
+        nice_fraction = 5
+    else:
+        nice_fraction = 10
+    return nice_fraction * (10**exponent)
+
+
+def _chart_number_format(chart_ir: ChartSpec) -> str:
+    if chart_ir.number_format:
+        return chart_ir.number_format
+    values = [value for series in chart_ir.series for value in series.values]
+    values.extend(threshold.value for threshold in chart_ir.thresholds)
+    if all(math.isclose(value, round(value), abs_tol=1e-9) for value in values):
+        decimals = 0
+    elif all(math.isclose(value * 10, round(value * 10), abs_tol=1e-8) for value in values):
+        decimals = 1
+    else:
+        decimals = 2
+    base = "#,##0" + ("." + "0" * decimals if decimals else "")
+    if not chart_ir.unit:
+        return base
+    suffix = chart_ir.unit.replace('"', '""')
+    return f'{base}"{suffix}"'
+
+
+def _visual_text_length(text: str) -> int:
+    return sum(2 if "\u2e80" <= character <= "\uffff" else 1 for character in text)
+
+
+def _set_axis_label_rotation(axis, degrees: int) -> None:
+    axis_element = axis._element
+    text_properties = axis_element.find(qn("c:txPr"))
+    if text_properties is None:
+        text_properties = OxmlElement("c:txPr")
+        body_properties = OxmlElement("a:bodyPr")
+        list_style = OxmlElement("a:lstStyle")
+        paragraph = OxmlElement("a:p")
+        paragraph_properties = OxmlElement("a:pPr")
+        default_run_properties = OxmlElement("a:defRPr")
+        paragraph_properties.append(default_run_properties)
+        paragraph.append(paragraph_properties)
+        paragraph.append(OxmlElement("a:endParaRPr"))
+        text_properties.extend([body_properties, list_style, paragraph])
+        axis_element.append(text_properties)
+    body_properties = text_properties.find(qn("a:bodyPr"))
+    if body_properties is not None:
+        body_properties.set("rot", str(int(degrees * 60000)))
+
+
+def _set_category_tick_label_skip(axis, skip: int) -> None:
+    axis_element = axis._element
+    element = axis_element.find(qn("c:tickLblSkip"))
+    if element is None:
+        element = OxmlElement("c:tickLblSkip")
+        axis_element.append(element)
+    element.set("val", str(max(1, skip)))
+
+
+def _clean_float(value: float) -> float:
+    return round(value, 10)
 
 
 def _add_chart_side_content(slide, chart_ir: ChartSpec, layout: dict, theme: dict) -> None:
@@ -1080,6 +1350,28 @@ def _add_chart_side_content(slide, chart_ir: ChartSpec, layout: dict, theme: dic
                 _fill_cell(cell, theme["colors"]["background"] if row_index % 2 else theme["colors"]["table_stripe"])
                 _write_cell_text(cell, [value], theme, size=side["table_font_size_pt"], bold=False, color_key="body")
                 _set_cell_border(cell, theme)
+        top += side["row_height_in"] * rows + side["gap_in"]
+    provenance = [
+        f"来源：{chart_ir.source}" if chart_ir.source else None,
+        f"口径：{chart_ir.methodology}" if chart_ir.methodology else None,
+        f"备注：{chart_ir.note}" if chart_ir.note else None,
+    ]
+    provenance_text = "\n".join(item for item in provenance if item)
+    if provenance_text:
+        _add_text_box(
+            slide,
+            provenance_text,
+            {
+                "left_in": side["left_in"],
+                "top_in": top,
+                "width_in": side["width_in"],
+                "height_in": side["provenance_height_in"],
+            },
+            theme,
+            size=side["provenance_font_size_pt"],
+            color_key="secondary",
+            name="HW_RENDERED_TEXT:NOTE",
+        )
 
 
 def _render_architecture_diagram(
@@ -2297,10 +2589,392 @@ def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(value, maximum))
 
 
-def _render_image_placeholder(slide, slide_ir: ImageSlide, theme: dict) -> None:
+def _render_image_text_slide(
+    slide,
+    slide_ir: ImageTextSlide,
+    theme: dict,
+    *,
+    asset_registry: AssetRegistry | None,
+    slide_number: int,
+) -> None:
+    _title(slide, slide_ir.title, theme)
+    if asset_registry is None:
+        raise AssetError("A005", f"slides[{slide_number - 1}].image.image_ref", "图片引用未提供 AssetRegistry。")
+    layout = theme["layouts"]["image_text"]
+    content = layout["content"]
+    image_left = content["left_in"] if slide_ir.image_position == "left" else content["left_in"] + content["width_in"] - layout["image_width_in"]
+    text_left = (
+        image_left + layout["image_width_in"] + layout["gap_in"]
+        if slide_ir.image_position == "left"
+        else content["left_in"]
+    )
+    text_width = content["width_in"] - layout["image_width_in"] - layout["gap_in"]
+    note_height = (layout["caption_height_in"] if slide_ir.image.caption else 0) + (
+        layout["credit_height_in"] if slide_ir.image.credit else 0
+    )
+    image_box = {
+        "left_in": image_left,
+        "top_in": content["top_in"],
+        "width_in": layout["image_width_in"],
+        "height_in": content["height_in"] - note_height,
+    }
+    _add_asset_picture(
+        slide,
+        asset_registry,
+        slide_ir.image.image_ref,
+        image_box,
+        slide_number=slide_number,
+        fit=slide_ir.image.fit,
+        focal_x=slide_ir.image.focal_x,
+        focal_y=slide_ir.image.focal_y,
+        alt=slide_ir.image.alt,
+        credit=slide_ir.image.credit,
+    )
+    note_top = content["top_in"] + image_box["height_in"]
+    if slide_ir.image.caption:
+        _add_text_box(
+            slide,
+            slide_ir.image.caption,
+            {
+                "left_in": image_left,
+                "top_in": note_top,
+                "width_in": layout["image_width_in"],
+                "height_in": layout["caption_height_in"],
+            },
+            theme,
+            size=layout["note_font_size_pt"],
+            color_key="secondary",
+            name="HW_RENDERED_TEXT:NOTE",
+        )
+        note_top += layout["caption_height_in"]
+    if slide_ir.image.credit:
+        _add_text_box(
+            slide,
+            f"来源：{slide_ir.image.credit}",
+            {
+                "left_in": image_left,
+                "top_in": note_top,
+                "width_in": layout["image_width_in"],
+                "height_in": layout["credit_height_in"],
+            },
+            theme,
+            size=layout["note_font_size_pt"],
+            color_key="secondary",
+            name="HW_RENDERED_TEXT:NOTE",
+        )
+    text_top = content["top_in"]
+    if slide_ir.heading:
+        _add_text_box(
+            slide,
+            slide_ir.heading,
+            {
+                "left_in": text_left,
+                "top_in": text_top,
+                "width_in": text_width,
+                "height_in": layout["heading_height_in"],
+            },
+            theme,
+            size=layout["heading_font_size_pt"],
+            bold=True,
+            name="HW_RENDERED_TEXT:SUBHEADING",
+        )
+        text_top += layout["heading_height_in"]
+    body = "\n".join(([slide_ir.text] if slide_ir.text else []) + [f"• {item}" for item in slide_ir.bullets])
+    _add_text_box(
+        slide,
+        body,
+        {
+            "left_in": text_left,
+            "top_in": text_top,
+            "width_in": text_width,
+            "height_in": content["top_in"] + content["height_in"] - text_top,
+        },
+        theme,
+        size=layout["body_font_size_pt"],
+        color_key="body",
+        name="HW_RENDERED_TEXT:BODY",
+    )
+
+
+def _render_image_grid_slide(
+    slide,
+    slide_ir: ImageGridSlide,
+    theme: dict,
+    *,
+    asset_registry: AssetRegistry | None,
+    slide_number: int,
+) -> None:
+    _title(slide, slide_ir.title, theme)
+    if asset_registry is None:
+        raise AssetError("A005", f"slides[{slide_number - 1}].images", "图片引用未提供 AssetRegistry。")
+    layout = theme["layouts"]["image_grid"]
+    content = layout["content"]
+    count = len(slide_ir.images)
+    columns = 2
+    rows = 1 if count == 2 else 2
+    cell_width = (content["width_in"] - layout["gap_in"] * (columns - 1)) / columns
+    cell_height = (content["height_in"] - layout["gap_in"] * (rows - 1)) / rows
+    for index, image in enumerate(slide_ir.images):
+        row, column = divmod(index, columns)
+        left = content["left_in"] + column * (cell_width + layout["gap_in"])
+        top = content["top_in"] + row * (cell_height + layout["gap_in"])
+        note = " · ".join(item for item in (image.caption, f"来源：{image.credit}" if image.credit else None) if item)
+        note_height = layout["caption_height_in"] if note else 0
+        _add_asset_picture(
+            slide,
+            asset_registry,
+            image.image_ref,
+            {"left_in": left, "top_in": top, "width_in": cell_width, "height_in": cell_height - note_height},
+            slide_number=slide_number,
+            fit=image.fit,
+            focal_x=image.focal_x,
+            focal_y=image.focal_y,
+            alt=image.alt,
+            credit=image.credit,
+        )
+        if note:
+            _add_text_box(
+                slide,
+                note,
+                {
+                    "left_in": left,
+                    "top_in": top + cell_height - note_height,
+                    "width_in": cell_width,
+                    "height_in": note_height,
+                },
+                theme,
+                size=layout["caption_font_size_pt"],
+                color_key="secondary",
+                name="HW_RENDERED_TEXT:NOTE",
+            )
+
+
+def _render_infographic_slide(slide, slide_ir: InfographicSlide, theme: dict) -> None:
+    _title(slide, slide_ir.title, theme)
+    infographic = slide_ir.infographic
+    if infographic.kind == "funnel":
+        _render_funnel(slide, infographic, theme)
+    elif infographic.kind == "quadrant":
+        _render_quadrant(slide, infographic, theme)
+    elif infographic.kind == "cycle":
+        _render_cycle(slide, infographic, theme)
+    else:
+        _render_matrix(slide, infographic, theme)
+
+
+def _render_funnel(slide, infographic, theme: dict) -> None:
+    layout = theme["layouts"]["infographic"]
+    content = layout["content"]
+    count = len(infographic.stages)
+    stage_height = (content["height_in"] - layout["gap_in"] * (count - 1)) / count
+    for index, stage in enumerate(infographic.stages):
+        order = index if infographic.direction == "forward" else count - index - 1
+        width = content["width_in"] * (1 - 0.1 * order)
+        left = content["left_in"] + (content["width_in"] - width) / 2
+        top = content["top_in"] + index * (stage_height + layout["gap_in"])
+        shape = slide.shapes.add_shape(
+            MSO_SHAPE.TRAPEZOID, Inches(left), Inches(top), Inches(width), Inches(stage_height)
+        )
+        shape.name = f"HW_INFOGRAPHIC:funnel:{index + 1}"
+        _style_infographic_shape(shape, theme, index)
+        _write_infographic_stage(shape, stage, theme, layout)
+        if stage.icon:
+            add_semantic_icon(
+                slide,
+                stage.icon,
+                {
+                    "left_in": left + layout["gap_in"],
+                    "top_in": top + (stage_height - layout["icon_size_in"]) / 2,
+                    "width_in": layout["icon_size_in"],
+                    "height_in": layout["icon_size_in"],
+                },
+                theme,
+                color_key="background",
+            )
+
+
+def _render_quadrant(slide, infographic, theme: dict) -> None:
+    layout = theme["layouts"]["infographic"]
+    content = layout["content"]
+    plot = {
+        "left_in": content["left_in"] + layout["quadrant_label_width_in"],
+        "top_in": content["top_in"],
+        "width_in": content["width_in"] - layout["quadrant_label_width_in"],
+        "height_in": content["height_in"] - layout["quadrant_label_height_in"],
+    }
+    frame = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE,
+        Inches(plot["left_in"]), Inches(plot["top_in"]), Inches(plot["width_in"]), Inches(plot["height_in"]),
+    )
+    frame.name = "HW_INFOGRAPHIC:quadrant:frame"
+    frame.fill.background()
+    frame.line.color.rgb = _rgb(theme["colors"]["border"])
+    for x1, y1, x2, y2 in (
+        (plot["left_in"] + plot["width_in"] / 2, plot["top_in"], plot["left_in"] + plot["width_in"] / 2, plot["top_in"] + plot["height_in"]),
+        (plot["left_in"], plot["top_in"] + plot["height_in"] / 2, plot["left_in"] + plot["width_in"], plot["top_in"] + plot["height_in"] / 2),
+    ):
+        line = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
+        line.name = "HW_INFOGRAPHIC:quadrant:axis"
+        line.line.color.rgb = _rgb(theme["colors"]["border"])
+    _add_text_box(
+        slide, infographic.x_axis,
+        {"left_in": plot["left_in"], "top_in": plot["top_in"] + plot["height_in"], "width_in": plot["width_in"], "height_in": layout["quadrant_label_height_in"]},
+        theme, size=layout["axis_font_size_pt"], color_key="secondary", name="HW_RENDERED_TEXT:NOTE",
+    )
+    _add_text_box(
+        slide, infographic.y_axis,
+        {"left_in": content["left_in"], "top_in": plot["top_in"], "width_in": layout["quadrant_label_width_in"], "height_in": layout["quadrant_label_height_in"]},
+        theme, size=layout["axis_font_size_pt"], color_key="secondary", name="HW_RENDERED_TEXT:NOTE",
+    )
+    for index, item in enumerate(infographic.items):
+        left = plot["left_in"] + item.x * plot["width_in"] - layout["quadrant_label_width_in"] / 2
+        top = plot["top_in"] + (1 - item.y) * plot["height_in"] - layout["quadrant_label_height_in"] / 2
+        point = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE,
+            Inches(_clamp(left, plot["left_in"], plot["left_in"] + plot["width_in"] - layout["quadrant_label_width_in"])),
+            Inches(_clamp(top, plot["top_in"], plot["top_in"] + plot["height_in"] - layout["quadrant_label_height_in"])),
+            Inches(layout["quadrant_label_width_in"]), Inches(layout["quadrant_label_height_in"]),
+        )
+        point.name = f"HW_INFOGRAPHIC:quadrant:item:{index + 1}"
+        _style_infographic_shape(point, theme, index)
+        point.text = item.label
+        _format_infographic_text(point, theme, layout["detail_font_size_pt"])
+
+
+def _render_cycle(slide, infographic, theme: dict) -> None:
+    layout = theme["layouts"]["infographic"]
+    content = layout["content"]
+    center_x = content["left_in"] + content["width_in"] / 2
+    center_y = content["top_in"] + content["height_in"] / 2
+    centers = []
+    for index in range(len(infographic.stages)):
+        angle = -math.pi / 2 + 2 * math.pi * index / len(infographic.stages)
+        centers.append((center_x + layout["cycle_radius_x_in"] * math.cos(angle), center_y + layout["cycle_radius_y_in"] * math.sin(angle)))
+    for index, (current, following) in enumerate(zip(centers, centers[1:] + centers[:1])):
+        line = slide.shapes.add_connector(
+            MSO_CONNECTOR.STRAIGHT, Inches(current[0]), Inches(current[1]), Inches(following[0]), Inches(following[1])
+        )
+        line.name = f"HW_INFOGRAPHIC:cycle:connector:{index + 1}"
+        line.line.color.rgb = _rgb(theme["colors"]["muted"])
+        line.line.width = Pt(layout["connector_width_pt"])
+        _set_connector_arrowheads(line, "forward")
+    for index, (stage, center) in enumerate(zip(infographic.stages, centers)):
+        shape = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE,
+            Inches(center[0] - layout["cycle_node_width_in"] / 2),
+            Inches(center[1] - layout["cycle_node_height_in"] / 2),
+            Inches(layout["cycle_node_width_in"]), Inches(layout["cycle_node_height_in"]),
+        )
+        shape.name = f"HW_INFOGRAPHIC:cycle:item:{index + 1}"
+        _style_infographic_shape(shape, theme, index)
+        _write_infographic_stage(shape, stage, theme, layout)
+        if stage.icon:
+            add_semantic_icon(
+                slide,
+                stage.icon,
+                {
+                    "left_in": center[0] - layout["cycle_node_width_in"] / 2 + layout["gap_in"],
+                    "top_in": center[1] - layout["icon_size_in"] / 2,
+                    "width_in": layout["icon_size_in"],
+                    "height_in": layout["icon_size_in"],
+                },
+                theme,
+            )
+
+
+def _render_matrix(slide, infographic, theme: dict) -> None:
+    layout = theme["layouts"]["infographic"]
+    content = layout["content"]
+    rows = len(infographic.row_labels) + 1
+    cols = len(infographic.column_labels) + 1
+    shape = slide.shapes.add_table(
+        rows, cols,
+        Inches(content["left_in"]), Inches(content["top_in"]), Inches(content["width_in"]), Inches(content["height_in"]),
+    )
+    shape.name = "HW_INFOGRAPHIC:matrix:table"
+    table = shape.table
+    labels = [""] + infographic.column_labels
+    for column, value in enumerate(labels):
+        _fill_cell(table.cell(0, column), theme["colors"]["hw_red"])
+        _write_cell_text(table.cell(0, column), [value], theme, size=layout["stage_font_size_pt"], bold=True, color_key="background")
+    for row, row_label in enumerate(infographic.row_labels, start=1):
+        _fill_cell(table.cell(row, 0), theme["colors"]["gray_light"])
+        _write_cell_text(table.cell(row, 0), [row_label], theme, size=layout["stage_font_size_pt"], bold=True, color_key="body")
+        for column, value in enumerate(infographic.cells[row - 1], start=1):
+            _fill_cell(table.cell(row, column), theme["colors"]["background"] if row % 2 else theme["colors"]["table_stripe"])
+            _write_cell_text(table.cell(row, column), [value], theme, size=layout["detail_font_size_pt"], bold=False, color_key="body")
+    for row in range(rows):
+        for column in range(cols):
+            _set_cell_border(table.cell(row, column), theme)
+
+
+def _style_infographic_shape(shape, theme: dict, index: int) -> None:
+    color_key = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"][index % 6]
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = _rgb(theme["colors"][color_key])
+    shape.line.color.rgb = _rgb(theme["colors"][color_key])
+
+
+def _write_infographic_stage(shape, stage, theme: dict, layout: dict) -> None:
+    values = [stage.label]
+    if stage.value:
+        values.append(stage.value)
+    if stage.description:
+        values.append(stage.description)
+    shape.text = "\n".join(values)
+    _format_infographic_text(shape, theme, layout["stage_font_size_pt"])
+
+
+def _format_infographic_text(shape, theme: dict, size: float) -> None:
+    _fit_text_frame(shape.text_frame)
+    shape.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    for paragraph in shape.text_frame.paragraphs:
+        paragraph.alignment = PP_ALIGN.CENTER
+        _format_paragraph(paragraph, theme)
+        for run in paragraph.runs:
+            _format_run(run, theme, size=size, bold=True, color_key="background")
+
+
+def _render_image_slide(
+    slide,
+    slide_ir: ImageSlide,
+    theme: dict,
+    *,
+    asset_registry: AssetRegistry | None,
+    slide_number: int,
+) -> None:
     _title(slide, slide_ir.title, theme)
     layout = theme["layouts"]["image"]
     box = layout["box"]
+    if slide_ir.image_ref:
+        if asset_registry is None:
+            raise AssetError("A005", f"slides[{slide_number - 1}].image_ref", "图片引用未提供 AssetRegistry。")
+        _add_asset_picture(
+            slide,
+            asset_registry,
+            slide_ir.image_ref,
+            box,
+            slide_number=slide_number,
+            fit=slide_ir.fit,
+            focal_x=slide_ir.focal_x,
+            focal_y=slide_ir.focal_y,
+            alt=slide_ir.alt,
+            credit=slide_ir.credit,
+        )
+        caption_text = " · ".join(
+            item for item in (slide_ir.caption, f"来源：{slide_ir.credit}" if slide_ir.credit else None) if item
+        )
+        if caption_text:
+            _add_text_box(
+                slide,
+                caption_text,
+                layout["caption"],
+                theme,
+                size=layout["caption"]["font_size_pt"],
+                color_key="secondary",
+                name="HW_RENDERED_TEXT:NOTE",
+            )
+        return
     shape = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE,
         Inches(box["left_in"]),
@@ -2319,16 +2993,115 @@ def _render_image_placeholder(slide, slide_ir: ImageSlide, theme: dict) -> None:
         _format_paragraph(paragraph, theme)
         for run in paragraph.runs:
             _format_run(run, theme, size=layout["placeholder_font_size_pt"], bold=True, color_key="body")
-    if slide_ir.caption:
+    caption_text = " · ".join(
+        item for item in (slide_ir.caption, f"来源：{slide_ir.credit}" if slide_ir.credit else None) if item
+    )
+    if caption_text:
         _add_text_box(
             slide,
-            slide_ir.caption,
+            caption_text,
             layout["caption"],
             theme,
             size=layout["caption"]["font_size_pt"],
             color_key="secondary",
             name="HW_RENDERED_TEXT:NOTE",
         )
+
+
+def _add_asset_picture(
+    slide,
+    registry: AssetRegistry,
+    asset_id: str,
+    box: dict[str, float],
+    *,
+    slide_number: int,
+    fit: str,
+    focal_x: float = 0.5,
+    focal_y: float = 0.5,
+    alt: str | None = None,
+    credit: str | None = None,
+):
+    record = registry.record(asset_id)
+    path = registry.resolve(asset_id)
+    left = float(box["left_in"])
+    top = float(box["top_in"])
+    width = float(box["width_in"])
+    height = float(box["height_in"])
+    crop_left = crop_top = crop_right = crop_bottom = 0.0
+    if fit == "contain":
+        scale = min(width / record.width, height / record.height)
+        rendered_width = record.width * scale
+        rendered_height = record.height * scale
+        rendered_left = left + (width - rendered_width) / 2
+        rendered_top = top + (height - rendered_height) / 2
+        picture = slide.shapes.add_picture(
+            str(path),
+            Inches(rendered_left),
+            Inches(rendered_top),
+            Inches(rendered_width),
+            Inches(rendered_height),
+        )
+        effective_dpi = min(record.width / rendered_width, record.height / rendered_height)
+        usage_box = (rendered_left, rendered_top, rendered_width, rendered_height)
+    elif fit == "cover":
+        picture = slide.shapes.add_picture(str(path), Inches(left), Inches(top), Inches(width), Inches(height))
+        image_aspect = record.width / record.height
+        box_aspect = width / height
+        if image_aspect > box_aspect:
+            visible = box_aspect / image_aspect
+            crop_left = _clamp(focal_x - visible / 2, 0, 1 - visible)
+            crop_right = 1 - visible - crop_left
+        else:
+            visible = image_aspect / box_aspect
+            crop_top = _clamp(focal_y - visible / 2, 0, 1 - visible)
+            crop_bottom = 1 - visible - crop_top
+        picture.crop_left = crop_left
+        picture.crop_top = crop_top
+        picture.crop_right = crop_right
+        picture.crop_bottom = crop_bottom
+        effective_dpi = min(
+            record.width * (1 - crop_left - crop_right) / width,
+            record.height * (1 - crop_top - crop_bottom) / height,
+        )
+        usage_box = (left, top, width, height)
+    else:
+        raise AssetError("A006", f"asset[{asset_id}].fit", f"未知图片适配策略: {fit}")
+    picture.name = f"HW_ASSET_IMAGE:{asset_id}"
+    picture.element.nvPicPr.cNvPr.set(
+        "descr",
+        json.dumps(
+            {
+                "asset_id": asset_id,
+                "effective_dpi": round(effective_dpi, 2),
+                "fit": fit,
+                "crop_fraction": round(crop_left + crop_top + crop_right + crop_bottom, 4),
+                "alt_present": bool(alt or record.alt),
+                "credit_present": bool(credit or record.credit),
+                "source_type": record.source_type,
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
+    registry.add_usage(
+        AssetUsage(
+            slide=slide_number,
+            asset_id=asset_id,
+            normalized_sha256=record.normalized_sha256,
+            fit=fit,
+            left_in=usage_box[0],
+            top_in=usage_box[1],
+            width_in=usage_box[2],
+            height_in=usage_box[3],
+            crop_left=crop_left,
+            crop_top=crop_top,
+            crop_right=crop_right,
+            crop_bottom=crop_bottom,
+            effective_dpi=effective_dpi,
+        )
+    )
+    return picture
 
 
 def _render_placeholder(slide, layout: str, theme: dict) -> None:

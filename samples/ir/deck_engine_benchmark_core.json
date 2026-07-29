@@ -1,0 +1,13 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {"title": "双引擎核心版式评测", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+  "slides": [
+    {"layout": "cover", "title": "双引擎核心版式评测", "subtitle": "同一 DeckIR 的可编辑输出对照"},
+    {"layout": "title_bullets", "title": "评测目标", "bullets": [{"text": "比较中文排版、原生对象和离线可控性", "level": 1}, {"text": "生产默认引擎保持 python-pptx", "level": 1}]},
+    {"layout": "two_column", "title": "两种渲染路径", "left": {"heading": "Python", "bullets": [{"text": "模板安全克隆与母版重绘", "level": 1}]}, "right": {"heading": "HTML", "bullets": [{"text": "浏览器计算布局后转换原生对象", "level": 1}]}},
+    {"layout": "cards", "title": "比较维度", "cards": [{"title": "视觉", "desc": "层级、留白与中文阅读"}, {"title": "编辑", "desc": "文本、表格和图表可编辑"}, {"title": "交付", "desc": "离线部署与故障治理"}]},
+    {"layout": "table", "title": "验收矩阵", "table": {"header": ["维度", "通过条件"], "rows": [["包完整", "关系与 XML 校验通过"], ["排版", "无裁切或重叠"], ["编辑", "核心对象可编辑"]]}},
+    {"layout": "chart", "title": "生成效率趋势", "chart": {"kind": "line", "categories": ["基线", "模板", "审计", "评测"], "series": [{"name": "确定性", "values": [70, 82, 91, 96]}], "legend_position": "none"}}
+  ]
+}

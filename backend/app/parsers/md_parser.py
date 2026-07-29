@@ -4,8 +4,9 @@ import re
 from pathlib import Path
 
 from app.ir.document_ir import DocumentIR
-from app.parsers.errors import encoding_failure, parser_error_boundary
+from app.parsers.errors import ParseFailure, encoding_failure, parser_error_boundary
 from app.parsers.source_metadata import deterministic_parsed_at
+from app.parsers.text_limits import TextLimiter
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -13,21 +14,34 @@ UNORDERED_RE = re.compile(r"^(\s*)[-*]\s+(.+?)\s*$")
 ORDERED_RE = re.compile(r"^(\s*)\d+[.)]\s+(.+?)\s*$")
 TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$")
 CODE_FENCE_RE = re.compile(r"^\s*```\s*([A-Za-z0-9_+-]*)\s*$")
+MAX_MD_FILE_BYTES = 10 * 1024 * 1024
 
 
 @parser_error_boundary
 def parse_markdown(path: Path) -> DocumentIR:
+    if path.stat().st_size > MAX_MD_FILE_BYTES:
+        raise ParseFailure(
+            code="E001",
+            loc="source.resource",
+            message="Markdown 文件超过 10 MB 资源上限。",
+            suggestion="请拆分文件或移除低价值大段内容后重试。",
+        )
     text, encoding_warning = _read_markdown_text(path)
     lines = text.splitlines()
     blocks: list[dict] = []
     outline: list[dict] = []
     warnings: list[str] = [encoding_warning] if encoding_warning else []
+    limiter = TextLimiter(warnings)
     paragraph_buffer: list[str] = []
     index = 0
 
     def flush_paragraph() -> None:
         if paragraph_buffer:
-            blocks.append({"type": "paragraph", "text": " ".join(paragraph_buffer).strip()})
+            value = limiter.limit(
+                " ".join(paragraph_buffer).strip(),
+                loc=f"markdown paragraph {len(blocks) + 1}",
+            )
+            blocks.append({"type": "paragraph", "text": value})
             paragraph_buffer.clear()
 
     while index < len(lines):
@@ -47,7 +61,8 @@ def parse_markdown(path: Path) -> DocumentIR:
             else:
                 index += 1
             if code_lines and any(line.strip() for line in code_lines):
-                block: dict[str, str] = {"type": "code_block", "code": "\n".join(code_lines)}
+                code = limiter.limit("\n".join(code_lines), loc=f"markdown code block {len(blocks) + 1}")
+                block: dict[str, str] = {"type": "code_block", "code": code}
                 if language:
                     block["language"] = language
                 blocks.append(block)
@@ -63,7 +78,10 @@ def parse_markdown(path: Path) -> DocumentIR:
         if heading:
             flush_paragraph()
             level = len(heading.group(1))
-            text_value = heading.group(2).strip()
+            text_value = limiter.limit(
+                heading.group(2).strip(),
+                loc=f"markdown heading line {index + 1}",
+            )
             if level > 4:
                 warnings.append(f"heading level {level} capped to 4: {text_value}")
                 level = 4
@@ -74,7 +92,11 @@ def parse_markdown(path: Path) -> DocumentIR:
 
         if _is_table_start(lines, index):
             flush_paragraph()
-            table, consumed, truncated, malformed_rows = _parse_table(lines[index:])
+            table, consumed, truncated, malformed_rows = _parse_table(
+                lines[index:],
+                limiter=limiter,
+                start_line=index + 1,
+            )
             blocks.append(table)
             if truncated:
                 warnings.append("W103: markdown table preview truncated to 20 rows")
@@ -87,7 +109,12 @@ def parse_markdown(path: Path) -> DocumentIR:
         ordered = ORDERED_RE.match(line)
         if unordered or ordered:
             flush_paragraph()
-            list_block, consumed = _parse_list(lines[index:], ordered=ordered is not None)
+            list_block, consumed = _parse_list(
+                lines[index:],
+                ordered=ordered is not None,
+                limiter=limiter,
+                start_line=index + 1,
+            )
             blocks.append(list_block)
             index += consumed
             continue
@@ -136,14 +163,23 @@ def _read_markdown_text(path: Path) -> tuple[str, str | None]:
             raise encoding_failure(path) from exc
 
 
-def _parse_table(lines: list[str]) -> tuple[dict, int, bool, int]:
-    header = _split_table_row(lines[0])
+def _parse_table(
+    lines: list[str],
+    *,
+    limiter: TextLimiter,
+    start_line: int,
+) -> tuple[dict, int, bool, int]:
+    header = _split_table_row(lines[0], limiter=limiter, loc=f"markdown table line {start_line}")
     rows: list[list[str]] = []
     consumed = 2
     truncated = False
     malformed_rows = 0
     while consumed < len(lines) and "|" in lines[consumed] and lines[consumed].strip():
-        row = _split_table_row(lines[consumed])
+        row = _split_table_row(
+            lines[consumed],
+            limiter=limiter,
+            loc=f"markdown table line {start_line + consumed}",
+        )
         if len(row) == len(header):
             if len(rows) < 20:
                 rows.append(row)
@@ -155,11 +191,20 @@ def _parse_table(lines: list[str]) -> tuple[dict, int, bool, int]:
     return {"type": "table", "header": header, "rows": rows}, consumed, truncated, malformed_rows
 
 
-def _split_table_row(line: str) -> list[str]:
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+def _split_table_row(line: str, *, limiter: TextLimiter, loc: str) -> list[str]:
+    return [
+        limiter.limit(cell.strip(), loc=f"{loc} cell {index}")
+        for index, cell in enumerate(line.strip().strip("|").split("|"), start=1)
+    ]
 
 
-def _parse_list(lines: list[str], *, ordered: bool) -> tuple[dict, int]:
+def _parse_list(
+    lines: list[str],
+    *,
+    ordered: bool,
+    limiter: TextLimiter,
+    start_line: int,
+) -> tuple[dict, int]:
     pattern = ORDERED_RE if ordered else UNORDERED_RE
     items: list[dict] = []
     consumed = 0
@@ -169,7 +214,11 @@ def _parse_list(lines: list[str], *, ordered: bool) -> tuple[dict, int]:
             break
         indent = len(match.group(1).replace("\t", "    "))
         level = 2 if indent >= 2 else 1
-        items.append({"text": match.group(2).strip(), "level": level})
+        text = limiter.limit(
+            match.group(2).strip(),
+            loc=f"markdown list item line {start_line + consumed}",
+        )
+        items.append({"text": text, "level": level})
         consumed += 1
     block_type = "numbered_list" if ordered else "bullet_list"
     return {"type": block_type, "items": items}, consumed

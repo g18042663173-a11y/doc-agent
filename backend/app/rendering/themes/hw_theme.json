@@ -323,6 +323,16 @@
       "data_label_font_size_pt": 9,
       "bar_gap_width": 70,
       "series_line_width_pt": 1.5,
+      "combo_legend": {
+        "left_offset_in": 0.7,
+        "top_offset_in": 0.08,
+        "item_width_in": 1.65,
+        "marker_width_in": 0.18,
+        "marker_height_in": 0.12,
+        "text_gap_in": 0.25,
+        "text_width_in": 1.25,
+        "font_size_pt": 8
+      },
       "threshold": {
         "line_width_pt": 0.75,
         "label_font_size_pt": 8,
@@ -345,7 +355,9 @@
         "gap_in": 0.222222,
         "font_size_pt": 9,
         "table_font_size_pt": 8,
-        "row_height_in": 0.333333
+        "row_height_in": 0.333333,
+        "provenance_height_in": 0.9,
+        "provenance_font_size_pt": 8
       }
     },
     "architecture_diagram": {
@@ -499,6 +511,56 @@
         "font_size_pt": 12
       },
       "placeholder_font_size_pt": 16
+    },
+    "image_text": {
+      "content": {
+        "left_in": 0.85,
+        "top_in": 1.55,
+        "width_in": 11.64,
+        "height_in": 4.95
+      },
+      "image_width_in": 6.55,
+      "gap_in": 0.45,
+      "heading_height_in": 0.55,
+      "heading_font_size_pt": 18,
+      "body_font_size_pt": 14,
+      "caption_height_in": 0.35,
+      "credit_height_in": 0.25,
+      "note_font_size_pt": 8
+    },
+    "image_grid": {
+      "content": {
+        "left_in": 0.85,
+        "top_in": 1.55,
+        "width_in": 11.64,
+        "height_in": 4.95
+      },
+      "gap_in": 0.25,
+      "caption_height_in": 0.35,
+      "caption_font_size_pt": 9
+    },
+    "infographic": {
+      "content": {
+        "left_in": 0.85,
+        "top_in": 1.55,
+        "width_in": 11.64,
+        "height_in": 4.95
+      },
+      "gap_in": 0.18,
+      "stage_font_size_pt": 14,
+      "detail_font_size_pt": 9,
+      "axis_font_size_pt": 10,
+      "border_pt": 1.0,
+      "connector_width_pt": 1.25,
+      "quadrant_label_width_in": 1.45,
+      "quadrant_label_height_in": 0.38,
+      "cycle_node_width_in": 2.1,
+      "cycle_node_height_in": 0.9,
+      "cycle_radius_x_in": 3.9,
+      "cycle_radius_y_in": 1.75,
+      "icon_size_in": 0.28,
+      "matrix_header_height_in": 0.55,
+      "matrix_label_width_in": 1.35
     },
     "placeholder": {
       "left_in": 0.57,

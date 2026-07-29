@@ -1,0 +1,7 @@
+{
+  "fixtures": [
+    {"id": "core-layouts", "deck_ir": "samples/ir/deck_engine_benchmark_core.json"},
+    {"id": "long-chinese-chart", "deck_ir": "samples/ir/deck_engine_benchmark_long_chinese.json"},
+    {"id": "dense-table", "deck_ir": "samples/ir/deck_engine_benchmark_dense_table.json"}
+  ]
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 import zipfile
 from email.parser import Parser
 from pathlib import Path
@@ -41,7 +42,13 @@ def main(argv: list[str] | None = None) -> int:
         "hash_algorithm": "sha256",
         "wheel_count": len(records),
         "wheels": records,
-        "verification_boundary": "Hashes were generated from downloaded Windows wheels on macOS; offline installation still requires Windows true-machine validation.",
+        "verification_boundary": (
+            "Hashes were generated from downloaded Windows wheels on Windows; clean-machine physical-offline "
+            "Windows true-machine validation is still required."
+            if sys.platform == "win32"
+            else "Hashes were generated from downloaded Windows wheels outside the target Windows host; "
+            "offline installation still requires Windows true-machine validation."
+        ),
     }
     args.manifest.parent.mkdir(parents=True, exist_ok=True)
     args.manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")

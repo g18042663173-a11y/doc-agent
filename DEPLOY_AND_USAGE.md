@@ -8,7 +8,7 @@
 md/docx/xlsx/pptx -> DocumentIR -> Prompt/generator -> WordIR/DeckIR -> DOCX/PPTX -> 合规报告
 ```
 
-当前交付版本的 IR 为：DocumentIR `1.2`、WordIR `1.2`、DeckIR `1.9`。历史 WordIR `1.0/1.1`、DocumentIR `1.0/1.1`、DeckIR `1.4-1.8` 可在内存中迁移后按现行约束校验。
+当前交付版本的 IR 为：DocumentIR `1.2`、WordIR `1.2`、DeckIR `2.0`。历史 WordIR `1.0/1.1`、DocumentIR `1.0/1.1`、DeckIR `1.4-1.9` 可在内存中迁移后按现行约束校验。
 
 默认可离线运行的是 `stub` 生成器。它用于可重复的链路、回归和交付验收，不代表真实模型生成质量。
 
@@ -22,12 +22,8 @@ md/docx/xlsx/pptx -> DocumentIR -> Prompt/generator -> WordIR/DeckIR -> DOCX/PPT
 - 若要获得 Graphviz 架构图自动布局，需要另行将经内网审计的 Graphviz Windows 运行时放到 `tools/graphviz/`，使 `tools/graphviz/bin/dot.exe` 存在。Python 的 `graphviz` wheel 不包含 `dot.exe`。
 
 ```powershell
-# 建议在项目目录下使用独立虚拟环境
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# 仅从随包 wheelhouse 安装，并校验每个依赖的 SHA-256
-python -m pip install --no-index --find-links wheelhouse --require-hashes -r requirements-win312.lock
+# 创建 Python 3.12 虚拟环境并从 wheelhouse 校验哈希后离线安装
+.\bootstrap_windows.ps1
 
 # Graphviz 已按上述方式放置时执行；未放置时，架构图会使用确定性 fallback 并给出 warning
 $env:PATH = "$PWD\tools\graphviz\bin;$env:PATH"
@@ -49,6 +45,7 @@ dot -V
 | `backend/app/generators/` | `stub`、可选 Codex，以及待内网实现的 `nga` 适配层。 |
 | `backend/app/rendering/` | python-docx / python-pptx 的可编辑 DOCX/PPTX 渲染。 |
 | `backend/app/lint/` | DOCX/PPTX 合规检查与报告。 |
+| `backend/app/reliability/` | FailureEnvelope、持久 JobState 与服务可靠性契约。 |
 | `backend/app/cli/` | `parse`、`prompt`、`render`、`check`、`analyze` 命令。 |
 | `backend/schemas/` | 导出的三份 JSON Schema 快照。 |
 | `backend/tests/` | 单元、契约、渲染回读、lint 和端到端测试。 |
@@ -152,11 +149,11 @@ NGA_MAX_RETRIES
 
 ## 6. 交接验收与已知边界
 
-### 已在 Mac 构造样例/stub 环境验证
+### 已在本机 Windows 构造样例/stub 环境验证
 
-- 自动测试与 `python scripts/verify.py`：最近基线为 `441 passed` 且 verify 通过。
 - 四格式输入到 Word/Deck 的 stub 全链路、三份 schema 快照、DOCX/PPTX 渲染与 lint。
 - 可编辑的 PPTX 基础版式、表格、流程/时间线、图表、架构图、composite 和可编辑 DOCX 标题/表格/代码块/文档头。
+- Waitress 本地服务的健康/版本、持久任务、队列、超时、取消、幂等、限流和浏览器双视口流程。
 
 ### 必须在内网或目标机完成
 
@@ -166,4 +163,4 @@ NGA_MAX_RETRIES
 4. 在 Windows Word/PowerPoint 与实际目标字体/CI 下人工检查字体替换、跨页表格、页眉页脚、元素重叠、可编辑性及视觉观感。
 5. 将经审计的 Graphviz Windows 运行时加入 `tools/graphviz/`；没有它时，架构图仍可渲染但会降级为 fallback 布局。
 
-当前 image 页是可编辑占位与题注，不搬运真实图片二进制；精确 Gantt 和地图版式未实现。自动 lint 和 Mac 预览不能替代上述真实环境验收。
+DeckIR 2.0 已支持经 AssetManifest 安全规范化的真实图片、图文页和图片网格；AI 生图默认禁用。精确 Gantt 和地图版式未实现。自动 lint 和本机预览不能替代上述真实环境验收。

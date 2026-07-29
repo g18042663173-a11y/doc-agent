@@ -11,15 +11,18 @@ from pptx import Presentation
 
 from app.ir.document_ir import DocumentIR
 from app.parsers.errors import parser_error_boundary
+from app.parsers.office_preflight import preflight_source_office
 from app.parsers.source_metadata import deterministic_parsed_at
 from app.parsers.text_limits import TextLimiter
 
 
 @parser_error_boundary
 def parse_pptx(path: Path) -> DocumentIR:
+    warnings = preflight_source_office(path)
     presentation = Presentation(str(path))
     slide_summaries: list[dict] = []
-    embedding_warnings, warnings = _embedding_warnings(path)
+    embedding_warnings, package_warnings = _embedding_warnings(path)
+    warnings.extend(package_warnings)
     limiter = TextLimiter(warnings)
     image_count = 0
 

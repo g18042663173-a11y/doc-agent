@@ -1,0 +1,488 @@
+{
+  "$defs": {
+    "TemplateCapacity": {
+      "additionalProperties": false,
+      "properties": {
+        "char_capacity": {
+          "minimum": 0,
+          "title": "Char Capacity",
+          "type": "integer"
+        },
+        "line_capacity": {
+          "minimum": 0,
+          "title": "Line Capacity",
+          "type": "integer"
+        },
+        "list_item_capacity": {
+          "minimum": 0,
+          "title": "List Item Capacity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "char_capacity",
+        "line_capacity",
+        "list_item_capacity"
+      ],
+      "title": "TemplateCapacity",
+      "type": "object"
+    },
+    "TemplateRelationship": {
+      "additionalProperties": false,
+      "properties": {
+        "external": {
+          "default": false,
+          "title": "External",
+          "type": "boolean"
+        },
+        "relationship_id": {
+          "minLength": 1,
+          "title": "Relationship Id",
+          "type": "string"
+        },
+        "relationship_type": {
+          "minLength": 1,
+          "title": "Relationship Type",
+          "type": "string"
+        },
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "relationship_id",
+        "relationship_type",
+        "target"
+      ],
+      "title": "TemplateRelationship",
+      "type": "object"
+    },
+    "TemplateShapeProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "capacity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemplateCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fill_color_hex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fill Color Hex"
+        },
+        "height_ratio": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Height Ratio",
+          "type": "number"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "placeholder",
+            "shape",
+            "image",
+            "table",
+            "chart",
+            "group"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "left_ratio": {
+          "maximum": 3,
+          "minimum": -2,
+          "title": "Left Ratio",
+          "type": "number"
+        },
+        "line_color_hex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Color Hex"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "relationship_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Relationship Ids",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "title",
+            "subtitle",
+            "body",
+            "agenda_item",
+            "section_label",
+            "footer",
+            "brand",
+            "decorative",
+            "content_slot",
+            "unknown"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "shape_id": {
+          "minimum": 1,
+          "title": "Shape Id",
+          "type": "integer"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemplateTextStyle"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text_preview": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Preview"
+        },
+        "top_ratio": {
+          "maximum": 3,
+          "minimum": -2,
+          "title": "Top Ratio",
+          "type": "number"
+        },
+        "width_ratio": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Width Ratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "shape_id",
+        "name",
+        "kind",
+        "role",
+        "left_ratio",
+        "top_ratio",
+        "width_ratio",
+        "height_ratio"
+      ],
+      "title": "TemplateShapeProfile",
+      "type": "object"
+    },
+    "TemplateSlideProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "exclusion_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclusion Reasons",
+          "type": "array"
+        },
+        "has_timing": {
+          "default": false,
+          "title": "Has Timing",
+          "type": "boolean"
+        },
+        "has_transition": {
+          "default": false,
+          "title": "Has Transition",
+          "type": "boolean"
+        },
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "layout_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layout Name"
+        },
+        "master_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Master Name"
+        },
+        "notes_present": {
+          "default": false,
+          "title": "Notes Present",
+          "type": "boolean"
+        },
+        "prototype_id": {
+          "pattern": "^slide-[0-9]{3}$",
+          "title": "Prototype Id",
+          "type": "string"
+        },
+        "relationships": {
+          "items": {
+            "$ref": "#/$defs/TemplateRelationship"
+          },
+          "title": "Relationships",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "cover",
+            "agenda",
+            "section",
+            "title_bullets",
+            "two_column",
+            "table",
+            "chart",
+            "cards",
+            "timeline",
+            "conclusion",
+            "closing",
+            "generic"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "safe_to_clone": {
+          "title": "Safe To Clone",
+          "type": "boolean"
+        },
+        "shapes": {
+          "items": {
+            "$ref": "#/$defs/TemplateShapeProfile"
+          },
+          "title": "Shapes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "index",
+        "prototype_id",
+        "role",
+        "safe_to_clone"
+      ],
+      "title": "TemplateSlideProfile",
+      "type": "object"
+    },
+    "TemplateSource": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "minimum": 1,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "filename": {
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "filename",
+        "sha256",
+        "bytes"
+      ],
+      "title": "TemplateSource",
+      "type": "object"
+    },
+    "TemplateTextStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alignment"
+        },
+        "bold": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bold"
+        },
+        "color_hex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Hex"
+        },
+        "font_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Font Name"
+        },
+        "font_size_pt": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 400,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Font Size Pt"
+        }
+      },
+      "title": "TemplateTextStyle",
+      "type": "object"
+    },
+    "TemplateTheme": {
+      "additionalProperties": false,
+      "properties": {
+        "colors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Colors",
+          "type": "object"
+        },
+        "major_fonts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Major Fonts",
+          "type": "array"
+        },
+        "minor_fonts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Minor Fonts",
+          "type": "array"
+        }
+      },
+      "title": "TemplateTheme",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "profile_version": {
+      "const": "1.0",
+      "title": "Profile Version",
+      "type": "string"
+    },
+    "slide_height_in": {
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "title": "Slide Height In",
+      "type": "number"
+    },
+    "slide_width_in": {
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "title": "Slide Width In",
+      "type": "number"
+    },
+    "slides": {
+      "items": {
+        "$ref": "#/$defs/TemplateSlideProfile"
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Slides",
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/TemplateSource"
+    },
+    "theme": {
+      "$ref": "#/$defs/TemplateTheme"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "profile_version",
+    "source",
+    "slide_width_in",
+    "slide_height_in",
+    "theme",
+    "slides"
+  ],
+  "title": "TemplateProfile",
+  "type": "object"
+}

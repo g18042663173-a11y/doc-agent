@@ -12,6 +12,8 @@ from app.generators.interface import IRTextGenerator
 from app.generation.layout_policy import LAYOUT_SELECTION_RULES, detect_sequence_evidence, timeline_parts
 from app.ir.deck_ir import DeckIR
 from app.ir.document_ir import DocumentIR
+from app.assets.contracts import AssetManifest
+from app.visual.contracts import VisualPlan
 from app.ir.errors import ValidationItem, ValidationResult
 from app.ir.repair import repair_generated_text, repair_ir_text
 from app.ir.shell import JsonExtractionError, extract_json_text, validate_deck_ir_text
@@ -37,6 +39,9 @@ LayoutName = Literal[
     "process_flow",
     "timeline",
     "image",
+    "image_text",
+    "image_grid",
+    "infographic",
     "conclusion",
     "composite",
 ]
@@ -76,6 +81,8 @@ class OutlinePage(BaseModel):
     source_evidence: list[str] = Field(default_factory=list, max_length=3)
     selection_reason: str = Field(min_length=1)
     content_budget: int = Field(ge=1, le=3)
+    visual_kind: Literal["funnel", "quadrant", "cycle", "matrix", "bar", "line", "pie", "scatter", "combo"] | None = None
+    asset_ids: list[str] = Field(default_factory=list, max_length=4)
 
 
 class DeckOutline(BaseModel):
@@ -134,6 +141,8 @@ def generate_deck(
     options: GenerationOptions,
     max_context_chars: int = 12000,
     max_output_chars: int = 6000,
+    visual_plan: VisualPlan | None = None,
+    asset_manifest: AssetManifest | None = None,
 ) -> DeckGenerationAttempt:
     if not options.enabled:
         raise ValueError("generate_deck depth orchestration requires explicit options")
@@ -144,6 +153,8 @@ def generate_deck(
             options=options,
             max_context_chars=max_context_chars,
             max_output_chars=max_output_chars,
+            visual_plan=visual_plan,
+            asset_manifest=asset_manifest,
         )
     return _generate_segmented(
         document,
@@ -151,10 +162,18 @@ def generate_deck(
         options=options,
         max_context_chars=max_context_chars,
         max_output_chars=max_output_chars,
+        visual_plan=visual_plan,
+        asset_manifest=asset_manifest,
     )
 
 
-def build_outline_prompt(document: DocumentIR, options: GenerationOptions, *, max_context_chars: int) -> str:
+def build_outline_prompt(
+    document: DocumentIR,
+    options: GenerationOptions,
+    *,
+    max_context_chars: int,
+    visual_plan: VisualPlan | None = None,
+) -> str:
     source_outline = [item.model_dump(mode="json") for item in document.content.outline]
     source_title = next(
         (str(item.get("text", "")).strip() for item in source_outline if str(item.get("text", "")).strip()),
@@ -178,9 +197,10 @@ def build_outline_prompt(document: DocumentIR, options: GenerationOptions, *, ma
             if sequence_evidence is not None
             else None
         ),
+        "visual_plan": visual_plan.model_dump(mode="json") if visual_plan is not None else None,
     }
     context = _outline_context(document, max_context_chars=max_context_chars)
-    return (
+    prompt = (
         "[任务] 先规划完整 Deck 大纲，本轮不生成 DeckIR。只输出符合下方独立 Schema 的 JSON。\n"
         "[要求] 页数必须精确；第 1 页 cover、最后 1 页 conclusion；观点写进标题；每页 focus 只承载一个判断；"
         "source_headings 只能引用输入里的真实标题；source_evidence 只能摘取输入中的方法名、数据、权衡或条件；"
@@ -194,6 +214,9 @@ def build_outline_prompt(document: DocumentIR, options: GenerationOptions, *, ma
         f"[独立大纲 Schema]\n{json.dumps(DeckOutline.model_json_schema(), ensure_ascii=False, sort_keys=True)}\n"
         "[输出纪律] 只输出一个完整 JSON 对象，不要解释、Markdown 围栏或 IR 字段。"
     )
+    if visual_plan is not None:
+        prompt += "\n[VisualPlan 1.0]\n" + visual_plan.model_dump_json(exclude_none=True)
+    return prompt
 
 
 def validate_outline_text(raw: str, *, expected_pages: int) -> ValidationResult[DeckOutline]:
@@ -274,7 +297,35 @@ def stub_outline_payload(planning: dict[str, Any]) -> dict[str, Any]:
                 "content_budget": content_budget,
             }
         )
+    _apply_stub_visual_plan(pages, planning.get("visual_plan"))
     return {"title": title, "pages": pages}
+
+
+def _apply_stub_visual_plan(pages: list[dict[str, Any]], visual_plan: Any) -> None:
+    if not isinstance(visual_plan, dict):
+        return
+    opportunities = [item for item in visual_plan.get("opportunities", []) if isinstance(item, dict)]
+    body_indices = [
+        index
+        for index, page in enumerate(pages)
+        if page.get("layout") in {"title_bullets", "two_column", "table", "cards", "chart"}
+    ]
+    for opportunity, page_index in zip(opportunities, body_indices):
+        recommended = str(opportunity.get("recommended_layout", ""))
+        if recommended.startswith("infographic_"):
+            pages[page_index]["layout"] = "infographic"
+            pages[page_index]["visual_kind"] = recommended.removeprefix("infographic_")
+        elif recommended in {"image_text", "image_grid"} and opportunity.get("asset_ids"):
+            pages[page_index]["layout"] = recommended
+            pages[page_index]["asset_ids"] = list(opportunity.get("asset_ids", []))[:4]
+        elif recommended == "chart" and opportunity.get("chart_kind"):
+            pages[page_index]["layout"] = "chart"
+            pages[page_index]["visual_kind"] = opportunity["chart_kind"]
+        elif recommended in {"architecture_diagram", "process_flow", "timeline"}:
+            pages[page_index]["layout"] = recommended
+        else:
+            continue
+        pages[page_index]["selection_reason"] = str(opportunity.get("reason") or "采用 VisualPlan 推荐")
 
 
 def _planning_evidence(document: DocumentIR) -> list[str]:
@@ -306,6 +357,9 @@ def _stub_layout_reason(layout: LayoutName) -> str:
         "process_flow": "流程页适合线性步骤",
         "timeline": "时间线适合阶段演进",
         "image": "图文页保留证据位置",
+        "image_text": "图文页使用已验证图片资产支撑结论",
+        "image_grid": "多图页并列呈现已验证证据",
+        "infographic": "信息图表达漏斗、象限、循环或矩阵结构",
         "conclusion": "结论页收束行动",
         "composite": "组合页适合两个半页组件联读",
     }[layout]
@@ -317,7 +371,7 @@ def stub_chunk_payload(chunk: dict[str, Any]) -> dict[str, Any]:
     slides = [_stub_slide(page, title=title, total_pages=int(chunk.get("global_target_pages", len(pages)))) for page in pages]
     return {
         "ir_type": "deck",
-        "ir_version": "1.9",
+        "ir_version": "2.0",
         "meta": {"title": title, "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
         "slides": slides,
     }
@@ -355,6 +409,8 @@ def _generate_single(
     options: GenerationOptions,
     max_context_chars: int,
     max_output_chars: int,
+    visual_plan: VisualPlan | None,
+    asset_manifest: AssetManifest | None,
 ) -> DeckGenerationAttempt:
     prompt = build_prompt(
         kind="deck",
@@ -363,6 +419,8 @@ def _generate_single(
         max_output_chars=max_output_chars,
         depth=options.effective_depth,
         pages=options.target_pages,
+        visual_plan=visual_plan,
+        asset_manifest=asset_manifest,
     )
     raw = generator.generate(prompt, target="deck_ir")
     initial = _validate_deck_page_target(raw, options.target_pages)
@@ -392,10 +450,14 @@ def _generate_segmented(
     options: GenerationOptions,
     max_context_chars: int,
     max_output_chars: int,
+    visual_plan: VisualPlan | None,
+    asset_manifest: AssetManifest | None,
 ) -> DeckGenerationAttempt:
     prompts: dict[str, str] = {}
     repair_events: list[dict[str, Any]] = []
-    outline_prompt = build_outline_prompt(document, options, max_context_chars=max_context_chars)
+    outline_prompt = build_outline_prompt(
+        document, options, max_context_chars=max_context_chars, visual_plan=visual_plan
+    )
     prompts["outline.txt"] = outline_prompt
     outline_raw = generator.generate(outline_prompt, target="analysis")
     initial_outline = validate_outline_text(outline_raw, expected_pages=options.target_pages)
@@ -431,6 +493,8 @@ def _generate_segmented(
             options=options,
             max_context_chars=max_context_chars,
             max_output_chars=max_output_chars,
+            visual_plan=visual_plan,
+            asset_manifest=asset_manifest,
         )
         prompts[f"chunk-{chunk_index:02d}.txt"] = prompt
         raw = generator.generate(prompt, target="deck_ir")
@@ -494,6 +558,8 @@ def _chunk_prompt(
     options: GenerationOptions,
     max_context_chars: int,
     max_output_chars: int,
+    visual_plan: VisualPlan | None,
+    asset_manifest: AssetManifest | None,
 ) -> str:
     base = build_prompt(
         kind="deck",
@@ -502,6 +568,8 @@ def _chunk_prompt(
         max_output_chars=max_output_chars,
         depth=options.effective_depth,
         pages=len(pages),
+        visual_plan=visual_plan,
+        asset_manifest=asset_manifest,
     )
     chunk = {
         "deck_title": outline.title,
@@ -757,10 +825,30 @@ def _stub_slide(page: dict[str, Any], *, title: str, total_pages: int) -> dict[s
             ],
         }
     if layout == "chart":
+        visual_kind = str(page.get("visual_kind") or "bar")
+        if visual_kind == "line":
+            chart = {"kind": "line", "categories": ["第一阶段", "第二阶段", "第三阶段"], "series": [{"name": "指标", "values": [1, 2, 3]}]}
+        elif visual_kind == "pie":
+            chart = {"kind": "pie", "categories": ["类别A", "类别B", "类别C"], "series": [{"name": "占比", "values": [50, 30, 20]}]}
+        elif visual_kind == "scatter":
+            chart = {"kind": "scatter", "categories": [], "series": [{"name": "样本", "x_values": [1, 2, 3], "values": [2, 4, 5]}]}
+        elif visual_kind == "combo":
+            chart = {
+                "kind": "combo",
+                "categories": ["一", "二", "三"],
+                "series": [
+                    {"name": "金额", "values": [10, 12, 15], "chart_type": "bar", "axis": "primary", "unit": "元"},
+                    {"name": "比例", "values": [0.1, 0.12, 0.15], "chart_type": "line", "axis": "secondary", "unit": "%"},
+                ],
+                "number_format": "0",
+                "secondary_number_format": "0%",
+            }
+        else:
+            chart = {"kind": "bar", "categories": ["方案A", "方案B"], "series": [{"name": "指标", "values": [1, 2]}]}
         return {
             "layout": "chart",
             "title": page_title,
-            "chart": {"kind": "bar", "categories": ["方案A", "方案B"], "series": [{"name": "指标", "values": [1, 2]}]},
+            "chart": chart,
         }
     if layout == "architecture_diagram":
         return {
@@ -775,7 +863,12 @@ def _stub_slide(page: dict[str, Any], *, title: str, total_pages: int) -> dict[s
             "groups": [],
         }
     if layout == "process_flow":
-        steps = bullets[:7]
+        steps = list(bullets[:7])
+        for fallback in ("执行方案", "完成复核"):
+            if len(steps) >= 2:
+                break
+            if fallback not in steps:
+                steps.append(fallback)
         return {
             "layout": "process_flow",
             "title": page_title,
@@ -786,7 +879,12 @@ def _stub_slide(page: dict[str, Any], *, title: str, total_pages: int) -> dict[s
             "orientation": "horizontal",
         }
     if layout == "timeline":
-        milestone_items = bullets[:8]
+        milestone_items = list(bullets[:8])
+        for fallback in ("Q1 启动", "Q2 完成"):
+            if len(milestone_items) >= 2:
+                break
+            if fallback not in milestone_items:
+                milestone_items.append(fallback)
         return {
             "layout": "timeline",
             "title": page_title,
@@ -802,6 +900,33 @@ def _stub_slide(page: dict[str, Any], *, title: str, total_pages: int) -> dict[s
         }
     if layout == "image":
         return {"layout": "image", "title": page_title, "placeholder": focus, "caption": bullets[0]}
+    if layout == "image_text":
+        asset_ids = list(page.get("asset_ids", []))
+        if asset_ids:
+            return {
+                "layout": "image_text",
+                "title": page_title,
+                "image": {"image_ref": asset_ids[0], "fit": "contain", "alt": "输入资料图片"},
+                "text": focus,
+            }
+    if layout == "image_grid":
+        asset_ids = list(page.get("asset_ids", []))[:4]
+        if len(asset_ids) >= 2:
+            return {
+                "layout": "image_grid",
+                "title": page_title,
+                "images": [{"image_ref": asset_id, "fit": "contain", "alt": "输入资料图片"} for asset_id in asset_ids],
+            }
+    if layout == "infographic":
+        kind = str(page.get("visual_kind") or "funnel")
+        labels = (bullets + ["识别", "执行", "闭环"])[:3]
+        if kind == "quadrant":
+            infographic = {"kind": "quadrant", "x_axis": "影响", "y_axis": "难度", "items": [{"label": labels[0], "x": 0.7, "y": 0.4}]}
+        elif kind == "matrix":
+            infographic = {"kind": "matrix", "row_labels": ["高", "低"], "column_labels": ["急", "缓"], "cells": [[labels[0], labels[1]], [labels[2], "观察"]]}
+        else:
+            infographic = {"kind": kind if kind in {"funnel", "cycle"} else "funnel", "stages": [{"label": label} for label in labels]}
+        return {"layout": "infographic", "title": page_title, "infographic": infographic}
     if layout == "conclusion":
         return {"layout": "conclusion", "title": page_title, "bullets": bullets[:3], "cta": "结合原文完成终审"}
     if layout == "composite":

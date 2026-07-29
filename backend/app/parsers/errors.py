@@ -12,7 +12,7 @@ from app.ir.errors import ValidationItem
 T = TypeVar("T")
 
 
-@dataclass(frozen=True)
+@dataclass
 class ParseFailure(Exception):
     code: str
     message: str

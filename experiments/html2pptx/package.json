@@ -1,0 +1,15 @@
+{
+  "name": "huawei-document-generator-html2pptx-experiment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated DeckIR to HTML to editable PPTX benchmark. Not a production renderer.",
+  "engines": {
+    "node": ">=25.2.1 <26"
+  },
+  "dependencies": {
+    "playwright": "1.62.0",
+    "pptxgenjs": "4.0.1",
+    "sharp": "0.35.3"
+  }
+}

@@ -12,7 +12,7 @@ SUGGESTIONS = {
     "E006": "为 blocks 或列表 items 至少提供 1 条内容。",
     "D001": "确认模型输出是一个完整 JSON 对象或单个 json 代码块。",
     "D002": "补齐 meta.title, 且标题不能为空白字符串。",
-    "D003": "把 slides[].layout 改为 DeckIR v1.9 允许的版式。",
+    "D003": "把 slides[].layout 改为 DeckIR v2.0 允许的版式。",
     "D004": "补齐该 layout 的必填字段。",
     "D005": "检查表格页 header、rows、column_groups、row_groups、cell_spans 与 col_widths 是否越界或不规整, 且数据区不超过 12 行 x 8 列。",
     "D006": "减少 bullets 条数到该 layout 的上限。",

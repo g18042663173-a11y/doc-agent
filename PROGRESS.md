@@ -1,5 +1,16 @@
 # Progress
 
+## 2026-07-29 实际使用可靠性测试与故障治理
+
+- HTML 技术参考已审计：附件描述的是 `HTML -> html2pptx -> PptxGenJS` 浏览器布局转换，只作为经验参考；生产 PPTX 继续保持 DeckIR 1.9 到 python-pptx，不引入 HTML/PptxGenJS/浏览器渲染。
+- 新增异步任务失败契约：`code`、`stage`、`retryable`、`message`、`suggestion`、`support_id`；失败任务生成受控 `failure-report`，状态响应和报告均不泄露异常堆栈、原始 Prompt、输入正文或模型原文预览。
+- 修复真实开发路径问题：直接使用仓库 `.venv` 执行 pytest 原先缺少 `PYTHONPATH=backend`；已由 `pytest.ini` 固定。超限上传会清理本次新建的空 job 目录；工作台补充空 favicon，浏览器控制台不再出现 404。
+- 新增 `scripts/reliability_test.py`，输出 JSON、JUnit、静态 HTML QA 摘要；默认执行离线 `verify.py` 和全量 pytest，可选 `--ui` 开发浏览器验证或 `--real-model` 显式真实模型冒烟。报告只保存测试名、失败类型和错误码。
+- 新增开发专用 Playwright 工作台检查、PowerPoint/Word COM 导图脚本和 Pillow PNG 差异工具；它们不进入生产 lock，也不参与 PPT 渲染。HIT Deck 已由 PowerPoint COM 成功导出 PDF/PNG；自比对通过。
+- 开发质量依赖固定为 `ruff==0.16.0`，以 `E9/F` 正确性规则作为现阶段仓库门禁；由此发现并修复了 Word 模式携带 `--template` 时引用未定义 `parser` 的 CLI 崩溃，新增无 traceback 的参数错误回归。
+- 当前验收：`verify.ps1` 通过（parsers 93.64%、IR 93.99%、lint 93.89%、整体 89.07%）；`scripts/reliability_test.py --skip-verify --ui` 的 QA 报告为 516 tests、501 passed、0 failed、15 skipped；桌面 1280px 与移动 390px 均无横向溢出和控制台错误。`pip check` 与 ruff 正确性检查通过。
+- 仍待人工：真实脱敏 docx/xlsx/pptx 各至少 3 个、真实模型稳定端点验收、固定 Office/字体环境下人工批准视觉 baseline 与最终审美签字。
+
 ## 2026-07-11 Analyze-then-generate depth task
 
 - Started with an extensive pre-existing dirty worktree; no unrelated changes will be reverted.
@@ -162,3 +173,110 @@
 - 既有色值保持不变：primary 青、secondary 黄、emphasis 红、data 绿；新增 job 黄、module 绿。renderer 与 lint 都从 `layouts.architecture_diagram.node_type_colors` 读取同一映射，不保留硬编码配色表。
 - 试点样例 `samples/ir/deck_valid_12_architecture_semantic_colors.json` 已生成原生可编辑 PPTX 和中文 PDF：`output/architecture_semantic_colors_review/deck_architecture_semantic_colors.pdf`。视觉检查确认 Job/未知 type 为黄，module/data 为绿，Graphviz 关系和标签清楚；CLI lint 为 0 Error / 0 Warning。
 - 回归覆盖注册 type 与未知 default 填色、主题色 lint、已有架构与 composite/堆叠样例。最终全量 pytest、verify、ruff、Schema 快照待本轮结束时再次运行。
+
+## 2026-07-29 Windows、模板驱动 PPT 与图表质量升级
+
+### 已完成并通过阶段验收
+
+- Windows 基线固定为仓库 `.venv` / Python 3.12.10；依赖闭包加入 `colorama==0.4.6`，28 个 Windows wheel 的 lock、manifest 与 SHA-256 已更新，离线 `pip --dry-run --require-hashes` 成功。
+- 新增 `bootstrap_windows.ps1`、强化 `verify.ps1`，并生成 `output/environment_report.json`；Graphviz 优先本地 `tools\graphviz\bin\dot.exe`，其次系统 `dot.exe`，当前系统 Graphviz 15.1.0 的版本和 SHA-256 已记录。
+- DeckIR 保持 1.9；新增严格的 `TemplateProfile 1.0`、`TemplatePlan 1.0`、独立 JSON Schema、原型评分、Pillow 字体测量、运行时容量回退、W201/W202 与模板感知 lint。
+- 模板包限制覆盖 50 MB 压缩、500 MB 解包、200 页、5000 形状、路径穿越、宏、ActiveX、OLE、外部关系、XML/Content Types/关系目标和 XML 关系反向引用。
+- 模板 renderer 复用 master/layout/theme，安全复制内部图片；不复制 transition、timing、notes、comments、外部超链接、chart/OLE/embedding；表格、图表和图形重绘保持原生可编辑。
+- CLI、`scripts/generate.py`、`demo_e2e.py`、异步 Flask API 和工作台均支持可选 `.pptx`；Word 明确拒绝模板；下载资产固定为 output/lint/profile/plan/package-report。
+- 图表实现了零轴、正/负/混合/全负范围、折线窄区间、1/2/2.5/5 漂亮刻度、字面量单位格式、长类目旋转/skip、折线 marker、饼图类别百分比及 HW-W10/W11/W12；Prompt 已加入图表选择规则。
+- HIT 32 页真实模板生成 14 页验收 Deck。修复了模板 tags 关系被剥离后遗留空 `<p:tags/>` 导致 PowerPoint 拒绝打开的问题；PowerPoint 16 已成功打开并导出 14 页 PDF/PNG。自动结果为 0 Error、0 HW-W03、无 `XXXX`、每页密级完整、包关系通过。
+
+### 降级或近似
+
+- 14 页官方样例中 5 页使用安全原型替换，9 页因版式不支持或运行时容量不足使用同 master/layout/theme 下的 `master_redraw`，均记录 W201；缺失字体按字体聚合为 3 条 W202。
+- HIT 联系表证明 PowerPoint 可打开、页面非空且无明显裁切，但该官方 IR 是版式边界样例，部分页面信息量较低，不代表真实业务内容质量。
+
+### 阻塞待人输入
+
+- 真实脱敏 docx/xlsx/pptx 各至少 3 个仍需业务侧提供；详见 `QUESTIONS.md`。
+- PowerPoint 自动导出不替代最终审美签字；HIT 联系表位于 `output/hit_template_acceptance/powerpoint_visual_20260729/contact_sheet.png`。
+
+### 仍不确定
+
+- 当前系统已完成联网 Windows 环境的 wheelhouse dry-run，但“全新干净 Windows + 物理断网”的安装记录仍属于交付流程证据，不冒充为已完成。
+- 最终 `verify.ps1` 已通过:四格式 word/deck stub E2E 全绿,覆盖率 parsers 93.64%、IR 93.99%、lint 93.89%、整体 89.04%,输出 `C0 verify passed`。联合模板/API/图表/renderer/lint/文档回归为 `179 passed`。
+- 工作台已启动于 5056 并完成浏览器验收:1280px 桌面和 390px 窄屏均无横向溢出、文本裁切或控件重叠,控制台无 error/warning。
+
+## 2026-07-29 PPT 双引擎融合与自主决策
+
+### 已完成并通过验收
+
+- 生产默认仍是 `DeckIR 1.9 -> python-pptx`；DeckIR、生产 API、工作台和 Windows 离线依赖闭包均未引入 Node、浏览器或 PptxGenJS。
+- 模板输出新增 `template_structure.json`、`template_structure.md` 与 `template_replacement_audit.json`；受控下载和工作台均展示 structure/replacement-audit。审计只记录形状 ID、替换动作、哈希和检查状态，不记录正文或 Prompt。
+- 模板感知 lint 以 Profile 的字体、色板和正文安全区为准；它只排除已归档的装饰形状，继续检查密级、动画、字号、溢出、业务对象重叠和页码。边界序列化的 4 EMU 容差防止精确安全线被误报。
+- `scripts/template_inspect.py` 可独立运行并自行设置 `backend` 导入路径；新增 PNG 联系表、Office PDF/PNG 导出、视觉差异和 `manual_pending` 状态。
+- 新建隔离的 `experiments/html2pptx/`。它只接收 Schema 已验证的 DeckIR，固定映射 HTML 后用 Playwright 测量，再由 PptxGenJS 生成可编辑对象；Node 25.2.1、PptxGenJS 4.0.1、Playwright 1.62.0、Sharp 0.35.3 均不属于生产依赖。
+- 最终 HIT 源模板对照集位于 `output/html2pptx-final-office/`。Python 对三个固定样例均通过 Schema、包关系、lint、无 HW-W03/HW-W07、Office 打开和原生文本/表格/图表门禁；HTML 无模板样例可继续实验，但模板样例明确 `native_editability=false`，因此 `engine_assessment.json` 的推荐为 `keep_python`，没有自动切换生产。
+- Office 已成功导出两套引擎共六份 PPTX 的 PDF/PNG 联系表；所有视觉状态为 `manual_pending`，没有人工基线时没有伪装成通过。
+- 最终回归：`510 passed, 15 skipped`；可靠性门禁含工作台 UI 为 `525` 测试、`510` 通过、`15` 跳过；ruff 和 `git diff --check` 通过；`verify.ps1` C0 通过，parsers 93.75%、IR 93.99%、lint 94.24%、整体 89.25%。
+
+### 阻塞待人输入
+
+- 真实脱敏业务语料和最终 PowerPoint 审美签字仍按 `QUESTIONS.md` 执行。HTML 对照结论不会替代此人工门禁，也不会更改生产架构。
+
+## 2026-07-29 PPT 图生成与视觉制作能力升级
+
+### 已完成并通过验收
+
+- DeckIR 已按契约先行升级并冻结为 2.0；1.4-1.9 仅在校验入口深拷贝迁移，不覆盖用户原文件。Schema、正反样例、迁移器、快照和 v2 样例矩阵均已通过。
+- 新增独立 `AssetManifest 1.0` / `AssetUsageAudit 1.0`：PNG/JPEG/WebP 完整解码、EXIF 方向修正、元数据移除、SHA-256、去重、白名单/Office media 提取、20 MB/40MP/20 张/100 MB 限制及 A001-A006 已落地。合法 `image_ref` 嵌入真图，缺失引用以 A005 阻断，不再静默占位。
+- 图片渲染支持 contain/cover、焦点、caption/credit/alt、`image_text` 和 2-4 图 `image_grid`；模板替换审计记录资产哈希、图片槽、fit/crop/focal 与回退原因。
+- 新增 funnel/quadrant/cycle/matrix 原生可编辑信息图和 24 个企业语义 AutoShape 图标；architecture/process/timeline 保持原生 shape、文本框与 connector。
+- 图表增加 scatter、combo、主次轴元数据、轴标题、显式数字格式、数据来源/口径/备注；新增 HW-W13-W16，且不合并、删除、排序或改写业务数据。
+- 新增 `VisualPlan 1.0` / `VisualSelectionAudit 1.0` 和默认禁用的 `ImageProvider`。生成链路、CLI、API、工作台均输出并提供受控下载；模型仍只能产出通过 DeckIR Schema 的 JSON。
+- API/工作台支持重复 `asset_files`、多图移除、Word 隔离、normalizing_assets/planning_visuals 阶段和资产/视觉审计下载。浏览器实测发现并修复同步 API 错误 payload 被前端降级为 E001 的问题；损坏模板现在正确显示 E003。
+- 全量 pytest 为 `539 passed, 15 skipped`；可靠性报告 `output/qa/report.json` 为 554 项、539 通过、15 跳过、0 失败。`scripts/verify.py` 通过，覆盖率 parsers 93.75%、IR 93.82%、lint 94.26%、整体 88.72%；`verify.ps1` 通过，覆盖率 parsers 93.75%、IR 93.82%、lint 94.34%、整体 89.30%。ruff 与 `git diff --check` 全绿。
+- 当前工作台已由仓库 `.venv` 启动于 `http://127.0.0.1:5056/static/index.html`。真实浏览器完成带图片 Deck 成功流和损坏模板失败流；图片资产清单、使用审计、VisualPlan、选择审计均可下载。默认 1265px 与 390px 视口无横向溢出、控件越界或文本裁切，控制台无 error/warning。
+
+### 降级或近似
+
+- combo 以两张对齐的 PowerPoint 原生图表实现：主轴 bar 与次轴 line 分别可编辑，不是单一 OOXML combo chart 对象，也没有把页面栅格化。
+- 24 个语义图标是主题一致的基础 AutoShape 组合，不是复杂插画库。默认 `DisabledImageProvider` 保持离线生产边界，AI 生图未作为可用生产能力。
+- Graphviz 在正式 `verify.ps1` 中检测到系统 `dot.exe`；未注入 PATH 的独立 pytest 子进程会发出确定性 fallback warning，但测试和输出不会失败。
+
+### 阻塞待人输入
+
+- 真实脱敏 docx/xlsx/pptx 和有明确版权/署名/替代文本的真实图片语料仍需业务侧提供，详见 `QUESTIONS.md`。
+- PowerPoint 自动打开、lint、联系表和像素检查不替代目标字体环境下的最终内容与视觉签字。
+
+### 仍不确定
+
+- combo 的主次轴在当前自动结构回读中通过，但仍需用真实双量纲业务数据在目标 PowerPoint 版本中确认往返保存后的右轴语义和人工可读性。
+- 当前 wheelhouse dry-run 与 Windows 本机门禁通过；全新干净 Windows 物理断网安装记录仍需按交付流程补证据，不能由本机结果替代。
+
+### 2026-07-29 OLE 模板错误治理
+
+- 实际模板触发 `E003: ppt/embeddings/oleobject1.bin`。确认这是既定安全门禁，而非 renderer 崩溃；OLE、宏、ActiveX 和外部关系继续禁止执行或复制。
+- 包校验现在反查 `.rels`，把嵌入部件定位到具体幻灯片；同步 API 错误返回 `loc=template_file`、`retryable=false` 和“删除嵌入对象或转 PNG”的处理建议，工作台显示定位信息，不再提示稍后重试。
+- 新增关系定位、API 结构化建议和前端定位文本回归，专项 `3 passed`；最终全量 pytest 为 `540 passed, 15 skipped`，ruff 与 `git diff --check` 通过。
+- `verify.ps1` 完整通过：四格式 word/deck stub 链路全绿，覆盖率 parsers 93.75%、IR 93.82%、lint 94.34%、整体 89.32%，输出 `C0 verify passed`。
+- 开发专用浏览器回归新增真实 OLE 上传拒绝场景；1280px 桌面与 390px 窄屏均确认显示 E003、`template_file`、引用页码和删除/转 PNG 建议，且不显示不存在的失败报告。报告位于 `output/qa/workbench-ui-ole/workbench_ui_report.json`。
+- 清理了 5056 端口残留的旧工作台父子进程并以仓库 `.venv` 重启；实时 multipart 请求已确认当前服务返回第 1 页定位、`retryable=false` 和可执行建议，而非旧版笼统错误。
+
+## 2026-07-29 上线前发布加固终验
+
+### 已完成并通过验收
+
+- Office 包预检修复了 ZIP 纯目录项 `ppt/embeddings/` 被误判为危险嵌入的问题。扫描器只忽略以 `/` 结尾的目录记录；未归属 `ppt/embeddings/*.xlsx`、任何 `.bin`、OLE、宏、ActiveX 和外部关系仍保持阻断，只有图表内部 `/package` 关系明确拥有的 `.xlsx` 可通过并接受嵌套 OOXML 安全检查。
+- 界面文档回归已对齐当前 `start_workbench.ps1`、5056 端口和稳定失败字段，不再断言废弃的 5055 同步启动命令。包安全、文档和 HTML 对照专项 `18 passed`；HTML 无模板样例恢复为 `expand_html_experiment`，生产默认仍为 `python-pptx`。
+- 最终全量 pytest 为 `573 passed, 15 skipped`，0 失败；Ruff 全绿，`git diff --check` 无空白错误。29 个 Windows CPython 3.12 依赖 wheel 通过 `--no-index --find-links wheelhouse --require-hashes --dry-run`。
+- `verify.ps1` 完整通过：四格式 Word/Deck stub 链路全绿，Graphviz 使用 `C:\Program Files\Graphviz\bin\dot.exe`；覆盖率 parsers 93.51%、IR 93.82%、lint 94.34%、整体 89.10%，输出 `C0 verify passed`。
+- 统一可靠性门禁位于 `output/qa/release-final/`：共 588 项，573 通过、15 跳过、0 失败；offline_verify、pytest、workbench_ui 三个 gate 均通过。浏览器在 1280x900 与 390x844 两个视口通过，无失败用例。
+
+### 降级或近似
+
+- 无本轮新增功能降级。普通 pytest 未注入 Graphviz PATH 时仍会记录确定性 fallback warning；正式 Windows 验收已识别并使用系统 Graphviz，不影响产物与门禁。
+
+### 阻塞待人输入
+
+- 真实脱敏业务语料、授权真实图片、PowerPoint 最终审美签字和全新 Windows 物理断网安装证据仍按 `QUESTIONS.md` 执行；自动绿色结果不替代这四项人工交付证据。
+
+### 仍不确定
+
+- 自动化范围内未发现未解决的软件失败。真实业务内容语义、目标字体环境审美及干净内网机器安装结果只能由后续人工验收确认。

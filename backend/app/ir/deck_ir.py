@@ -263,16 +263,27 @@ class CardsSlide(ContractModel):
 class ChartSeries(ContractModel):
     name: str = Field(min_length=1)
     values: list[float] = Field(min_length=1, description="系列数值；与 thresholds[].value 使用相同数值单位。")
+    x_values: list[float] | None = Field(default=None, description="scatter 系列的横坐标；其它图表必须省略。")
+    chart_type: Literal["bar", "line"] | None = Field(default=None, description="combo 系列的原生图表类型。")
+    axis: Literal["primary", "secondary"] = "primary"
+    unit: str | None = Field(default=None, description="系列量纲；用于组合图双轴适用性审计，不执行单位换算。")
     emphasis: bool = False
 
     _name_not_blank = field_validator("name")(non_empty)
 
-    @field_validator("values")
+    @field_validator("values", "x_values")
     @classmethod
-    def values_must_be_finite(_cls, value: list[float]) -> list[float]:
+    def values_must_be_finite(_cls, value: list[float] | None) -> list[float] | None:
+        if value is None:
+            return None
         if any(not math.isfinite(item) for item in value):
             raise ValueError("chart series values must be finite")
         return value
+
+    @field_validator("unit")
+    @classmethod
+    def unit_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
 
 
 class ChartThreshold(ContractModel):
@@ -309,14 +320,22 @@ class ChartSideTable(ContractModel):
 
 
 class ChartSpec(ContractModel):
-    kind: Literal["bar", "line", "pie"]
+    kind: Literal["bar", "line", "pie", "scatter", "combo"]
     orientation: Literal["vertical", "horizontal"] = Field(
         default="vertical",
         description="bar 的数据方向；horizontal 生成横向数据条，line/pie 只能使用默认 vertical。",
     )
-    categories: list[str] = Field(min_length=1)
+    categories: list[str] = Field(default_factory=list)
     series: list[ChartSeries] = Field(min_length=1)
     unit: str | None = Field(default=None, description="仅用于坐标轴和数据/阈值标签的显示后缀，不执行单位换算。")
+    category_axis_title: str | None = None
+    value_axis_title: str | None = None
+    secondary_value_axis_title: str | None = None
+    number_format: str | None = None
+    secondary_number_format: str | None = None
+    source: str | None = None
+    methodology: str | None = None
+    note: str | None = None
     thresholds: list[ChartThreshold] = Field(default_factory=list, max_length=4)
     show_data_labels: bool = True
     legend_position: Literal["top", "right", "none"] = "top"
@@ -328,6 +347,21 @@ class ChartSpec(ContractModel):
     def categories_not_blank(_cls, value: list[str]) -> list[str]:
         return [non_empty(category) for category in value]
 
+    @field_validator(
+        "unit",
+        "category_axis_title",
+        "value_axis_title",
+        "secondary_value_axis_title",
+        "number_format",
+        "secondary_number_format",
+        "source",
+        "methodology",
+        "note",
+    )
+    @classmethod
+    def optional_chart_text_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
     @model_validator(mode="after")
     def validate_chart_shape(self) -> "ChartSpec":
         expected_points = len(self.categories)
@@ -338,15 +372,43 @@ class ChartSpec(ContractModel):
             raise ValueError("chart series names must be unique")
         if sum(1 for series in self.series if series.emphasis) > 1:
             raise ValueError("chart allows at most one emphasized series")
-        for series in self.series:
-            if len(series.values) != expected_points:
-                raise ValueError("chart series values must match categories length")
+        if self.kind == "scatter":
+            if self.categories:
+                raise ValueError("scatter chart categories must be empty; use series x_values")
+            for series in self.series:
+                if series.x_values is None or len(series.x_values) != len(series.values):
+                    raise ValueError("scatter series x_values must match values length")
+                if series.chart_type is not None or series.axis != "primary":
+                    raise ValueError("scatter series does not support chart_type or secondary axis")
+        else:
+            if not self.categories:
+                raise ValueError("chart categories must contain at least one item")
+            for series in self.series:
+                if len(series.values) != expected_points:
+                    raise ValueError("chart series values must match categories length")
+                if series.x_values is not None:
+                    raise ValueError("x_values is only supported for scatter charts")
         if self.kind == "pie" and len(self.series) != 1:
             raise ValueError("pie chart requires exactly one series")
         if self.kind == "pie" and self.thresholds:
             raise ValueError("pie chart does not support thresholds")
         if self.orientation == "horizontal" and self.kind != "bar":
             raise ValueError("horizontal chart orientation is only supported for bar charts")
+        if self.kind == "combo":
+            types = {series.chart_type for series in self.series}
+            axes = {series.axis for series in self.series}
+            if None in types or not {"bar", "line"}.issubset(types):
+                raise ValueError("combo chart requires explicit bar and line series")
+            if axes != {"primary", "secondary"}:
+                raise ValueError("combo chart requires primary and secondary axes")
+            primary_units = {series.unit or self.unit for series in self.series if series.axis == "primary"}
+            secondary_units = {series.unit or self.unit for series in self.series if series.axis == "secondary"}
+            if primary_units == secondary_units:
+                raise ValueError("combo secondary axis requires a different business unit")
+        elif any(series.chart_type is not None or series.axis != "primary" for series in self.series):
+            raise ValueError("chart_type and secondary axis are only supported for combo charts")
+        if self.kind != "combo" and (self.secondary_value_axis_title or self.secondary_number_format):
+            raise ValueError("secondary axis metadata is only supported for combo charts")
         self._validate_side_conclusion()
         return self
 
@@ -653,16 +715,66 @@ def _has_consecutive_run(values: list[float], count: int | None, predicate) -> b
     return False
 
 
+SemanticIcon = Literal[
+    "person",
+    "team",
+    "organization",
+    "target",
+    "risk",
+    "cost",
+    "quality",
+    "data",
+    "cloud",
+    "device",
+    "security",
+    "process",
+    "time",
+    "growth",
+    "decline",
+    "check",
+    "warning",
+    "idea",
+    "service",
+    "network",
+    "database",
+    "document",
+    "settings",
+    "delivery",
+]
+
+
+class ImageAssetSpec(ContractModel):
+    image_ref: str = Field(min_length=1)
+    fit: Literal["contain", "cover"] = "contain"
+    focal_x: float = Field(default=0.5, ge=0, le=1)
+    focal_y: float = Field(default=0.5, ge=0, le=1)
+    alt: str | None = None
+    caption: str | None = None
+    credit: str | None = None
+
+    _image_ref_not_blank = field_validator("image_ref")(non_empty)
+
+    @field_validator("alt", "caption", "credit")
+    @classmethod
+    def optional_image_text_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+
 class ImageSlide(ContractModel):
     layout: Literal["image"]
     title: str = Field(min_length=1)
     image_ref: str | None = None
     placeholder: str | None = None
     caption: str | None = None
+    fit: Literal["contain", "cover"] = "contain"
+    focal_x: float = Field(default=0.5, ge=0, le=1)
+    focal_y: float = Field(default=0.5, ge=0, le=1)
+    alt: str | None = None
+    credit: str | None = None
 
     _title_not_blank = field_validator("title")(non_empty)
 
-    @field_validator("image_ref", "placeholder", "caption")
+    @field_validator("image_ref", "placeholder", "caption", "alt", "credit")
     @classmethod
     def optional_value_not_blank(_cls, value: str | None) -> str | None:
         return non_empty(value) if value is not None else None
@@ -672,6 +784,127 @@ class ImageSlide(ContractModel):
         if not self.image_ref and not self.placeholder:
             raise ValueError("image layout requires image_ref or placeholder")
         return self
+
+
+class ImageTextSlide(ContractModel):
+    layout: Literal["image_text"]
+    title: str = Field(min_length=1)
+    image: ImageAssetSpec
+    image_position: Literal["left", "right"] = "left"
+    heading: str | None = None
+    text: str | None = None
+    bullets: list[str] = Field(default_factory=list, max_length=5)
+
+    _title_not_blank = field_validator("title")(non_empty)
+
+    @field_validator("heading", "text")
+    @classmethod
+    def optional_text_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+    @field_validator("bullets")
+    @classmethod
+    def bullets_not_blank(_cls, value: list[str]) -> list[str]:
+        return [non_empty(item) for item in value]
+
+    @model_validator(mode="after")
+    def body_is_present(self) -> "ImageTextSlide":
+        if not self.text and not self.bullets:
+            raise ValueError("image_text requires text or bullets")
+        return self
+
+
+class ImageGridSlide(ContractModel):
+    layout: Literal["image_grid"]
+    title: str = Field(min_length=1)
+    images: list[ImageAssetSpec] = Field(min_length=2, max_length=4)
+
+    _title_not_blank = field_validator("title")(non_empty)
+
+    @model_validator(mode="after")
+    def image_refs_are_unique(self) -> "ImageGridSlide":
+        refs = [image.image_ref for image in self.images]
+        if len(refs) != len(set(refs)):
+            raise ValueError("image_grid image_ref values must be unique")
+        return self
+
+
+class InfographicStage(ContractModel):
+    label: str = Field(min_length=1)
+    description: str | None = None
+    value: str | None = None
+    icon: SemanticIcon | None = None
+
+    _label_not_blank = field_validator("label")(non_empty)
+
+    @field_validator("description", "value")
+    @classmethod
+    def optional_stage_text_not_blank(_cls, value: str | None) -> str | None:
+        return non_empty(value) if value is not None else None
+
+
+class FunnelInfographic(ContractModel):
+    kind: Literal["funnel"]
+    direction: Literal["forward", "reverse"] = "forward"
+    stages: list[InfographicStage] = Field(min_length=3, max_length=6)
+
+
+class QuadrantItem(ContractModel):
+    label: str = Field(min_length=1)
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    category: str | None = None
+    icon: SemanticIcon | None = None
+
+    _label_not_blank = field_validator("label")(non_empty)
+
+
+class QuadrantInfographic(ContractModel):
+    kind: Literal["quadrant"]
+    x_axis: str = Field(min_length=1)
+    y_axis: str = Field(min_length=1)
+    items: list[QuadrantItem] = Field(min_length=1, max_length=12)
+
+    _x_axis_not_blank = field_validator("x_axis")(non_empty)
+    _y_axis_not_blank = field_validator("y_axis")(non_empty)
+
+
+class CycleInfographic(ContractModel):
+    kind: Literal["cycle"]
+    stages: list[InfographicStage] = Field(min_length=3, max_length=6)
+
+
+class MatrixInfographic(ContractModel):
+    kind: Literal["matrix"]
+    row_labels: list[str] = Field(min_length=2, max_length=4)
+    column_labels: list[str] = Field(min_length=2, max_length=4)
+    cells: list[list[str]] = Field(min_length=2, max_length=4)
+
+    @field_validator("row_labels", "column_labels")
+    @classmethod
+    def labels_not_blank(_cls, value: list[str]) -> list[str]:
+        return [non_empty(item) for item in value]
+
+    @model_validator(mode="after")
+    def cells_match_labels(self) -> "MatrixInfographic":
+        if len(self.cells) != len(self.row_labels) or any(len(row) != len(self.column_labels) for row in self.cells):
+            raise ValueError("matrix cells must match row and column labels")
+        self.cells = [[non_empty(cell) for cell in row] for row in self.cells]
+        return self
+
+
+InfographicSpec = Annotated[
+    Union[FunnelInfographic, QuadrantInfographic, CycleInfographic, MatrixInfographic],
+    Field(discriminator="kind"),
+]
+
+
+class InfographicSlide(ContractModel):
+    layout: Literal["infographic"]
+    title: str = Field(min_length=1)
+    infographic: InfographicSpec
+
+    _title_not_blank = field_validator("title")(non_empty)
 
 
 class ConclusionSlide(ContractModel):
@@ -750,6 +983,9 @@ DeckSlide = Annotated[
         ProcessFlowSlide,
         TimelineSlide,
         ImageSlide,
+        ImageTextSlide,
+        ImageGridSlide,
+        InfographicSlide,
         ConclusionSlide,
         CompositeSlide,
     ],
@@ -757,8 +993,12 @@ DeckSlide = Annotated[
 ]
 
 
-def migrate_deck_payload(value: Any, *, target_version: str = "1.9") -> tuple[Any, str | None]:
-    if not isinstance(value, dict) or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7", "1.8"} or target_version != "1.9":
+def migrate_deck_payload(value: Any, *, target_version: str = "2.0") -> tuple[Any, str | None]:
+    if (
+        not isinstance(value, dict)
+        or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7", "1.8", "1.9"}
+        or target_version != "2.0"
+    ):
         return value, None
     source_version = value["ir_version"]
     migrated = copy.deepcopy(value)
@@ -775,13 +1015,13 @@ def migrate_deck_payload(value: Any, *, target_version: str = "1.9") -> tuple[An
                     if not isinstance(region, dict) or "components" in region or "component" not in region:
                         continue
                     region["components"] = [region.pop("component")]
-    migrated["ir_version"] = "1.9"
+    migrated["ir_version"] = "2.0"
     return migrated, source_version
 
 
 class DeckIR(ContractModel):
     ir_type: Literal["deck"]
-    ir_version: Literal["1.9"]
+    ir_version: Literal["2.0"]
     meta: DeckMeta
     slides: list[DeckSlide] = Field(min_length=1, max_length=30)
 

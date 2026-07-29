@@ -43,8 +43,12 @@ def test_usage_documents_document_ir_v10_compatibility() -> None:
 def test_web_usage_doc_covers_stub_and_nga_switch() -> None:
     text = (ROOT / "docs" / "界面使用说明.md").read_text(encoding="utf-8")
 
-    assert "PYTHONPATH=backend python3 -m app.web" in text
-    assert "Error / Warning / Info" in text
+    assert ".\\start_workbench.ps1" in text
+    assert "127.0.0.1:5056" in text
+    assert "稳定错误码" in text
+    assert "可重试标记" in text
+    assert "支持编号" in text
+    assert "脱敏失败报告" in text
     assert "backend/app/generators/interface.py" in text
     assert "codeagent.exe" in text
     assert "encoding=\"utf-8\"" in text

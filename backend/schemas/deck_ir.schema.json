@@ -326,6 +326,32 @@
     },
     "ChartSeries": {
       "properties": {
+        "axis": {
+          "default": "primary",
+          "enum": [
+            "primary",
+            "secondary"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "chart_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "bar",
+                "line"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "combo 系列的原生图表类型。",
+          "title": "Chart Type"
+        },
         "emphasis": {
           "default": false,
           "title": "Emphasis",
@@ -336,6 +362,19 @@
           "title": "Name",
           "type": "string"
         },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "系列量纲；用于组合图双轴适用性审计，不执行单位换算。",
+          "title": "Unit"
+        },
         "values": {
           "description": "系列数值；与 thresholds[].value 使用相同数值单位。",
           "items": {
@@ -344,6 +383,22 @@
           "minItems": 1,
           "title": "Values",
           "type": "array"
+        },
+        "x_values": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "scatter 系列的横坐标；其它图表必须省略。",
+          "title": "X Values"
         }
       },
       "required": [
@@ -412,15 +467,28 @@
           "items": {
             "type": "string"
           },
-          "minItems": 1,
           "title": "Categories",
           "type": "array"
+        },
+        "category_axis_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category Axis Title"
         },
         "kind": {
           "enum": [
             "bar",
             "line",
-            "pie"
+            "pie",
+            "scatter",
+            "combo"
           ],
           "title": "Kind",
           "type": "string"
@@ -435,6 +503,42 @@
           "title": "Legend Position",
           "type": "string"
         },
+        "methodology": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Methodology"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "number_format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Number Format"
+        },
         "orientation": {
           "default": "vertical",
           "description": "bar 的数据方向；horizontal 生成横向数据条，line/pie 只能使用默认 vertical。",
@@ -444,6 +548,30 @@
           ],
           "title": "Orientation",
           "type": "string"
+        },
+        "secondary_number_format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondary Number Format"
+        },
+        "secondary_value_axis_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondary Value Axis Title"
         },
         "series": {
           "items": {
@@ -481,6 +609,18 @@
           ],
           "default": null
         },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
         "thresholds": {
           "items": {
             "$ref": "#/$defs/ChartThreshold"
@@ -501,11 +641,22 @@
           "default": null,
           "description": "仅用于坐标轴和数据/阈值标签的显示后缀，不执行单位换算。",
           "title": "Unit"
+        },
+        "value_axis_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Axis Title"
         }
       },
       "required": [
         "kind",
-        "categories",
         "series"
       ],
       "title": "ChartSpec",
@@ -750,6 +901,30 @@
       "title": "CoverSlide",
       "type": "object"
     },
+    "CycleInfographic": {
+      "properties": {
+        "kind": {
+          "const": "cycle",
+          "title": "Kind",
+          "type": "string"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/InfographicStage"
+          },
+          "maxItems": 6,
+          "minItems": 3,
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "stages"
+      ],
+      "title": "CycleInfographic",
+      "type": "object"
+    },
     "DeckMeta": {
       "properties": {
         "author": {
@@ -983,8 +1158,53 @@
       "title": "DiagramSize",
       "type": "object"
     },
-    "ImageSlide": {
+    "FunnelInfographic": {
       "properties": {
+        "direction": {
+          "default": "forward",
+          "enum": [
+            "forward",
+            "reverse"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "kind": {
+          "const": "funnel",
+          "title": "Kind",
+          "type": "string"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/InfographicStage"
+          },
+          "maxItems": 6,
+          "minItems": 3,
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "stages"
+      ],
+      "title": "FunnelInfographic",
+      "type": "object"
+    },
+    "ImageAssetSpec": {
+      "properties": {
+        "alt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt"
+        },
         "caption": {
           "anyOf": [
             {
@@ -996,6 +1216,144 @@
           ],
           "default": null,
           "title": "Caption"
+        },
+        "credit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credit"
+        },
+        "fit": {
+          "default": "contain",
+          "enum": [
+            "contain",
+            "cover"
+          ],
+          "title": "Fit",
+          "type": "string"
+        },
+        "focal_x": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Focal X",
+          "type": "number"
+        },
+        "focal_y": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Focal Y",
+          "type": "number"
+        },
+        "image_ref": {
+          "minLength": 1,
+          "title": "Image Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "image_ref"
+      ],
+      "title": "ImageAssetSpec",
+      "type": "object"
+    },
+    "ImageGridSlide": {
+      "properties": {
+        "images": {
+          "items": {
+            "$ref": "#/$defs/ImageAssetSpec"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Images",
+          "type": "array"
+        },
+        "layout": {
+          "const": "image_grid",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "images"
+      ],
+      "title": "ImageGridSlide",
+      "type": "object"
+    },
+    "ImageSlide": {
+      "properties": {
+        "alt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "credit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credit"
+        },
+        "fit": {
+          "default": "contain",
+          "enum": [
+            "contain",
+            "cover"
+          ],
+          "title": "Fit",
+          "type": "string"
+        },
+        "focal_x": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Focal X",
+          "type": "number"
+        },
+        "focal_y": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Focal Y",
+          "type": "number"
         },
         "image_ref": {
           "anyOf": [
@@ -1039,6 +1397,194 @@
       "title": "ImageSlide",
       "type": "object"
     },
+    "ImageTextSlide": {
+      "properties": {
+        "bullets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Bullets",
+          "type": "array"
+        },
+        "heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heading"
+        },
+        "image": {
+          "$ref": "#/$defs/ImageAssetSpec"
+        },
+        "image_position": {
+          "default": "left",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "title": "Image Position",
+          "type": "string"
+        },
+        "layout": {
+          "const": "image_text",
+          "title": "Layout",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "image"
+      ],
+      "title": "ImageTextSlide",
+      "type": "object"
+    },
+    "InfographicSlide": {
+      "properties": {
+        "infographic": {
+          "discriminator": {
+            "mapping": {
+              "cycle": "#/$defs/CycleInfographic",
+              "funnel": "#/$defs/FunnelInfographic",
+              "matrix": "#/$defs/MatrixInfographic",
+              "quadrant": "#/$defs/QuadrantInfographic"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FunnelInfographic"
+            },
+            {
+              "$ref": "#/$defs/QuadrantInfographic"
+            },
+            {
+              "$ref": "#/$defs/CycleInfographic"
+            },
+            {
+              "$ref": "#/$defs/MatrixInfographic"
+            }
+          ],
+          "title": "Infographic"
+        },
+        "layout": {
+          "const": "infographic",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "infographic"
+      ],
+      "title": "InfographicSlide",
+      "type": "object"
+    },
+    "InfographicStage": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "enum": [
+                "person",
+                "team",
+                "organization",
+                "target",
+                "risk",
+                "cost",
+                "quality",
+                "data",
+                "cloud",
+                "device",
+                "security",
+                "process",
+                "time",
+                "growth",
+                "decline",
+                "check",
+                "warning",
+                "idea",
+                "service",
+                "network",
+                "database",
+                "document",
+                "settings",
+                "delivery"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "InfographicStage",
+      "type": "object"
+    },
     "ListItem": {
       "properties": {
         "level": {
@@ -1060,6 +1606,53 @@
         "text"
       ],
       "title": "ListItem",
+      "type": "object"
+    },
+    "MatrixInfographic": {
+      "properties": {
+        "cells": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Cells",
+          "type": "array"
+        },
+        "column_labels": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Column Labels",
+          "type": "array"
+        },
+        "kind": {
+          "const": "matrix",
+          "title": "Kind",
+          "type": "string"
+        },
+        "row_labels": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Row Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "row_labels",
+        "column_labels",
+        "cells"
+      ],
+      "title": "MatrixInfographic",
       "type": "object"
     },
     "ProcessFlowSlide": {
@@ -1138,6 +1731,120 @@
         "title"
       ],
       "title": "ProcessStep",
+      "type": "object"
+    },
+    "QuadrantInfographic": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/QuadrantItem"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        },
+        "kind": {
+          "const": "quadrant",
+          "title": "Kind",
+          "type": "string"
+        },
+        "x_axis": {
+          "minLength": 1,
+          "title": "X Axis",
+          "type": "string"
+        },
+        "y_axis": {
+          "minLength": 1,
+          "title": "Y Axis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "x_axis",
+        "y_axis",
+        "items"
+      ],
+      "title": "QuadrantInfographic",
+      "type": "object"
+    },
+    "QuadrantItem": {
+      "properties": {
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "enum": [
+                "person",
+                "team",
+                "organization",
+                "target",
+                "risk",
+                "cost",
+                "quality",
+                "data",
+                "cloud",
+                "device",
+                "security",
+                "process",
+                "time",
+                "growth",
+                "decline",
+                "check",
+                "warning",
+                "idea",
+                "service",
+                "network",
+                "database",
+                "document",
+                "settings",
+                "delivery"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "label",
+        "x",
+        "y"
+      ],
+      "title": "QuadrantItem",
       "type": "object"
     },
     "SectionSlide": {
@@ -1458,7 +2165,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "1.9",
+      "const": "2.0",
       "title": "Ir Version",
       "type": "string"
     },
@@ -1477,6 +2184,9 @@
             "conclusion": "#/$defs/ConclusionSlide",
             "cover": "#/$defs/CoverSlide",
             "image": "#/$defs/ImageSlide",
+            "image_grid": "#/$defs/ImageGridSlide",
+            "image_text": "#/$defs/ImageTextSlide",
+            "infographic": "#/$defs/InfographicSlide",
             "process_flow": "#/$defs/ProcessFlowSlide",
             "section": "#/$defs/SectionSlide",
             "table": "#/$defs/TableSlide",
@@ -1522,6 +2232,15 @@
           },
           {
             "$ref": "#/$defs/ImageSlide"
+          },
+          {
+            "$ref": "#/$defs/ImageTextSlide"
+          },
+          {
+            "$ref": "#/$defs/ImageGridSlide"
+          },
+          {
+            "$ref": "#/$defs/InfographicSlide"
           },
           {
             "$ref": "#/$defs/ConclusionSlide"

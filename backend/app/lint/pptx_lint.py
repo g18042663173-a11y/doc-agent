@@ -12,11 +12,14 @@ from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE
 
 from app.rendering.theme import load_theme
+from app.template.contracts import TemplateProfile
+from app.template.theme import build_template_render_theme
 from app.rendering.typography import text_units
 
 
 EMU_PER_INCH = 914400
 PT_PER_INCH = 72
+EDGE_TOLERANCE_EMU = 4
 
 
 @dataclass(frozen=True)
@@ -55,8 +58,14 @@ class PptxLintReport:
         }
 
 
-def check_pptx(path: Path, *, classification: str | None = None, theme_name: str = "hw_v1") -> PptxLintReport:
-    theme = load_theme(theme_name)
+def check_pptx(
+    path: Path,
+    *,
+    classification: str | None = None,
+    theme_name: str = "hw_v1",
+    template_profile: TemplateProfile | None = None,
+) -> PptxLintReport:
+    theme = build_template_render_theme(theme_name, template_profile) if template_profile is not None else load_theme(theme_name)
     expected_classification = classification or theme["footer"]["default_classification"]
     prs = Presentation(str(path))
     items: list[PptxLintItem] = []
@@ -92,6 +101,9 @@ def check_pptx(path: Path, *, classification: str | None = None, theme_name: str
         items.extend(_sequence_layout_items(slide, slide_index, theme))
         items.extend(_kpi_items(slide, slide_index, theme))
         items.extend(_image_placeholder_items(slide, slide_index, theme))
+        items.extend(_asset_image_items(slide, slide_index, theme))
+        items.extend(_infographic_items(slide, slide_index, theme))
+        items.extend(_combo_chart_items(slide, slide_index))
         items.extend(_bullet_items(slide, slide_index, theme))
         items.extend(_content_overflow_items(slide, slide_index, theme, expected_classification))
         items.extend(_grid_items(slide, text_shapes, slide_index, prs, theme, expected_classification))
@@ -252,10 +264,12 @@ def _chart_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
         if not getattr(shape, "has_chart", False):
             continue
         chart = shape.chart
+        items.extend(_chart_quality_items(chart, slide_index))
+        color_warning_added = False
         for series in chart.series:
             for color in (_chart_fill_color(series), _chart_line_color(series)):
                 if color is not None and color.upper() not in allowed_colors:
-                    return [
+                    items.append(
                         _item(
                             "HW-W02",
                             "Warning",
@@ -263,9 +277,90 @@ def _chart_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
                             f"图表数据系列颜色 {color} 不在 accent 色板。",
                             "图表数据使用 accent1-6;重点系列使用 hw_red。",
                         )
-                    ]
+                    )
+                    color_warning_added = True
+                    break
+            if color_warning_added:
+                break
         items.extend(_chart_font_items(chart, slide_index, theme))
     return items
+
+
+def _chart_quality_items(chart, slide_index: int) -> list[PptxLintItem]:
+    items: list[PptxLintItem] = []
+    categories, values = _chart_cached_data(chart)
+    chart_type = chart.chart_type
+    pie = chart_type in {XL_CHART_TYPE.PIE, XL_CHART_TYPE.PIE_EXPLODED}
+    if pie:
+        if len(categories) < 2 or len(categories) > 6 or any(value <= 0 for value in values):
+            items.append(
+                _item(
+                    "HW-W12",
+                    "Warning",
+                    slide_index,
+                    "饼图应包含 2-6 个正值类别，当前数据不适合可靠比较。",
+                    "改用条形图，或在不改变业务数据的前提下重新选择图表类型。",
+                )
+            )
+        return items
+
+    try:
+        minimum = chart.value_axis.minimum_scale
+        maximum = chart.value_axis.maximum_scale
+        major = chart.value_axis.major_unit
+    except (AttributeError, ValueError):
+        minimum = maximum = major = None
+    bar_types = {XL_CHART_TYPE.BAR_CLUSTERED, XL_CHART_TYPE.COLUMN_CLUSTERED}
+    misses_zero = chart_type in bar_types and (
+        (minimum is not None and minimum > 0) or (maximum is not None and maximum < 0)
+    )
+    if minimum is None or maximum is None or major is None or misses_zero:
+        items.append(
+            _item(
+                "HW-W10",
+                "Warning",
+                slide_index,
+                "图表坐标轴缺少明确范围/主刻度，或柱图未包含零基线。",
+                "设置可读的 minimum/maximum/major_unit；柱图必须包含零轴。",
+            )
+        )
+    long_label = max((_chart_visual_length(category) for category in categories), default=0) > 20
+    if len(chart.series) > 4 or len(categories) > 12 or long_label:
+        items.append(
+            _item(
+                "HW-W11",
+                "Warning",
+                slide_index,
+                "图表类别、系列或标签较密，存在图例和类目轴拥挤风险。",
+                "长类目优先使用横向条形图；减少同页系列或设置跳标后人工复核。",
+            )
+        )
+    return items
+
+
+def _chart_cached_data(chart) -> tuple[list[str], list[float]]:
+    categories: list[str] = []
+    values: list[float] = []
+    for series in chart._chartSpace.iter():
+        if series.tag.rsplit("}", 1)[-1] != "ser":
+            continue
+        for child in series:
+            local_name = child.tag.rsplit("}", 1)[-1]
+            if local_name == "cat" and not categories:
+                categories = [value.text or "" for value in child.iter() if value.tag.rsplit("}", 1)[-1] == "v"]
+            elif local_name == "val":
+                for value in child.iter():
+                    if value.tag.rsplit("}", 1)[-1] != "v" or value.text is None:
+                        continue
+                    try:
+                        values.append(float(value.text))
+                    except ValueError:
+                        continue
+    return categories, values
+
+
+def _chart_visual_length(text: str) -> int:
+    return sum(2 if "\u2e80" <= character <= "\uffff" else 1 for character in text)
 
 
 def _allowed_chart_colors(theme: dict) -> set[str]:
@@ -640,6 +735,124 @@ def _image_placeholder_items(slide, slide_index: int, theme: dict) -> list[PptxL
     return []
 
 
+def _asset_image_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
+    items: list[PptxLintItem] = []
+    for shape in slide.shapes:
+        if not getattr(shape, "name", "").startswith("HW_ASSET_IMAGE:"):
+            continue
+        metadata = _shape_description_json(shape)
+        dpi = float(metadata.get("effective_dpi", 0) or 0)
+        if dpi < 150:
+            items.append(
+                _item(
+                    "HW-W13",
+                    "Warning",
+                    slide_index,
+                    f"图片有效分辨率仅 {dpi:g} DPI，可能在投影或打印时模糊。",
+                    "替换为更高分辨率原图，或减小图片在页面中的显示尺寸。",
+                )
+            )
+        crop = float(metadata.get("crop_fraction", 0) or 0)
+        alt_present = bool(metadata.get("alt_present"))
+        generated_without_credit = metadata.get("source_type") == "generated" and not metadata.get("credit_present")
+        if crop > 0.55 or not alt_present or generated_without_credit:
+            risks = []
+            if crop > 0.55:
+                risks.append("裁切比例过大")
+            if not alt_present:
+                risks.append("缺少替代文本")
+            if generated_without_credit:
+                risks.append("生成图片缺少来源")
+            items.append(
+                _item(
+                    "HW-W14",
+                    "Warning",
+                    slide_index,
+                    "图片存在" + "、".join(risks) + "风险。",
+                    "调整 focal point/fit，并补充 alt 与必要来源信息。",
+                )
+            )
+        margin = float(theme["grid"]["min_edge_margin_in"])
+        if (
+            _inches(shape.left) < margin
+            or _inches(shape.top) < margin
+            or _inches(shape.left + shape.width) > theme["slide"]["width_in"] - margin
+            or _inches(shape.top + shape.height) > theme["slide"]["footer_top_in"]
+        ):
+            items.append(
+                _item("HW-W14", "Warning", slide_index, "图片进入页边或页脚安全区。", "按主题图片布局恢复安全边距。")
+            )
+    return items
+
+
+def _infographic_items(slide, slide_index: int, theme: dict) -> list[PptxLintItem]:
+    shapes = [shape for shape in slide.shapes if getattr(shape, "name", "").startswith("HW_INFOGRAPHIC:")]
+    if not shapes:
+        return []
+    item_shapes = [shape for shape in shapes if ":item:" in shape.name or re.search(r":\d+$", shape.name)]
+    long_label = any(_text_units(_shape_text(shape)) > 44 for shape in item_shapes if _has_visible_text(shape))
+    overlapping = False
+    for index, first in enumerate(item_shapes):
+        for second in item_shapes[index + 1 :]:
+            if _boxes_overlap_or_too_close(_bbox(first), _bbox(second), 0):
+                overlapping = True
+                break
+        if overlapping:
+            break
+    if long_label or overlapping:
+        reason = "标签过长" if long_label else "标签或节点碰撞"
+        return [
+            _item(
+                "HW-W15",
+                "Warning",
+                slide_index,
+                f"信息图存在{reason}，结构密度可能不适合当前版式。",
+                "缩短标签、减少节点或拆分页面；不得静默截断业务内容。",
+            )
+        ]
+    return []
+
+
+def _combo_chart_items(slide, slide_index: int) -> list[PptxLintItem]:
+    charts = {
+        shape.name.removeprefix("HW_COMBO_CHART:"): shape
+        for shape in slide.shapes
+        if getattr(shape, "name", "").startswith("HW_COMBO_CHART:") and getattr(shape, "has_chart", False)
+    }
+    if not charts:
+        return []
+    if set(charts) != {"primary", "secondary"}:
+        return [_item("HW-W16", "Warning", slide_index, "组合图缺少主轴或次轴原生图表对象。", "重新按组合图契约渲染主轴与次轴。")]
+    primary_meta = _shape_description_json(charts["primary"])
+    secondary_meta = _shape_description_json(charts["secondary"])
+    axis_position = charts["secondary"].chart.value_axis._element.find("{http://schemas.openxmlformats.org/drawingml/2006/chart}axPos")
+    same_units = set(primary_meta.get("units") or []) == set(secondary_meta.get("units") or [])
+    missing_format = not primary_meta.get("number_format") or not secondary_meta.get("number_format")
+    if axis_position is None or axis_position.get("val") != "r" or same_units or missing_format:
+        return [
+            _item(
+                "HW-W16",
+                "Warning",
+                slide_index,
+                "组合图次轴位置、量纲或数字格式不完整。",
+                "仅在真实量纲不同且格式显式时使用次轴，并把次轴放在右侧。",
+            )
+        ]
+    return []
+
+
+def _shape_description_json(shape) -> dict[str, Any]:
+    try:
+        if hasattr(shape.element, "nvPicPr"):
+            raw = shape.element.nvPicPr.cNvPr.get("descr", "")
+        else:
+            raw = shape.element.nvGraphicFramePr.cNvPr.get("descr", "")
+        parsed = json.loads(raw) if raw else {}
+        return parsed if isinstance(parsed, dict) else {}
+    except (AttributeError, TypeError, ValueError, json.JSONDecodeError):
+        return {}
+
+
 def _shape_fill_color(shape) -> str | None:
     try:
         rgb = getattr(shape.fill.fore_color, "rgb", None)
@@ -803,7 +1016,14 @@ def _grid_items(slide, text_shapes: list, slide_index: int, prs, theme: dict, ex
     for shape in text_shapes:
         if not _has_visible_text(shape) or _is_footer_shape(shape, theme, expected_classification):
             continue
-        if _is_architecture_shape(shape) or _is_threshold_shape(shape) or _is_sequence_shape(shape) or _is_image_placeholder_shape(shape):
+        if (
+            _is_architecture_shape(shape)
+            or _is_threshold_shape(shape)
+            or _is_sequence_shape(shape)
+            or _is_image_placeholder_shape(shape)
+            or _is_infographic_shape(shape)
+            or _is_asset_image_shape(shape)
+        ):
             continue
         allows_compacted_vertical_position = _is_intentionally_compacted_composite_text(shape, slide, theme)
         left = _inches(shape.left)
@@ -876,6 +1096,15 @@ def _is_image_placeholder_shape(shape) -> bool:
     return getattr(shape, "name", "") == "HW_IMAGE_PLACEHOLDER"
 
 
+def _is_infographic_shape(shape) -> bool:
+    name = getattr(shape, "name", "")
+    return name.startswith("HW_INFOGRAPHIC:") or name.startswith("HW_SEMANTIC_ICON:")
+
+
+def _is_asset_image_shape(shape) -> bool:
+    return getattr(shape, "name", "").startswith("HW_ASSET_IMAGE:")
+
+
 def _layout_items(slide, slide_index: int, prs, theme: dict, expected_classification: str) -> list[PptxLintItem]:
     items: list[PptxLintItem] = []
     width = prs.slide_width
@@ -887,10 +1116,13 @@ def _layout_items(slide, slide_index: int, prs, theme: dict, expected_classifica
     min_gap = theme["grid"]["min_gap_in"]
     content_shapes = _layout_shapes(slide, prs, theme, expected_classification)
     for shape in content_shapes:
-        if shape.left < left_margin or shape.top < top_margin:
+        if shape.left < left_margin - EDGE_TOLERANCE_EMU or shape.top < top_margin - EDGE_TOLERANCE_EMU:
             items.append(_item("HW-W07", "Warning", slide_index, "文本、表格、图表或图形过近页边。", "按主题页边距重新排布。"))
             break
-        if shape.left + shape.width > width - right_margin or shape.top + shape.height > height - bottom_margin:
+        if (
+            shape.left + shape.width > width - right_margin + EDGE_TOLERANCE_EMU
+            or shape.top + shape.height > height - bottom_margin + EDGE_TOLERANCE_EMU
+        ):
             items.append(_item("HW-W07", "Warning", slide_index, "文本、表格、图表或图形超出版心或过近页边。", "按主题页边距重新排布。"))
             break
     if items:
@@ -915,10 +1147,14 @@ def _layout_shapes(slide, prs, theme: dict, expected_classification: str) -> lis
         if (
             _is_footer_shape(shape, theme, expected_classification)
             or name.startswith("HW_DECORATION:")
+            or name.startswith("HW_TEMPLATE_DECORATION:")
             or name.startswith("HW_COMPOSITE_BLOCK:")
             or _is_architecture_shape(shape)
             or _is_threshold_shape(shape)
             or _is_sequence_shape(shape)
+            or _is_infographic_shape(shape)
+            or _is_asset_image_shape(shape)
+            or name.startswith("HW_COMBO_CHART:")
         ):
             continue
         shape_type = str(getattr(shape, "shape_type", ""))

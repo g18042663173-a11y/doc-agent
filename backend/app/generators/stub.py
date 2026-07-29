@@ -10,6 +10,7 @@ from app.generation.layout_policy import detect_sequence_evidence, timeline_part
 
 
 CONTEXT_MARKER = "[输入 DocumentIR]"
+VISUAL_PLAN_MARKER = "[VisualPlan 1.0]"
 
 
 class StubGenerator:
@@ -37,6 +38,8 @@ class StubGenerator:
                 payload = stub_chunk_payload(chunk)
             else:
                 payload = _deck_payload(context)
+                visual_plan = _json_after_marker(prompt, VISUAL_PLAN_MARKER)
+                _apply_visual_plan_to_deck_payload(payload, visual_plan)
                 page_match = re.search(r"必须恰好生成\s*(\d+)\s*页", prompt)
                 if page_match is not None:
                     payload = fit_stub_deck_pages(payload, int(page_match.group(1)))
@@ -275,10 +278,39 @@ def _deck_payload(context: dict[str, Any] | None) -> dict[str, Any]:
     )
     return {
         "ir_type": "deck",
-        "ir_version": "1.9",
+        "ir_version": "2.0",
         "meta": {"title": title, "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
         "slides": slides,
     }
+
+
+def _apply_visual_plan_to_deck_payload(payload: dict[str, Any], visual_plan: dict[str, Any] | None) -> None:
+    if not visual_plan:
+        return
+    from app.generation.depth import _stub_slide
+
+    opportunities = [item for item in visual_plan.get("opportunities", []) if isinstance(item, dict)]
+    for opportunity in opportunities:
+        recommended = str(opportunity.get("recommended_layout", ""))
+        page: dict[str, Any] = {
+            "title": "输入证据采用可编辑视觉表达",
+            "focus": str(opportunity.get("reason") or "按视觉计划组织内容"),
+            "source_evidence": list(opportunity.get("evidence_refs", []))[:3],
+            "asset_ids": list(opportunity.get("asset_ids", []))[:4],
+        }
+        if recommended.startswith("infographic_"):
+            page["layout"] = "infographic"
+            page["visual_kind"] = recommended.removeprefix("infographic_")
+        elif recommended in {"image_text", "image_grid", "architecture_diagram", "process_flow", "timeline"}:
+            page["layout"] = recommended
+        elif recommended == "chart":
+            page["layout"] = "chart"
+            page["visual_kind"] = opportunity.get("chart_kind")
+        else:
+            continue
+        slide = _stub_slide(page, title=payload["meta"]["title"], total_pages=len(payload["slides"]) + 1)
+        payload["slides"].insert(max(len(payload["slides"]) - 1, 0), slide)
+        return
 
 
 def _document_title(context: dict[str, Any] | None, *, fallback: str) -> str:

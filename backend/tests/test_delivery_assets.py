@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -182,6 +183,43 @@ def test_windows_wheel_manifest_and_hash_lock_are_auditable() -> None:
     assert "Windows true-machine validation" in manifest["verification_boundary"]
 
 
+@pytest.mark.skipif(not (ROOT / "wheelhouse").is_dir(), reason="local Windows wheelhouse is not present")
+def test_windows_wheelhouse_resolves_offline_with_hashes() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--dry-run",
+            "--ignore-installed",
+            "--no-index",
+            "--find-links",
+            str(ROOT / "wheelhouse"),
+            "--require-hashes",
+            "--only-binary=:all:",
+            "--platform",
+            "win_amd64",
+            "--python-version",
+            "3.12",
+            "--implementation",
+            "cp",
+            "--abi",
+            "cp312",
+            "-r",
+            str(ROOT / "requirements-win312.lock"),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Would install" in result.stdout
+
+
 def test_demo_logs_screenshots_and_manifest_are_real_assets() -> None:
     manifest = _json("samples/demo/manifest.json")
     assert manifest["cases"]["success_word"]["returncode"] == 0
@@ -206,7 +244,14 @@ def test_delivery_docs_cover_reviews_assets_and_all_18_cards() -> None:
 
     assert "build_delivery_assets.py" in asset_doc
     assert "Windows true-machine" not in asset_doc or "不等于" in asset_doc
-    for code in [*(f"E00{value}" for value in range(1, 7)), *(f"D00{value}" for value in range(1, 7)), "W101", "W104", "I201"]:
+    codes = [
+        *(f"E00{value}" for value in range(1, 7)),
+        *(f"D00{value}" for value in range(1, 7)),
+        "W101",
+        "W104",
+        "I201",
+    ]
+    for code in codes:
         assert code in failure_review
     assert "#C7000B" in theme_review and "#C00000" in theme_review
     assert sum(line.startswith("| S") for line in index.splitlines()) == 18

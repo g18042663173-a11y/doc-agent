@@ -1,0 +1,8 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {"title": "密集表格评测", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+  "slides": [
+    {"layout": "table", "title": "跨阶段质量门禁", "table": {"header": ["阶段", "输入", "自动检查", "人工门禁"], "rows": [["生成", "合法 DeckIR", "Schema 与容量", "语义抽查"], ["模板", "合法 PPTX", "关系与样例文本", "视觉审美"], ["导出", "Office PNG", "包完整与差异", "基线批准"], ["发布", "离线环境", "verify.ps1", "业务签字"], ["运营", "失败报告", "错误码与隔离", "真实语料回归"]]}}
+  ]
+}

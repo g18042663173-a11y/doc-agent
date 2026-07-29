@@ -15,6 +15,7 @@ from openpyxl.utils.cell import get_column_letter, range_boundaries
 
 from app.ir.document_ir import DocumentIR
 from app.parsers.errors import ParseFailure, parser_error_boundary
+from app.parsers.office_preflight import preflight_source_office
 from app.parsers.source_metadata import deterministic_parsed_at
 from app.parsers.text_limits import TextLimiter
 
@@ -50,7 +51,8 @@ def parse_xlsx(path: Path) -> DocumentIR:
 
 def _parse_xlsx_impl(path: Path) -> DocumentIR:
     started = time.monotonic()
-    warnings = _preflight_warnings(path)
+    warnings = preflight_source_office(path)
+    warnings.extend(_preflight_warnings(path))
     value_workbook = load_workbook(path, read_only=True, data_only=True)
     formula_workbook = load_workbook(path, read_only=True, data_only=False)
     metadata_by_sheet = _worksheet_metadata_by_sheet(path)
