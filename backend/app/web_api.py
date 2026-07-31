@@ -43,6 +43,7 @@ from app.template.package import TemplateInputError, validate_pptx_package, vali
 from app.template.planner import build_template_plan
 from app.template.profile import extract_template_profile
 from app.template.renderer import render_deck_ir_with_template
+from app.version import APP_VERSION
 from app.visual.planner import audit_visual_selection, build_visual_plan
 
 
@@ -78,7 +79,6 @@ DEFAULT_JOB_TIMEOUT_SECONDS = 900.0
 DEFAULT_QUEUE_CAPACITY = 4
 DEFAULT_RETENTION_HOURS = 24
 DEFAULT_RATE_LIMIT_PER_MINUTE = 30
-APP_VERSION = "2.1.0"
 API_VERSION = "1.0"
 
 

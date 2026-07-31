@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
+        xmlns:local="clr-namespace:DocumentWorkbench"
         mc:Ignorable="d"
         Title="文档生成工作台"
         Icon="Assets/app-icon.ico"
@@ -582,7 +583,7 @@
                                 <Border x:Name="SettingsAboutPanel" Style="{StaticResource GroupPanel}" Visibility="Collapsed" VerticalAlignment="Top">
                                     <StackPanel>
                                         <TextBlock Text="关于" Style="{StaticResource SectionTitle}" />
-                                        <TextBlock Text="文档生成工作台 2.1.0" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Static local:AppInfo.ProductVersionLabel}" FontWeight="SemiBold" />
                                         <TextBlock Text="原生 .NET 8 WPF 客户端" Style="{StaticResource MutedText}" Margin="0,6,0,0" />
                                     </StackPanel>
                                 </Border>
@@ -628,7 +629,7 @@
                               HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
                     <StackPanel MaxWidth="760" HorizontalAlignment="Stretch">
                         <TextBlock Text="文档生成工作台" Style="{StaticResource PageTitle}" />
-                        <TextBlock Text="2.1.0 · Windows x64" Style="{StaticResource MutedText}" Margin="0,0,0,22" />
+                        <TextBlock Text="{x:Static local:AppInfo.PlatformVersionLabel}" Style="{StaticResource MutedText}" Margin="0,0,0,22" />
                         <Border Style="{StaticResource GroupPanel}">
                             <StackPanel>
                                 <TextBlock Text="运行边界" Style="{StaticResource SectionTitle}" />

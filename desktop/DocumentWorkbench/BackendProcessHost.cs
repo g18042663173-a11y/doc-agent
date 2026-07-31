@@ -125,7 +125,7 @@ public sealed class BackendProcessHost : IDisposable
             Timeout = TimeSpan.FromMinutes(20),
         };
         client.DefaultRequestHeaders.Add("X-Workbench-Session", SessionToken);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("DocumentWorkbench/2.1.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"DocumentWorkbench/{AppInfo.Version}");
         return client;
     }
 

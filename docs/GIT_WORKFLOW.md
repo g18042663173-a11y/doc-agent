@@ -2,7 +2,7 @@
 
 ## 分支
 
-- 正式稳定分支由项目负责人指定；当前交付基线是 `codex/windows-native-app`。
+- 正式稳定分支由项目负责人指定；当前唯一开发候选是 `codex/consolidate-latest-20260801`。
 - Codex 开发分支统一使用 `codex/<short-purpose>`。
 - 功能、修复、重构使用短生命周期分支，不复制整个目录创建 `final2` 或 `new_new`。
 - `experiments/` 内的试验可使用独立实验分支，但不得反向成为生产入口。
@@ -31,15 +31,16 @@
 
 - 正式内部发布使用 `vMAJOR.MINOR.PATCH` annotated tag。
 - tag 只能指向已经通过发布门禁并有产物 SHA-256 的 commit。
-- 版本号需要同步 API/WPF/便携包清单；不能只修改文件名。
+- 产品版本只修改根目录 `VERSION`；API、WPF 和便携包必须通过测试证明从该文件派生。
 - 当前仓库尚无正式 tag，首次 tag 由项目负责人在签名和真机验收后创建。
+- `pre-version-consolidation-20260801` 是可回滚保护标签，不是正式 release tag。
 
 ## 历史与实验
 
 - 历史代码优先依赖 Git，而不是在工作树保留 `old`、`copy`、日期副本。
 - 必须留在仓库的非生产实现放 `experiments/<name>/`，包含 README、独立依赖锁和退出标准。
 - 历史审计材料放 `docs/history/`；当前事实只写入 `README.md`、`PROGRESS.md` 和权威专题文档。
-- 删除 `backup-*` 分支前必须确认它不承担远程或人工备份职责。
+- 当前 `backup-*` 分支均已证明为正式候选的祖先且无独有提交；删除前仍需确认它们不承担人工备份职责。
 
 ## 发布检查
 

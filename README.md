@@ -8,6 +8,24 @@ md/docx/xlsx/pptx -> DocumentIR -> Prompt/generator -> WordIR/DeckIR -> DOCX/PPT
 
 IR 是唯一契约。模型文本必须先剥壳和校验,非法 IR 不进入 renderer。
 
+## 唯一正式版本与入口
+
+- 产品版本唯一来源：根目录 `VERSION`。Python API、WPF Assembly、界面版本、User-Agent
+  和便携包名称都从该文件派生，不在各模块单独维护版本号。
+- 主用户入口：发布包中的 `DocumentWorkbench.exe`；源码项目为
+  `desktop/DocumentWorkbench/DocumentWorkbench.csproj`。
+- 浏览器/API 模块入口：`python -m app.web_api`；Windows 固定使用
+  `.\.venv\Scripts\python.exe -m app.web_api`。它是 WPF 和浏览器兼容客户端共享的唯一
+  HTTP 后端，不存在第二套同步 Web 服务。
+- CLI 入口：`python -m app.cli.parse`、`python -m app.cli.prompt`、
+  `python -m app.cli.render` 和 `python -m app.cli.check`，分别承担一个流水线阶段。
+- 安装命令：`.\bootstrap_windows.ps1`。
+- 浏览器兼容入口启动命令：`.\start_workbench.ps1`。
+- 测试与发布门禁：`.\verify.ps1`。
+- WPF 构建入口：`scripts/package_document_workbench.py`。
+- 生产 PPT 引擎：DeckIR 2.0 到 `python-pptx`；`experiments/html2pptx/` 仅为隔离对照实验。
+- 本仓库不包含训练或推理入口；NGA 是受约束的 IR generator adapter，不是模型训练代码。
+
 ## 环境
 
 - Python 3.12
@@ -185,7 +203,7 @@ $dotnet = "$env:LOCALAPPDATA\Codex\dotnet-sdk-8.0.423\dotnet.exe"
   --graphviz-root "C:\Program Files\Graphviz" --overwrite
 ```
 
-输出为 `dist/document-workbench-windows-x64-2.1.0.zip` 及同名 SHA-256 文件。便携包自带
+输出为 `dist/document-workbench-windows-x64-<VERSION>.zip` 及同名 SHA-256 文件；实际版本取自根目录 `VERSION`。便携包自带
 .NET、Python 3.12、锁定 Python 依赖与 Graphviz，解压后双击 `DocumentWorkbench.exe`，
 无需管理员权限。正式推广前仍须完成内网代码签名和干净 Windows 10/11 断网验收。
 

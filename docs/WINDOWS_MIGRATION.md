@@ -2,7 +2,7 @@
 
 本指南对应由 `scripts/package_windows_dev.py` 生成的 Windows 开发快照。该快照用于把当前项目从 Mac 带入内网 Windows，并在解压后继续开发、测试和生成 DOCX/PPTX。
 
-面向普通使用者另有 WPF 便携交付包：`document-workbench-windows-x64-2.1.0.zip`。它内置
+面向普通使用者另有 WPF 便携交付包：`document-workbench-windows-x64-<VERSION>.zip`，版本取自仓库根目录 `VERSION`。它内置
 .NET 8、Python 3.12 embeddable、锁定 Python 依赖和 Graphviz，解压后直接双击
 `DocumentWorkbench.exe`，不要求管理员权限、系统 Python 或仓库 `.venv`。开发快照与
 便携包用途不同，不要混用验收结论。

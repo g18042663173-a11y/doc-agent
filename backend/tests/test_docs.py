@@ -84,3 +84,43 @@ def test_repository_governance_documents_lock_current_architecture() -> None:
     assert (ROOT / "docs" / "design" / "TECH_REVIEW_DESIGN.md").is_file()
     assert (ROOT / "docs" / "history" / "2026-07" / "AUDIT.md").is_file()
     assert not (ROOT / "backend" / "app" / "web.py").exists()
+
+
+def test_readme_declares_the_unique_official_entrypoints() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "唯一正式版本与入口" in readme
+    assert "根目录 `VERSION`" in readme
+    assert "主用户入口" in readme and "DocumentWorkbench.exe" in readme
+    assert "python -m app.web_api" in readme
+    assert "python -m app.cli.render" in readme
+    assert "不包含训练或推理入口" in readme
+    assert "experiments/html2pptx" in readme
+
+
+def test_human_review_doc_describes_current_manual_gates() -> None:
+    review = (ROOT / "docs" / "HUMAN_REVIEW.md").read_text(encoding="utf-8")
+
+    assert "DeckIR 2.0" in review
+    assert "AssetManifest 1.0" in review
+    assert "Windows Credential Manager" in review
+    assert "manual_pending" in review
+    assert "DeckIR v1.1" not in review
+    assert "write placeholder report" not in review
+    assert "`[图片占位]`" not in review
+    assert "NGA timeout/retry 只写为实现层默认" not in review
+
+
+def test_version_consolidation_documents_preserve_decision_evidence() -> None:
+    audit = (ROOT / "VERSION_CONSOLIDATION_AUDIT.md").read_text(encoding="utf-8")
+    report = (ROOT / "VERSION_CONSOLIDATION_REPORT.md").read_text(encoding="utf-8")
+
+    assert "CANONICAL_CANDIDATE" in audit
+    assert "FEATURE_DONOR" in audit
+    assert "EXPERIMENTAL" in audit
+    assert "pre-version-consolidation-20260801" in audit
+    assert "唯一正式入口" in report
+    assert "验证命令与结果" in report
+    assert "恢复方式" in report
+    assert "未决事项" in report
+    assert "`pending`" not in report

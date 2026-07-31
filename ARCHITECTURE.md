@@ -66,6 +66,7 @@ parsers -> DocumentIR -> generation/prompting -> generators
 
 ## 配置流
 
+- 产品版本: 根 `VERSION`，由 Python API、WPF Assembly 和便携打包器共同读取。
 - 固定设计 token: `backend/app/rendering/themes/hw_theme.json`。
 - NGA 非敏感配置: `%LOCALAPPDATA%\HuaweiDocumentGenerator\settings.json`。
 - NGA Token: Windows Credential Manager。

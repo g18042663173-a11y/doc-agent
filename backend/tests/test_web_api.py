@@ -16,6 +16,7 @@ from PIL import Image
 from app.generators.stub import StubGenerator
 import app.web_api as web_api
 from app.web_api import create_api_app
+from app.version import APP_VERSION
 from app.reliability.contracts import FailureEnvelope, JobState
 
 
@@ -45,7 +46,7 @@ def test_health_and_version_expose_release_compatibility_without_paths(tmp_path:
     assert version.status_code == 200
     assert version.get_json() == {
         "service": "huawei-document-generator",
-        "app_version": "2.1.0",
+        "app_version": APP_VERSION,
         "api_version": "1.0",
         "deck_ir_version": "2.0",
         "failure_envelope_version": "1.0",
@@ -77,7 +78,7 @@ def test_desktop_diagnostics_and_job_list_are_sanitized(tmp_path: Path) -> None:
     assert diagnostics.status_code == 200
     payload = diagnostics.get_json()
     assert payload["diagnostics_version"] == "1.0"
-    assert payload["application"]["version"] == "2.1.0"
+    assert payload["application"]["version"] == APP_VERSION
     assert payload["application"]["deck_ir_version"] == "2.0"
     assert payload["generator"]["name"] == "stub"
     assert payload["graphviz"]["source"] in {"bundled", "system", "missing"}

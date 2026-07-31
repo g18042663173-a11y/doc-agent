@@ -15,7 +15,7 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "2.1.0"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 PACKAGE_NAME = f"document-workbench-windows-x64-{VERSION}"
 DIST = ROOT / "dist"
 STAGING_ROOT = DIST / ".dw-stage"
@@ -134,7 +134,7 @@ def _download_resumable(url: str, output: Path, expected_bytes: int) -> None:
         current = output.stat().st_size if output.exists() else 0
         if current == expected_bytes:
             return
-        headers = {"User-Agent": "DocumentWorkbenchPackager/2.1.0"}
+        headers = {"User-Agent": f"DocumentWorkbenchPackager/{VERSION}"}
         if current:
             headers["Range"] = f"bytes={current}-"
         request = Request(url, headers=headers)
@@ -230,6 +230,7 @@ def _copy_backend(stage: Path) -> None:
         destination,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
     )
+    shutil.copy2(ROOT / "VERSION", stage / "app" / "VERSION")
 
 
 def _install_python_runtime(archive: Path, stage: Path) -> None:
@@ -287,7 +288,7 @@ def _copy_graphviz(source: Path, stage: Path) -> None:
 
 def _write_readme(stage: Path) -> None:
     (stage / "README.txt").write_text(
-        "文档生成工作台 2.1.0\n"
+        f"文档生成工作台 {VERSION}\n"
         "\n"
         "1. 将整个目录解压到当前用户可写位置。\n"
         "2. 双击 DocumentWorkbench.exe；不需要管理员权限或预装 Python/.NET。\n"
