@@ -25,13 +25,13 @@ Git 祖先关系、分支独有提交、测试、构建、发布脚本、文档�
 
 | 候选 | 相对 HEAD | 独有提交 | 证据分 | 状态 | 结论 |
 | --- | ---: | ---: | ---: | --- | --- |
-| `codex/consolidate-latest-20260801` / `fd0317f` | 0 | 0 | 95 | `CANONICAL_CANDIDATE` | 当前完整工作树，已通过 Python、可靠性和 WPF 门禁 |
-| `codex/repository-cleanup-20260731` | 0 | 0 | 80 | `DUPLICATE` | 与保护点相同，仅作为上一阶段分支引用 |
-| `codex/windows-native-app` | 落后 1 | 0 | 55 | `OBSOLETE` | WPF/NGA 已全部进入当前分支，缺少仓库治理提交 |
-| `codex/release-hardening` | 落后 3 | 0 | 45 | `OBSOLETE` | 发布加固已被 WPF/NGA 和治理提交覆盖 |
-| `fix-arch-diagram` | 落后 4 | 0 | 35 | `OBSOLETE` | 架构图功能已在当前 renderer、Schema 和测试中 |
-| `codex-c0-contract` | 落后 13 | 0 | 20 | `OBSOLETE` | 早期契约基线，后续迁移器和 Schema 已覆盖 |
-| 12 个 `backup-*` 分支 | 落后 5-15 | 0 | 0 | `OBSOLETE` | 全部是 HEAD 祖先，无独有提交；仅保留为待人工清理的 Git 引用 |
+| `codex/consolidate-latest-20260801` / `30426e5` | 0 | 0 | 100 | `CANONICAL_CANDIDATE` | 当前完整工作树，已通过 Python、可靠性和 WPF 门禁 |
+| `codex/repository-cleanup-20260731` | 落后 1 | 0 | 70 | `OBSOLETE` | 直接前置基线，缺少版本单源和本次治理证据 |
+| `codex/windows-native-app` | 落后 2 | 0 | 55 | `OBSOLETE` | WPF/NGA 已全部进入当前分支，缺少仓库治理提交 |
+| `codex/release-hardening` | 落后 4 | 0 | 45 | `OBSOLETE` | 发布加固已被 WPF/NGA 和治理提交覆盖 |
+| `fix-arch-diagram` | 落后 5 | 0 | 35 | `OBSOLETE` | 架构图功能已在当前 renderer、Schema 和测试中 |
+| `codex-c0-contract` | 落后 14 | 0 | 20 | `OBSOLETE` | 早期契约基线，后续迁移器和 Schema 已覆盖 |
+| 12 个 `backup-*` 分支 | 落后 6-16 | 0 | 0 | `OBSOLETE` | 全部是 HEAD 祖先，无独有提交；仅保留为待人工清理的 Git 引用 |
 
 当前没有远程配置和远程分支。损坏的 `refs/codex/turn-diffs/checkpoints/...` 会让部分
 全局 Git 枚举/维护命令报错；它属于 Codex 宿主引用，不直接编辑 `.git`。
@@ -65,8 +65,8 @@ Git 祖先关系、分支独有提交、测试、构建、发布脚本、文档�
 
 ## 5. 正式版本决定
 
-唯一正式开发基础为保护标签所指向的 `fd0317f`，并在
-`codex/consolidate-latest-20260801` 上继续收敛。旧分支不存在独有提交，因此没有代码需要
+唯一正式开发基础为 `30426e5`，保护标签所指向的 `fd0317f` 仅用于回滚本轮整合。
+后续在 `codex/consolidate-latest-20260801` 上继续开发。旧分支不存在独有提交，因此没有代码需要
 反向合并。生产 PPT 唯一引擎仍为 DeckIR 2.0 到 `python-pptx`；WPF 是主用户入口，浏览器
 只作为共享 API 的兼容客户端；HTML 引擎继续作为显式实验。
 

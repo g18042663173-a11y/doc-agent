@@ -10,7 +10,7 @@
 安全、生成脚本、产品版本声明和人工验收文档等候选组。详细矩阵、证据评分和调用关系见
 `VERSION_CONSOLIDATION_AUDIT.md`。
 
-唯一正式基础是 `fd0317f` 及本分支后续整合提交。17 个旧分支全部是当前 HEAD 的祖先，
+唯一正式基础是 `30426e53907bee115fc2773206c4609252784384`。17 个旧分支全部是当前 HEAD 的祖先，
 分支独有提交均为 0；没有 `FEATURE_DONOR` 需要迁移。旧分支名称和提交时间未作为正式
 版本判断依据。
 
@@ -30,8 +30,8 @@
 | --- | --- | --- | --- | --- |
 | 历史 `backend/app/web.py` | 旧 5055 同步服务，缺当前异步/安全契约 | `backend/app/web_api.py` | `fd0317f` | `git show c9e000e:backend/app/web.py` |
 | placeholder renderer/lint | 已被真实 renderer 和真实 lint 完全替代 | `app.rendering.*`、`app.lint.*` | `fd0317f` | 从 `c9e000e` 按路径只读恢复 |
-| 多处产品版本硬编码 | 易产生跨栈发布漂移 | 根 `VERSION` | 本次整合提交 | 从保护标签查看修改前文件 |
-| 早期 `docs/HUMAN_REVIEW.md` 正文 | 与 DeckIR 2.0、AssetManifest、NGA/WPF 现状冲突 | 当前人工门禁清单 | 本次整合提交 | `git show pre-version-consolidation-20260801:docs/HUMAN_REVIEW.md` |
+| 多处产品版本硬编码 | 易产生跨栈发布漂移 | 根 `VERSION` | `30426e5` | 从保护标签查看修改前文件 |
+| 早期 `docs/HUMAN_REVIEW.md` 正文 | 与 DeckIR 2.0、AssetManifest、NGA/WPF 现状冲突 | 当前人工门禁清单 | `30426e5` | `git show pre-version-consolidation-20260801:docs/HUMAN_REVIEW.md` |
 
 没有删除远程分支、重写历史或清理用途未确认的本地 `backup-*` 引用。历史版本通过 Git
 恢复，不在当前工作树创建 `old`、`final`、`copy` 或日期源码副本。

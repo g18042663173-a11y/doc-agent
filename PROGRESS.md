@@ -332,3 +332,41 @@
 ### 仍不确定
 
 - 自动化范围内未发现重构引入的行为回归。目标内网 NGA 协议差异、终端安全软件对便携 EXE 的影响及 Office 最终审美，只能在交付环境继续确认。
+
+## 2026-08-01 唯一正式版本整合
+
+### 已完成并通过验收
+
+- 从干净提交 `fd0317f` 创建 `codex/consolidate-latest-20260801`，并建立保护标签
+  `pre-version-consolidation-20260801`。没有 reset、force push、远程分支删除或用户修改丢失。
+- 逐分支验证 17 个旧分支全部是当前正式候选的祖先，独有提交均为 0；当前提交
+  `30426e53907bee115fc2773206c4609252784384` 比它们多 1-16 个提交，因此没有遗漏的
+  `FEATURE_DONOR` 需要 cherry-pick。
+- `VERSION_CONSOLIDATION_AUDIT.md` 已记录候选矩阵、证据评分、调用关系和处理状态；
+  `VERSION_CONSOLIDATION_REPORT.md` 已记录合并、替换、恢复方式、唯一正式入口和未决事项。
+- 产品版本从 Python API、打包器、WPF csproj、XAML 和 User-Agent 多处硬编码收敛到根
+  `VERSION`。便携 backend 会携带该文件；WPF Assembly 为 2.1.0.0，Python/API 为 2.1.0。
+- README 明确 WPF 主入口、唯一 Flask API、分阶段 CLI、统一 verify、WPF 打包入口以及
+  HTML/PptxGenJS 实验边界。本仓库没有训练或推理入口。
+- 早期 `docs/HUMAN_REVIEW.md` 已替换为当前 DeckIR 2.0、AssetManifest、NGA、WPF、模板
+  安全和 `manual_pending` 人工门禁；旧内容只通过 Git 历史恢复。
+- 全量 Python 为 `601 passed, 15 skipped`。`scripts/verify.py` 通过，整体覆盖率 88.95%；
+  `verify.ps1` 通过，Graphviz 使用系统运行时，整体覆盖率 89.17%。
+- 可靠性报告共 616 项：601 通过、15 跳过、0 失败。WPF Debug xUnit/FlaUI 3/3；Release
+  build 0 warning、0 error。Ruff、diff、含糊路径、旧入口和生产实验引用扫描均通过。
+
+### 降级或近似
+
+- HTML/PptxGenJS 保留为 `experiments/html2pptx/` 对照实验，不是待合并的第二生产版本。
+- 浏览器工作台保留为同一 Flask API 的兼容客户端，WPF 是主用户入口；二者不是两套业务后端。
+
+### 阻塞待人输入
+
+- 12 个 `backup-*` 本地分支均已合并且无独有提交，但是否删除仍需确认人工备份用途。
+- 正式 release tag 仍需等待代码签名、干净 Windows 断网验收和 PowerPoint 人工视觉签字。
+- 真实业务语料、授权图片和真实 NGA 继续按 `QUESTIONS.md` 与 `docs/HUMAN_REVIEW.md` 执行。
+
+### 仍不确定
+
+- 损坏的 Codex checkpoint ref 会让 Git geometric repack 和部分全局枚举报错；当前提交有效、
+  工作树与分支正常，但该宿主工具引用需要由其所有者处理，本轮未直接编辑 `.git`。
