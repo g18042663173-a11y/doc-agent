@@ -20,7 +20,6 @@ from app.ir.repair import repair_ir_text
 from app.ir.report import format_validation_result
 from app.ir.word_ir import WordIR
 from app.lint.docx_lint import check_docx, write_docx_reports
-from app.lint.placeholder import write_placeholder_report
 from app.lint.pptx_lint import check_pptx, write_reports
 from app.prompting.builder import build_prompt
 from app.rendering.docx_renderer import render_word_ir
@@ -36,7 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target", choices=["word", "deck"], required=True)
     parser.add_argument("--generator", choices=["stub", "nga", "codex"], default="stub")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "output" / "demo")
-    parser.add_argument("--lint", action="store_true")
+    # Kept for compatibility with the taskbook and existing automation. Lint is
+    # now mandatory so a demo can never report a synthetic passing result.
+    parser.add_argument("--lint", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--max-context-chars", type=int, default=12000)
     parser.add_argument("--max-output-chars", type=int, default=6000)
     parser.add_argument("--pages", type=int)
@@ -135,15 +136,12 @@ def main(argv: list[str] | None = None) -> int:
             artifact = template_result.artifact_path
         else:
             artifact = render_deck_ir(deck_ir, output_dir / "deck.pptx", asset_registry=asset_registry)
-        if args.lint:
-            report_obj = check_pptx(
-                artifact,
-                classification=deck_ir.meta.classification,
-                template_profile=template_result.profile if template_result is not None else None,
-            )
-            report, _ = write_reports(report_obj, output_dir)
-        else:
-            report = write_placeholder_report([artifact], output_dir)
+        report_obj = check_pptx(
+            artifact,
+            classification=deck_ir.meta.classification,
+            template_profile=template_result.profile if template_result is not None else None,
+        )
+        report, _ = write_reports(report_obj, output_dir)
     print(f"document_ir: {document_path}")
     print(f"prompt: {prompt_path}")
     print(f"raw_ir: {raw_path}")

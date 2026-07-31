@@ -173,4 +173,4 @@ NGA 后，配置、鉴权、TLS 或响应错误会按 `E010-E014` 阻断，不�
 6. 便携版在干净 Windows 10/11 x64 断网机器上完成 Stub Word/PPT、模拟 NGA、真实 NGA 与 Office 打开验收。
 7. 正式推广包使用内网代码签名证书；首版无签名 ZIP 只允许受控内部试点。
 
-更完整的内网接入边界、NGA 替换点和验收要求见 `DEPLOY_AND_USAGE.md` 与 `docs/内网接入.md`。
+更完整的内网接入边界、NGA 替换点和验收要求见 `docs/DEPLOY_AND_USAGE.md` 与 `docs/内网接入.md`。

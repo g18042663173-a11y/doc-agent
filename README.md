@@ -105,7 +105,7 @@ python scripts/generate.py samples/input/需求说明.docx --generator stub --de
 
 `analyze` 只给基于 parser 实测数据的页数建议。`generate` 可选 `--depth 概览|标准|详细`
 和 `--pages N`;均不传时保持原有生成行为。详细档采用大纲加分批 DeckIR 的方式避免弱模型
-一次输出被截断,见 `GENERATION_NOTES.md`。
+一次输出被截断,见 `docs/GENERATION.md`。
 
 ## 图片、信息图与视觉规划
 
@@ -209,6 +209,29 @@ python scripts/record_demo.py
 
 详细说明见 `docs/交付资产说明.md`、`docs/使用说明.md`、`docs/内网接入.md`、`docs/验收手册.md`。
 
+## 仓库结构与开发规则
+
+- `backend/app/`: 正式 Python 业务模块；IR、解析、生成、渲染、lint 和安全边界按领域分包。
+- `backend/tests/`: Python 单元与集成测试；新增行为必须有对应回归用例。
+- `backend/schemas/`: 冻结的 IR/Profile/Plan JSON Schema 快照。
+- `desktop/`: .NET 8 WPF 客户端与原生 UI 测试。
+- `scripts/`: 可审计的验证、QA 和发布入口，不放唯一业务实现。
+- `experiments/`: 非生产实验及其独立依赖，禁止被正式后端导入。
+- `samples/`: 固定 fixture、正反 IR、golden 与演示资产。
+- `docs/`: 使用、架构、验收、生成策略和 Git 工作流。
+
+架构边界见 `ARCHITECTURE.md`，当前审计见 `REPO_AUDIT.md`，分批重构与回滚方法见
+`REFACTOR_PLAN.md`，分支和发布规则见 `docs/GIT_WORKFLOW.md`。
+
+## 常见问题
+
+- Python 版本错误：重新运行 `bootstrap_windows.ps1`，后续命令固定使用 `.venv\Scripts\python.exe`。
+- Graphviz 不可用：环境报告会标记确定性降级；普通 Word/PPT 生成仍可运行。
+- 模板返回 `E003`：模板含宏、OLE、ActiveX、外部关系或损坏部件，需在 PowerPoint 中清理后另存为 `.pptx`。
+- 图片返回 `A00x`：检查格式、大小、Manifest 哈希和 `image_ref`，系统不会把缺失图片静默变成占位框。
+- NGA 返回 `E010-E014`：在工作台重新保存、测试并启用配置；显式 NGA 失败不会回退 Stub。
+- 自动测试全绿但视觉未签字：必须继续执行 Windows Office 导出和人工终审。
+
 ## 人工边界
 
-自动全绿不等于最终交付通过。真实脱敏业务文件、Windows 断网 wheelhouse 安装、目标字体下的 PPTX/DOCX 视觉观感和内容语义仍需人工验收,见 `HUMAN_REVIEW.md`。
+自动全绿不等于最终交付通过。真实脱敏业务文件、Windows 断网 wheelhouse 安装、目标字体下的 PPTX/DOCX 视觉观感和内容语义仍需人工验收,见 `docs/HUMAN_REVIEW.md`。

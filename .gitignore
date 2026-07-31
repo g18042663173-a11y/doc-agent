@@ -1,4 +1,7 @@
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
 __pycache__/
 *.py[cod]
 .coverage
@@ -15,9 +18,16 @@ desktop/**/TestResults/
 desktop/runtime-cache/
 .DS_Store
 .coverage*
+*.log
+*.pid
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+*.p12
+settings.json
 task_plan*.md
-findings.md
-GENERATION_NOTES.md
-docs/临时*.md
 samples/input/real/*
 !samples/input/real/README.md

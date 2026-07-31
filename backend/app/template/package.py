@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import posixpath
 from pathlib import Path, PurePosixPath
-import re
 import zipfile
 from xml.etree import ElementTree
 
@@ -166,34 +165,6 @@ def _external_relationships(package: zipfile.ZipFile) -> list[str]:
             if relationship.attrib.get("TargetMode") == "External":
                 external.append(f"{name}:{relationship.attrib.get('Id', '?')}")
     return external
-
-
-def _unsafe_part_context(package: zipfile.ZipFile, unsafe_part: str) -> str:
-    sources: list[str] = []
-    for rels_name in package.namelist():
-        if not rels_name.endswith(".rels"):
-            continue
-        root = ElementTree.fromstring(package.read(rels_name))
-        source_part = _relationship_source_part(rels_name)
-        for relationship in root.findall(f"{{{REL_NS}}}Relationship"):
-            if relationship.attrib.get("TargetMode") == "External":
-                continue
-            target = relationship.attrib.get("Target", "")
-            if _resolve_relationship_target(source_part, target).casefold() == unsafe_part.casefold():
-                sources.append(source_part)
-    slide_numbers = sorted(
-        {
-            int(match.group(1))
-            for source in sources
-            if (match := re.fullmatch(r"ppt/slides/slide(\d+)\.xml", source, flags=re.IGNORECASE))
-        }
-    )
-    if slide_numbers:
-        pages = "、".join(str(number) for number in slide_numbers)
-        return f"第 {pages} 页"
-    if sources:
-        return f"的 {sorted(sources)[0]} 中"
-    return "中"
 
 
 def _relationship_source_part(rels_name: str) -> str:

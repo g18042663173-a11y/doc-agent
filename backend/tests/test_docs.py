@@ -55,15 +55,32 @@ def test_web_usage_doc_covers_stub_and_nga_switch() -> None:
 
 
 def test_generation_notes_cover_analysis_depth_and_intranet_truncation_strategy() -> None:
-    notes = (ROOT / "GENERATION_NOTES.md").read_text(encoding="utf-8")
+    notes = (ROOT / "docs" / "GENERATION.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "使用说明.md").read_text(encoding="utf-8")
     intranet = (ROOT / "docs" / "内网接入.md").read_text(encoding="utf-8")
 
     assert "analysis.json" in notes
-    assert "不属于\nWordIR、DocumentIR 或 DeckIR" in notes
-    assert "每批\n最多 4 页" in notes
+    assert "不属于 WordIR、DocumentIR 或 DeckIR" in notes
+    assert "每批最多 4 页" in notes
     assert "D001/D002/D006" in notes
     assert "generation_manifest.json" in notes
     assert "scripts/analyze.py" in usage
     assert "--depth 详细" in usage
     assert 'target: "word_ir" | "deck_ir" | "analysis"' in intranet
+
+
+def test_repository_governance_documents_lock_current_architecture() -> None:
+    audit = (ROOT / "REPO_AUDIT.md").read_text(encoding="utf-8")
+    architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    refactor_plan = (ROOT / "REFACTOR_PLAN.md").read_text(encoding="utf-8")
+    git_workflow = (ROOT / "docs" / "GIT_WORKFLOW.md").read_text(encoding="utf-8")
+
+    assert "backend/app/web_api.py" in audit
+    assert "IR 是唯一" in architecture
+    assert "experiments/html2pptx" in architecture
+    assert "不修改 DeckIR 2.0" in refactor_plan
+    assert "短生命周期" in git_workflow
+
+    assert (ROOT / "docs" / "design" / "TECH_REVIEW_DESIGN.md").is_file()
+    assert (ROOT / "docs" / "history" / "2026-07" / "AUDIT.md").is_file()
+    assert not (ROOT / "backend" / "app" / "web.py").exists()

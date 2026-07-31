@@ -384,6 +384,465 @@ class RateLimiter:
             return True
 
 
+def _require_desktop_session(session_token: str | None):
+    if session_token is None or not request.path.startswith("/api/"):
+        return None
+    supplied = request.headers.get("X-Workbench-Session", "")
+    if supplied and hmac.compare_digest(supplied, session_token):
+        return None
+    return _error_response(
+        "E001",
+        "桌面会话凭据无效。",
+        status=401,
+        stage="session_authentication",
+        loc="X-Workbench-Session",
+        suggestion="请重新启动文档生成工作台。",
+        retryable=False,
+    )
+
+
+def _health_response(root: Path, runner: JobRunner, manager: GeneratorManager, jobs: JobStore):
+    try:
+        free_bytes = shutil.disk_usage(root).free
+    except OSError:
+        free_bytes = 0
+    runner_state = runner.stats()
+    generator_snapshot = manager.snapshot()
+    ready = bool(runner_state["worker_alive"]) and free_bytes >= MIN_FREE_DISK_BYTES
+    payload = {
+        "status": "ok" if ready else "degraded",
+        "ready": ready,
+        "version": APP_VERSION,
+        "generator": generator_snapshot.name,
+        "generator_revision": generator_snapshot.revision,
+        "jobs": jobs.stats(),
+        "runner": runner_state,
+        "storage": {
+            "free_bytes": free_bytes,
+            "minimum_free_bytes": MIN_FREE_DISK_BYTES,
+        },
+        "recovery_warning_count": len(jobs.recovery_warnings),
+    }
+    return jsonify(payload), 200 if ready else 503
+
+
+def _diagnostics_response(root: Path, runner: JobRunner, manager: GeneratorManager, jobs: JobStore):
+    try:
+        free_bytes = shutil.disk_usage(root).free
+    except OSError:
+        free_bytes = 0
+    generator_snapshot = manager.snapshot()
+    return jsonify(
+        build_runtime_diagnostics(
+            app_version=APP_VERSION,
+            api_version=API_VERSION,
+            deck_ir_version="2.0",
+            generator=generator_snapshot.name,
+            generator_revision=generator_snapshot.revision,
+            jobs=jobs.stats(),
+            runner=runner.stats(),
+            storage_free_bytes=free_bytes,
+            storage_minimum_free_bytes=MIN_FREE_DISK_BYTES,
+        )
+    )
+
+
+def _update_generator_settings(app: Flask, manager: GeneratorManager):
+    try:
+        _enforce_rate_limit(app)
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise ApiRequestError(
+                "E010",
+                "生成器配置必须是 JSON 对象。",
+                status=400,
+                stage="configuring_generator",
+                retryable=False,
+            )
+        allowed = {"generator", "config", "credential", "clear_credential"}
+        if set(payload) - allowed:
+            raise ApiRequestError(
+                "E010",
+                "生成器配置包含未知字段。",
+                status=400,
+                stage="configuring_generator",
+                retryable=False,
+            )
+        generator_name = payload.get("generator")
+        if generator_name not in {"stub", "nga"}:
+            raise ApiRequestError(
+                "E010",
+                "generator 只支持 stub 或 nga。",
+                status=400,
+                stage="configuring_generator",
+                loc="generator",
+                retryable=False,
+            )
+        config = NgaHttpConfig.model_validate(payload.get("config")) if generator_name == "nga" else None
+        credential = payload.get("credential")
+        if credential is not None and not isinstance(credential, str):
+            raise ApiRequestError(
+                "E010",
+                "NGA credential 必须是字符串。",
+                status=400,
+                stage="configuring_generator",
+                loc="credential",
+                retryable=False,
+            )
+        clear_credential = payload.get("clear_credential", False)
+        if not isinstance(clear_credential, bool):
+            raise ApiRequestError(
+                "E010",
+                "clear_credential 必须是布尔值。",
+                status=400,
+                stage="configuring_generator",
+                loc="clear_credential",
+                retryable=False,
+            )
+        return jsonify(
+            manager.configure(
+                generator=generator_name,
+                config=config,
+                credential=credential,
+                clear_credential=clear_credential,
+            )
+        )
+    except ValidationError:
+        return _error_response(
+            "E010",
+            "NGA 配置字段无效。",
+            status=400,
+            stage="configuring_generator",
+            suggestion="请检查地址、接口路径、模型、超时和 TLS 设置。",
+            retryable=False,
+        )
+    except NgaGeneratorError as exc:
+        return _generator_error_response(exc, stage="configuring_generator")
+    except ApiRequestError as exc:
+        return _api_request_error_response(exc)
+
+
+def _test_generator_settings(app: Flask, manager: GeneratorManager):
+    try:
+        _enforce_rate_limit(app)
+        return jsonify({"connection": manager.test_draft(), **manager.status()})
+    except NgaGeneratorError as exc:
+        return _generator_error_response(exc, stage="testing_generator")
+
+
+def _activate_generator_settings(app: Flask, manager: GeneratorManager):
+    try:
+        _enforce_rate_limit(app)
+        return jsonify(manager.activate())
+    except NgaGeneratorError as exc:
+        return _generator_error_response(exc, stage="activating_generator", conflict=True)
+
+
+def _analyze_request(app: Flask, root: Path, manager: GeneratorManager):
+    analysis_dir: Path | None = None
+    try:
+        _enforce_rate_limit(app)
+        _ensure_disk_capacity(root)
+        analysis_dir = _new_workspace(root, prefix="analysis")
+        input_path = _save_upload(analysis_dir)
+        document = parse_file(input_path)
+        metrics = measure_document(document)
+        generator_snapshot = manager.snapshot()
+        raw = generator_snapshot.generator.generate(build_analysis_prompt(document, metrics), target="analysis")
+        result = repair_generated_text(
+            raw,
+            target="analysis",
+            generator=generator_snapshot.generator,
+            validator=lambda current: validate_analysis_text(
+                current,
+                expected_metrics=metrics,
+                expected_filename=document.source.filename,
+            ),
+        )
+        if not result.ok or result.value is None:
+            return _validation_error(result)
+        return jsonify(result.value.model_dump(mode="json"))
+    except Exception as exc:
+        return _analysis_error_response(exc)
+    finally:
+        if analysis_dir is not None:
+            shutil.rmtree(analysis_dir, ignore_errors=True)
+
+
+def _analysis_error_response(exc: Exception):
+    if isinstance(exc, ApiRequestError):
+        return _api_request_error_response(exc)
+    if isinstance(exc, ParseFailure):
+        return _error_response(
+            exc.code,
+            "源文件无法解析。",
+            status=422,
+            stage="parsing",
+            loc=exc.loc,
+            suggestion="请确认文件未损坏、扩展名与实际格式一致后重试。",
+            retryable=False,
+        )
+    if isinstance(exc, NgaGeneratorError):
+        return _generator_error_response(exc, stage="analyzing")
+    if isinstance(exc, TimeoutError):
+        return _error_response(
+            "E002",
+            "内容分析服务响应超时。",
+            status=504,
+            stage="analyzing",
+            suggestion="请稍后重试；若持续失败，请提供支持编号。",
+            retryable=True,
+        )
+    return _error_response(
+        "E001",
+        "分析任务执行失败。",
+        status=500,
+        stage="analyzing",
+        suggestion="请稍后重试；若持续失败，请提供支持编号。",
+        retryable=True,
+    )
+
+
+def _generate_request(
+    app: Flask,
+    root: Path,
+    jobs: JobStore,
+    runner: JobRunner,
+    manager: GeneratorManager,
+):
+    job_dir: Path | None = None
+    reserved = False
+    response_status = 202
+    try:
+        idempotency_key = _idempotency_key()
+        jobs.cleanup_expired()
+        if idempotency_key:
+            existing = jobs.get_by_idempotency_key(idempotency_key)
+            if existing is not None:
+                return jsonify(existing.payload()), 200 if existing.status in TERMINAL_JOB_STATUSES else 202
+        _enforce_rate_limit(app)
+        _ensure_disk_capacity(root)
+        target = _target_from_form()
+        depth = _depth_from_form(target)
+        if not runner.reserve():
+            raise ApiRequestError(
+                "E008",
+                "当前任务队列已满。",
+                status=429,
+                stage="queued",
+                suggestion="请等待已有任务完成后重试。",
+                retryable=True,
+            )
+        reserved = True
+        job_dir = _new_workspace(root, prefix="job")
+        input_path = _save_upload(job_dir)
+        template_path = _save_template_upload(job_dir, target)
+        asset_manifest_path = _save_asset_uploads(job_dir, target)
+    except ApiRequestError as exc:
+        if reserved:
+            runner.release_reservation()
+        if job_dir is not None:
+            shutil.rmtree(job_dir, ignore_errors=True)
+        return _api_request_error_response(exc)
+
+    try:
+        generator_snapshot = manager.snapshot()
+        job = jobs.create(
+            target=target,
+            depth=depth,
+            work_dir=job_dir,
+            generator_name=generator_snapshot.name,
+            generator_revision=generator_snapshot.revision,
+            template_path=template_path,
+            asset_manifest_path=asset_manifest_path,
+            idempotency_key=idempotency_key,
+        )
+        runner.submit_reserved(
+            QueuedJob(
+                job_id=job.job_id,
+                input_path=input_path,
+                generator=generator_snapshot.generator,
+                generator_revision=generator_snapshot.revision,
+            )
+        )
+        reserved = False
+    except ValueError:
+        if reserved:
+            runner.release_reservation()
+        shutil.rmtree(job_dir, ignore_errors=True)
+        existing = jobs.get_by_idempotency_key(idempotency_key or "")
+        if existing is None:
+            return _error_response(
+                "E001",
+                "任务创建失败。",
+                status=500,
+                stage="queued",
+                suggestion="请稍后重试；若持续失败，请提供支持编号。",
+                retryable=True,
+            )
+        job = existing
+        response_status = 200 if existing.status in TERMINAL_JOB_STATUSES else 202
+    return jsonify(job.payload()), response_status
+
+
+def _job_status_response(jobs: JobStore, job_id: str):
+    jobs.cleanup_expired()
+    payload = jobs.payload(job_id)
+    if payload is None:
+        return _error_response("E001", "任务不存在。", status=404)
+    return jsonify(payload)
+
+
+def _artifact_download_response(jobs: JobStore, job_id: str):
+    jobs.cleanup_expired()
+    job = jobs.get(job_id)
+    if job is None:
+        return _error_response("E001", "任务不存在。", status=404)
+    if job.status != "done" or job.artifact_path is None:
+        return _error_response("E001", "任务尚未完成，暂无可下载产物。", status=409)
+    if not job.artifact_path.is_file():
+        return _error_response("E001", "任务产物不存在。", status=404)
+    return send_file(job.artifact_path, as_attachment=True, download_name=job.artifact_path.name)
+
+
+def _audit_download_response(jobs: JobStore, job_id: str, asset: str):
+    if asset not in ALLOWED_DOWNLOAD_ASSETS:
+        return _error_response(
+            "E001",
+            "asset 不在允许下载的审计文件白名单中。",
+            status=400,
+        )
+    jobs.cleanup_expired()
+    job = jobs.get(job_id)
+    if job is None:
+        return _error_response("E001", "任务不存在。", status=404)
+    failure_report_available = job.status in {"failed", "canceled"} and asset == "failure-report"
+    if job.status != "done" and not failure_report_available:
+        return _error_response("E001", "任务尚未完成，暂无可下载审计文件。", status=409)
+    path = job.artifact_path if asset == "output" else job.assets.get(asset)
+    if path is None or not path.is_file():
+        return _error_response("E001", "审计文件不存在。", status=404)
+    return send_file(path, as_attachment=True, download_name=path.name)
+
+
+def _cancel_job_response(jobs: JobStore, job_id: str):
+    job = jobs.get(job_id)
+    if job is None:
+        return _error_response("E001", "任务不存在。", status=404, stage="canceling")
+    if job.status in TERMINAL_JOB_STATUSES:
+        return _error_response(
+            "E001",
+            "任务已结束，无法取消。",
+            status=409,
+            stage="canceling",
+            suggestion="请查看现有任务结果，或创建新的任务。",
+            retryable=False,
+        )
+    _fail_job(
+        job,
+        jobs,
+        code="E009",
+        stage="canceled",
+        retryable=False,
+        message="任务已取消。",
+        suggestion="可修改输入后创建新的任务。",
+        terminal_status="canceled",
+    )
+    return jsonify(jobs.payload(job_id)), 200
+
+
+def _register_session_guard(app: Flask, session_token: str | None) -> None:
+    @app.before_request
+    def require_desktop_session():
+        return _require_desktop_session(session_token)
+
+
+def _register_service_routes(
+    app: Flask,
+    root: Path,
+    jobs: JobStore,
+    runner: JobRunner,
+    manager: GeneratorManager,
+) -> None:
+    @app.get("/api/version")
+    def version():
+        return jsonify(
+            {
+                "service": "huawei-document-generator",
+                "app_version": APP_VERSION,
+                "api_version": API_VERSION,
+                "deck_ir_version": "2.0",
+                "failure_envelope_version": "1.0",
+                "job_state_version": "1.0",
+            }
+        )
+
+    @app.get("/api/health")
+    def health():
+        return _health_response(root, runner, manager, jobs)
+
+    @app.get("/api/diagnostics")
+    def diagnostics():
+        return _diagnostics_response(root, runner, manager, jobs)
+
+    @app.get("/api/jobs")
+    def list_jobs():
+        jobs.cleanup_expired()
+        return jsonify({"jobs": jobs.list_payloads()})
+
+
+def _register_generator_routes(app: Flask, manager: GeneratorManager) -> None:
+    @app.get("/api/settings/generator")
+    def generator_settings():
+        return jsonify(manager.status())
+
+    @app.put("/api/settings/generator")
+    def update_generator_settings():
+        return _update_generator_settings(app, manager)
+
+    @app.post("/api/settings/generator/test")
+    def test_generator_settings():
+        return _test_generator_settings(app, manager)
+
+    @app.post("/api/settings/generator/activate")
+    def activate_generator_settings():
+        return _activate_generator_settings(app, manager)
+
+
+def _register_generation_routes(
+    app: Flask,
+    root: Path,
+    jobs: JobStore,
+    runner: JobRunner,
+    manager: GeneratorManager,
+) -> None:
+    @app.post("/api/analyze")
+    def analyze():
+        return _analyze_request(app, root, manager)
+
+    @app.post("/api/generate")
+    def generate():
+        return _generate_request(app, root, jobs, runner, manager)
+
+
+def _register_job_routes(app: Flask, jobs: JobStore) -> None:
+    @app.get("/api/status/<job_id>")
+    def status(job_id: str):
+        return _job_status_response(jobs, job_id)
+
+    @app.get("/api/download/<job_id>")
+    def download(job_id: str):
+        return _artifact_download_response(jobs, job_id)
+
+    @app.get("/api/download/<job_id>/<asset>")
+    def download_asset(job_id: str, asset: str):
+        return _audit_download_response(jobs, job_id, asset)
+
+    @app.post("/api/jobs/<job_id>/cancel")
+    def cancel(job_id: str):
+        return _cancel_job_response(jobs, job_id)
+
+
 def create_api_app(
     *,
     work_dir: Path | None = None,
@@ -422,387 +881,11 @@ def create_api_app(
     app.config["API_RATE_LIMITER"] = RateLimiter(max_requests=rate_limit_per_minute)
     app.config["MAX_CONTENT_LENGTH"] = 260 * 1024 * 1024
 
-    @app.before_request
-    def require_desktop_session():
-        if session_token is None or not request.path.startswith("/api/"):
-            return None
-        supplied = request.headers.get("X-Workbench-Session", "")
-        if supplied and hmac.compare_digest(supplied, session_token):
-            return None
-        return _error_response(
-            "E001",
-            "桌面会话凭据无效。",
-            status=401,
-            stage="session_authentication",
-            loc="X-Workbench-Session",
-            suggestion="请重新启动文档生成工作台。",
-            retryable=False,
-        )
-
-    @app.get("/api/version")
-    def version():
-        return jsonify(
-            {
-                "service": "huawei-document-generator",
-                "app_version": APP_VERSION,
-                "api_version": API_VERSION,
-                "deck_ir_version": "2.0",
-                "failure_envelope_version": "1.0",
-                "job_state_version": "1.0",
-            }
-        )
-
-    @app.get("/api/health")
-    def health():
-        try:
-            free_bytes = shutil.disk_usage(root).free
-        except OSError:
-            free_bytes = 0
-        runner_state = runner.stats()
-        ready = bool(runner_state["worker_alive"]) and free_bytes >= MIN_FREE_DISK_BYTES
-        payload = {
-            "status": "ok" if ready else "degraded",
-            "ready": ready,
-            "version": APP_VERSION,
-            "generator": manager.snapshot().name,
-            "generator_revision": manager.snapshot().revision,
-            "jobs": jobs.stats(),
-            "runner": runner_state,
-            "storage": {
-                "free_bytes": free_bytes,
-                "minimum_free_bytes": MIN_FREE_DISK_BYTES,
-            },
-            "recovery_warning_count": len(jobs.recovery_warnings),
-        }
-        return jsonify(payload), 200 if ready else 503
-
-    @app.get("/api/diagnostics")
-    def diagnostics():
-        try:
-            free_bytes = shutil.disk_usage(root).free
-        except OSError:
-            free_bytes = 0
-        return jsonify(
-            build_runtime_diagnostics(
-                app_version=APP_VERSION,
-                api_version=API_VERSION,
-                deck_ir_version="2.0",
-                generator=manager.snapshot().name,
-                generator_revision=manager.snapshot().revision,
-                jobs=jobs.stats(),
-                runner=runner.stats(),
-                storage_free_bytes=free_bytes,
-                storage_minimum_free_bytes=MIN_FREE_DISK_BYTES,
-            )
-        )
-
-    @app.get("/api/jobs")
-    def list_jobs():
-        jobs.cleanup_expired()
-        return jsonify({"jobs": jobs.list_payloads()})
-
-    @app.get("/api/settings/generator")
-    def generator_settings():
-        return jsonify(manager.status())
-
-    @app.put("/api/settings/generator")
-    def update_generator_settings():
-        try:
-            _enforce_rate_limit(app)
-            payload = request.get_json(silent=True)
-            if not isinstance(payload, dict):
-                raise ApiRequestError(
-                    "E010",
-                    "生成器配置必须是 JSON 对象。",
-                    status=400,
-                    stage="configuring_generator",
-                    retryable=False,
-                )
-            allowed = {"generator", "config", "credential", "clear_credential"}
-            if set(payload) - allowed:
-                raise ApiRequestError(
-                    "E010",
-                    "生成器配置包含未知字段。",
-                    status=400,
-                    stage="configuring_generator",
-                    retryable=False,
-                )
-            generator_name = payload.get("generator")
-            if generator_name not in {"stub", "nga"}:
-                raise ApiRequestError(
-                    "E010",
-                    "generator 只支持 stub 或 nga。",
-                    status=400,
-                    stage="configuring_generator",
-                    loc="generator",
-                    retryable=False,
-                )
-            config = None
-            if generator_name == "nga":
-                config = NgaHttpConfig.model_validate(payload.get("config"))
-            credential = payload.get("credential")
-            if credential is not None and not isinstance(credential, str):
-                raise ApiRequestError(
-                    "E010",
-                    "NGA credential 必须是字符串。",
-                    status=400,
-                    stage="configuring_generator",
-                    loc="credential",
-                    retryable=False,
-                )
-            clear_credential = payload.get("clear_credential", False)
-            if not isinstance(clear_credential, bool):
-                raise ApiRequestError(
-                    "E010",
-                    "clear_credential 必须是布尔值。",
-                    status=400,
-                    stage="configuring_generator",
-                    loc="clear_credential",
-                    retryable=False,
-                )
-            return jsonify(
-                manager.configure(
-                    generator=generator_name,
-                    config=config,
-                    credential=credential,
-                    clear_credential=clear_credential,
-                )
-            )
-        except ValidationError:
-            return _error_response(
-                "E010",
-                "NGA 配置字段无效。",
-                status=400,
-                stage="configuring_generator",
-                suggestion="请检查地址、接口路径、模型、超时和 TLS 设置。",
-                retryable=False,
-            )
-        except NgaGeneratorError as exc:
-            return _generator_error_response(exc, stage="configuring_generator")
-        except ApiRequestError as exc:
-            return _api_request_error_response(exc)
-
-    @app.post("/api/settings/generator/test")
-    def test_generator_settings():
-        try:
-            _enforce_rate_limit(app)
-            return jsonify({"connection": manager.test_draft(), **manager.status()})
-        except NgaGeneratorError as exc:
-            return _generator_error_response(exc, stage="testing_generator")
-
-    @app.post("/api/settings/generator/activate")
-    def activate_generator_settings():
-        try:
-            _enforce_rate_limit(app)
-            return jsonify(manager.activate())
-        except NgaGeneratorError as exc:
-            return _generator_error_response(exc, stage="activating_generator", conflict=True)
-
-    @app.post("/api/analyze")
-    def analyze():
-        analysis_dir: Path | None = None
-        try:
-            _enforce_rate_limit(app)
-            _ensure_disk_capacity(root)
-            analysis_dir = _new_workspace(root, prefix="analysis")
-            input_path = _save_upload(analysis_dir)
-            document = parse_file(input_path)
-            metrics = measure_document(document)
-            generator_snapshot = manager.snapshot()
-            raw = generator_snapshot.generator.generate(build_analysis_prompt(document, metrics), target="analysis")
-            result = repair_generated_text(
-                raw,
-                target="analysis",
-                generator=generator_snapshot.generator,
-                validator=lambda current: validate_analysis_text(
-                    current,
-                    expected_metrics=metrics,
-                    expected_filename=document.source.filename,
-                ),
-            )
-            if not result.ok or result.value is None:
-                return _validation_error(result)
-            return jsonify(result.value.model_dump(mode="json"))
-        except ApiRequestError as exc:
-            return _api_request_error_response(exc)
-        except ParseFailure as exc:
-            return _error_response(
-                exc.code,
-                "源文件无法解析。",
-                status=422,
-                stage="parsing",
-                loc=exc.loc,
-                suggestion="请确认文件未损坏、扩展名与实际格式一致后重试。",
-                retryable=False,
-            )
-        except NgaGeneratorError as exc:
-            return _generator_error_response(exc, stage="analyzing")
-        except TimeoutError:
-            return _error_response(
-                "E002",
-                "内容分析服务响应超时。",
-                status=504,
-                stage="analyzing",
-                suggestion="请稍后重试；若持续失败，请提供支持编号。",
-                retryable=True,
-            )
-        except Exception:
-            return _error_response(
-                "E001",
-                "分析任务执行失败。",
-                status=500,
-                stage="analyzing",
-                suggestion="请稍后重试；若持续失败，请提供支持编号。",
-                retryable=True,
-            )
-        finally:
-            if analysis_dir is not None:
-                shutil.rmtree(analysis_dir, ignore_errors=True)
-
-    @app.post("/api/generate")
-    def generate():
-        job_dir: Path | None = None
-        reserved = False
-        try:
-            idempotency_key = _idempotency_key()
-            jobs.cleanup_expired()
-            if idempotency_key:
-                existing = jobs.get_by_idempotency_key(idempotency_key)
-                if existing is not None:
-                    return jsonify(existing.payload()), 200 if existing.status in TERMINAL_JOB_STATUSES else 202
-            _enforce_rate_limit(app)
-            _ensure_disk_capacity(root)
-            target = _target_from_form()
-            depth = _depth_from_form(target)
-            if not runner.reserve():
-                raise ApiRequestError(
-                    "E008",
-                    "当前任务队列已满。",
-                    status=429,
-                    stage="queued",
-                    suggestion="请等待已有任务完成后重试。",
-                    retryable=True,
-                )
-            reserved = True
-            job_dir = _new_workspace(root, prefix="job")
-            input_path = _save_upload(job_dir)
-            template_path = _save_template_upload(job_dir, target)
-            asset_manifest_path = _save_asset_uploads(job_dir, target)
-        except ApiRequestError as exc:
-            if reserved:
-                runner.release_reservation()
-            if job_dir is not None:
-                shutil.rmtree(job_dir, ignore_errors=True)
-            return _api_request_error_response(exc)
-
-        try:
-            generator_snapshot = manager.snapshot()
-            job = jobs.create(
-                target=target,
-                depth=depth,
-                work_dir=job_dir,
-                generator_name=generator_snapshot.name,
-                generator_revision=generator_snapshot.revision,
-                template_path=template_path,
-                asset_manifest_path=asset_manifest_path,
-                idempotency_key=idempotency_key,
-            )
-            runner.submit_reserved(
-                QueuedJob(
-                    job_id=job.job_id,
-                    input_path=input_path,
-                    generator=generator_snapshot.generator,
-                    generator_revision=generator_snapshot.revision,
-                )
-            )
-            reserved = False
-        except ValueError:
-            if reserved:
-                runner.release_reservation()
-            shutil.rmtree(job_dir, ignore_errors=True)
-            existing = jobs.get_by_idempotency_key(idempotency_key or "")
-            if existing is None:
-                return _error_response(
-                    "E001",
-                    "任务创建失败。",
-                    status=500,
-                    stage="queued",
-                    suggestion="请稍后重试；若持续失败，请提供支持编号。",
-                    retryable=True,
-                )
-            return jsonify(existing.payload()), 200 if existing.status in TERMINAL_JOB_STATUSES else 202
-        return jsonify(job.payload()), 202
-
-    @app.get("/api/status/<job_id>")
-    def status(job_id: str):
-        jobs.cleanup_expired()
-        payload = jobs.payload(job_id)
-        if payload is None:
-            return _error_response("E001", "任务不存在。", status=404)
-        return jsonify(payload)
-
-    @app.get("/api/download/<job_id>")
-    def download(job_id: str):
-        jobs.cleanup_expired()
-        job = jobs.get(job_id)
-        if job is None:
-            return _error_response("E001", "任务不存在。", status=404)
-        if job.status != "done" or job.artifact_path is None:
-            return _error_response("E001", "任务尚未完成，暂无可下载产物。", status=409)
-        if not job.artifact_path.is_file():
-            return _error_response("E001", "任务产物不存在。", status=404)
-        return send_file(job.artifact_path, as_attachment=True, download_name=job.artifact_path.name)
-
-    @app.get("/api/download/<job_id>/<asset>")
-    def download_asset(job_id: str, asset: str):
-        if asset not in ALLOWED_DOWNLOAD_ASSETS:
-            return _error_response(
-                "E001",
-                "asset 不在允许下载的审计文件白名单中。",
-                status=400,
-            )
-        jobs.cleanup_expired()
-        job = jobs.get(job_id)
-        if job is None:
-            return _error_response("E001", "任务不存在。", status=404)
-        if job.status != "done" and not (
-            job.status in {"failed", "canceled"} and asset == "failure-report"
-        ):
-            return _error_response("E001", "任务尚未完成，暂无可下载审计文件。", status=409)
-        if asset == "output":
-            path = job.artifact_path
-        else:
-            path = job.assets.get(asset)
-        if path is None or not path.is_file():
-            return _error_response("E001", "审计文件不存在。", status=404)
-        return send_file(path, as_attachment=True, download_name=path.name)
-
-    @app.post("/api/jobs/<job_id>/cancel")
-    def cancel(job_id: str):
-        job = jobs.get(job_id)
-        if job is None:
-            return _error_response("E001", "任务不存在。", status=404, stage="canceling")
-        if job.status in TERMINAL_JOB_STATUSES:
-            return _error_response(
-                "E001",
-                "任务已结束，无法取消。",
-                status=409,
-                stage="canceling",
-                suggestion="请查看现有任务结果，或创建新的任务。",
-                retryable=False,
-            )
-        _fail_job(
-            job,
-            jobs,
-            code="E009",
-            stage="canceled",
-            retryable=False,
-            message="任务已取消。",
-            suggestion="可修改输入后创建新的任务。",
-            terminal_status="canceled",
-        )
-        return jsonify(jobs.payload(job_id)), 200
-
+    _register_session_guard(app, session_token)
+    _register_service_routes(app, root, jobs, runner, manager)
+    _register_generator_routes(app, manager)
+    _register_generation_routes(app, root, jobs, runner, manager)
+    _register_job_routes(app, jobs)
     return app
 
 
@@ -987,38 +1070,49 @@ def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs:
     if job is None:
         return
     try:
-        if not jobs.update(job_id, status="running", stage="parsing", progress_percent=10):
-            return
-        document = parse_file(input_path)
-        (job.work_dir / "document_ir.json").write_text(document.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        _execute_job(job, input_path, generator, jobs)
+    except JobAborted:
+        return
+    except Exception as exc:
+        _handle_job_failure(job, jobs, exc)
 
-        embedded = extract_office_image_files(input_path, job.work_dir / "document_asset_raw")
-        if embedded:
-            asset_dir = job.work_dir / "assets"
-            normalize_assets(
-                embedded,
-                asset_dir,
-                source_type="document",
-                append=job.asset_manifest_path is not None,
-            )
-            if not jobs.update(job_id, asset_manifest_path=asset_dir / "asset_manifest.json"):
-                return
 
-        if not jobs.update(job_id, stage="generating", progress_percent=40):
-            return
-        artifact, report_payload, manifest = _generate_artifact(job, document, generator, jobs)
-        _cleanup_sensitive_job_files(job, keep_artifact=True)
-        jobs.update(
-            job_id,
-            status="done",
-            stage="done",
-            progress_percent=100,
-            artifact_path=artifact,
-            report=report_payload,
-            manifest=manifest,
-            template_path=None,
+def _execute_job(job: ApiJob, input_path: Path, generator: IRTextGenerator, jobs: JobStore) -> None:
+    if not jobs.update(job.job_id, status="running", stage="parsing", progress_percent=10):
+        return
+    document = parse_file(input_path)
+    (job.work_dir / "document_ir.json").write_text(document.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
+    embedded = extract_office_image_files(input_path, job.work_dir / "document_asset_raw")
+    if embedded:
+        asset_dir = job.work_dir / "assets"
+        normalize_assets(
+            embedded,
+            asset_dir,
+            source_type="document",
+            append=job.asset_manifest_path is not None,
         )
-    except ApiValidationError as exc:
+        if not jobs.update(job.job_id, asset_manifest_path=asset_dir / "asset_manifest.json"):
+            return
+
+    if not jobs.update(job.job_id, stage="generating", progress_percent=40):
+        return
+    artifact, report_payload, manifest = _generate_artifact(job, document, generator, jobs)
+    _cleanup_sensitive_job_files(job, keep_artifact=True)
+    jobs.update(
+        job.job_id,
+        status="done",
+        stage="done",
+        progress_percent=100,
+        artifact_path=artifact,
+        report=report_payload,
+        manifest=manifest,
+        template_path=None,
+    )
+
+
+def _handle_job_failure(job: ApiJob, jobs: JobStore, exc: Exception) -> None:
+    if isinstance(exc, ApiValidationError):
         _fail_job(
             job,
             jobs,
@@ -1029,7 +1123,7 @@ def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs:
             suggestion="请检查输入资料后重试；若持续失败，请下载失败报告并提供支持编号。",
             items=exc.items,
         )
-    except NgaGeneratorError as exc:
+    elif isinstance(exc, NgaGeneratorError):
         _fail_job(
             job,
             jobs,
@@ -1040,7 +1134,7 @@ def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs:
             suggestion=_generator_error_suggestion(exc),
             loc="generator",
         )
-    except TimeoutError:
+    elif isinstance(exc, TimeoutError):
         _fail_job(
             job,
             jobs,
@@ -1050,7 +1144,7 @@ def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs:
             message="内容生成服务响应超时。",
             suggestion="请稍后重试；若持续失败，请下载失败报告并提供支持编号。",
         )
-    except TemplateInputError as exc:
+    elif isinstance(exc, TemplateInputError):
         _fail_job(
             job,
             jobs,
@@ -1061,7 +1155,7 @@ def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs:
             suggestion="请更换合法 .pptx 模板后重试。",
             loc=exc.loc,
         )
-    except AssetError as exc:
+    elif isinstance(exc, AssetError):
         _fail_job(
             job,
             jobs,
@@ -1072,21 +1166,8 @@ def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs:
             suggestion="请检查图片格式、大小和引用后重试。",
             loc=exc.loc,
         )
-    except JobAborted:
-        return
-    except Exception:
-        if job.stage == "generating":
-            message = "内容生成服务未完成响应。"
-            suggestion = "请稍后重试；若持续失败，请下载失败报告并提供支持编号。"
-            retryable = True
-        elif job.stage == "parsing":
-            message = "源文件无法解析。"
-            suggestion = "请确认文件未损坏、扩展名与实际格式一致后重试。"
-            retryable = False
-        else:
-            message = "任务执行失败。"
-            suggestion = "请检查输入或模板后重试；若持续失败，请下载失败报告并提供支持编号。"
-            retryable = False
+    else:
+        message, suggestion, retryable = _unexpected_job_failure(job.stage)
         _fail_job(
             job,
             jobs,
@@ -1096,6 +1177,26 @@ def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs:
             message=message,
             suggestion=suggestion,
         )
+
+
+def _unexpected_job_failure(stage: str) -> tuple[str, str, bool]:
+    if stage == "generating":
+        return (
+            "内容生成服务未完成响应。",
+            "请稍后重试；若持续失败，请下载失败报告并提供支持编号。",
+            True,
+        )
+    if stage == "parsing":
+        return (
+            "源文件无法解析。",
+            "请确认文件未损坏、扩展名与实际格式一致后重试。",
+            False,
+        )
+    return (
+        "任务执行失败。",
+        "请检查输入或模板后重试；若持续失败，请下载失败报告并提供支持编号。",
+        False,
+    )
 
 
 def _fail_job(
@@ -1319,6 +1420,30 @@ def _generate_artifact(
     generator: IRTextGenerator,
     jobs: JobStore,
 ) -> tuple[Path, dict[str, Any], dict[str, Any] | None]:
+    context = _prepare_artifact_context(job, document, generator, jobs)
+    if job.target == "deck" and job.depth is not None:
+        return _generate_depth_deck_artifact(context)
+    return _generate_single_artifact(context)
+
+
+@dataclass
+class _ArtifactContext:
+    job: ApiJob
+    document: DocumentIR
+    generator: IRTextGenerator
+    jobs: JobStore
+    asset_registry: AssetRegistry | None
+    asset_manifest: Any | None
+    visual_plan: Any | None
+    visual_assets: dict[str, Path]
+
+
+def _prepare_artifact_context(
+    job: ApiJob,
+    document: DocumentIR,
+    generator: IRTextGenerator,
+    jobs: JobStore,
+) -> _ArtifactContext:
     asset_registry: AssetRegistry | None = None
     asset_manifest = None
     if job.asset_manifest_path is not None:
@@ -1335,76 +1460,102 @@ def _generate_artifact(
         visual_assets["visual-plan"] = visual_plan_path
         if job.asset_manifest_path is not None:
             visual_assets["asset-manifest"] = job.asset_manifest_path
-    if job.target == "deck" and job.depth is not None:
-        attempt = generate_deck(
-            document,
-            generator=generator,
-            options=GenerationOptions(depth=job.depth),
-            visual_plan=visual_plan,
-            asset_manifest=asset_manifest,
-        )
-        _ensure_job_active(job, jobs)
-        _write_deck_attempt(job.work_dir, attempt)
-        if not attempt.validation.ok or attempt.validation.value is None:
-            raise ApiValidationError(_validation_items(attempt.validation))
-        deck = attempt.validation.value
-        selection_path = _write_visual_selection(job, visual_plan, deck)
-        visual_assets["visual-selection-audit"] = selection_path
-        artifact, profile, template_assets, template_summary = _render_deck(
-            job, deck, jobs, asset_registry=asset_registry
-        )
-        if asset_registry is not None:
-            visual_assets["asset-usage-audit"] = job.work_dir / "asset_usage_audit.json"
-        jobs.update(job.job_id, stage="linting", progress_percent=90)
-        report = check_pptx(artifact, classification=deck.meta.classification, template_profile=profile)
-        write_reports(report, job.work_dir)
-        jobs.update(
-            job.job_id,
-            assets={**visual_assets, **template_assets, "lint": job.work_dir / "report.json"},
-            template_summary=template_summary,
-        )
-        return artifact, report.to_dict(), attempt.manifest()
+    return _ArtifactContext(
+        job=job,
+        document=document,
+        generator=generator,
+        jobs=jobs,
+        asset_registry=asset_registry,
+        asset_manifest=asset_manifest,
+        visual_plan=visual_plan,
+        visual_assets=visual_assets,
+    )
 
+
+def _generate_depth_deck_artifact(
+    context: _ArtifactContext,
+) -> tuple[Path, dict[str, Any], dict[str, Any] | None]:
+    job = context.job
+    attempt = generate_deck(
+        context.document,
+        generator=context.generator,
+        options=GenerationOptions(depth=job.depth),
+        visual_plan=context.visual_plan,
+        asset_manifest=context.asset_manifest,
+    )
+    _ensure_job_active(job, context.jobs)
+    _write_deck_attempt(job.work_dir, attempt)
+    if not attempt.validation.ok or attempt.validation.value is None:
+        raise ApiValidationError(_validation_items(attempt.validation))
+    deck = attempt.validation.value
+    selection_path = _write_visual_selection(job, context.visual_plan, deck)
+    context.visual_assets["visual-selection-audit"] = selection_path
+    artifact, profile, template_assets, template_summary = _render_deck(
+        job,
+        deck,
+        context.jobs,
+        asset_registry=context.asset_registry,
+    )
+    if context.asset_registry is not None:
+        context.visual_assets["asset-usage-audit"] = job.work_dir / "asset_usage_audit.json"
+    context.jobs.update(job.job_id, stage="linting", progress_percent=90)
+    report = check_pptx(artifact, classification=deck.meta.classification, template_profile=profile)
+    write_reports(report, job.work_dir)
+    context.jobs.update(
+        job.job_id,
+        assets={**context.visual_assets, **template_assets, "lint": job.work_dir / "report.json"},
+        template_summary=template_summary,
+    )
+    return artifact, report.to_dict(), attempt.manifest()
+
+
+def _generate_single_artifact(
+    context: _ArtifactContext,
+) -> tuple[Path, dict[str, Any], dict[str, Any] | None]:
+    job = context.job
     prompt = build_prompt(
         kind=job.target,
-        context=document,
-        visual_plan=visual_plan,
-        asset_manifest=asset_manifest,
+        context=context.document,
+        visual_plan=context.visual_plan,
+        asset_manifest=context.asset_manifest,
     )
     (job.work_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     generator_target = "word_ir" if job.target == "word" else "deck_ir"
-    raw = generator.generate(prompt, target=generator_target)
-    _ensure_job_active(job, jobs)
+    raw = context.generator.generate(prompt, target=generator_target)
+    _ensure_job_active(job, context.jobs)
     (job.work_dir / "raw_ir.txt").write_text(raw.strip() + "\n", encoding="utf-8")
-    validation = repair_ir_text(raw, target=generator_target, generator=generator)
-    _ensure_job_active(job, jobs)
+    validation = repair_ir_text(raw, target=generator_target, generator=context.generator)
+    _ensure_job_active(job, context.jobs)
     if not validation.ok or validation.value is None:
         raise ApiValidationError(_validation_items(validation))
 
-    jobs.update(job.job_id, stage="rendering", progress_percent=75)
+    context.jobs.update(job.job_id, stage="rendering", progress_percent=75)
     if job.target == "word":
         artifact = render_word_ir(validation.value, job.work_dir / "word.docx")
-        jobs.update(job.job_id, stage="linting", progress_percent=90)
+        context.jobs.update(job.job_id, stage="linting", progress_percent=90)
         report = check_docx(artifact, classification=validation.value.meta.classification)
         write_docx_reports(report, job.work_dir)
     else:
-        selection_path = _write_visual_selection(job, visual_plan, validation.value)
-        visual_assets["visual-selection-audit"] = selection_path
+        selection_path = _write_visual_selection(job, context.visual_plan, validation.value)
+        context.visual_assets["visual-selection-audit"] = selection_path
         artifact, profile, template_assets, template_summary = _render_deck(
-            job, validation.value, jobs, asset_registry=asset_registry
+            job,
+            validation.value,
+            context.jobs,
+            asset_registry=context.asset_registry,
         )
-        if asset_registry is not None:
-            visual_assets["asset-usage-audit"] = job.work_dir / "asset_usage_audit.json"
-        jobs.update(job.job_id, stage="linting", progress_percent=90)
+        if context.asset_registry is not None:
+            context.visual_assets["asset-usage-audit"] = job.work_dir / "asset_usage_audit.json"
+        context.jobs.update(job.job_id, stage="linting", progress_percent=90)
         report = check_pptx(
             artifact,
             classification=validation.value.meta.classification,
             template_profile=profile,
         )
         write_reports(report, job.work_dir)
-        jobs.update(
+        context.jobs.update(
             job.job_id,
-            assets={**visual_assets, **template_assets, "lint": job.work_dir / "report.json"},
+            assets={**context.visual_assets, **template_assets, "lint": job.work_dir / "report.json"},
             template_summary=template_summary,
         )
     return artifact, report.to_dict(), None

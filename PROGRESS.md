@@ -33,7 +33,7 @@
 
 - Started from the verified baseline recorded immediately before this task: `220 passed`; `scripts/verify.py` passed with parsers 92.56%, IR 92.68%, lint 91.99%, overall 89.27%.
 - The worktree already contains extensive prior user/task changes. They must be preserved; only targeted P0 edits will be added.
-- `TASKBOOK_GAP_PLAN.md` has 34 P0 atomic rows, but several are aggregate acceptance rows. Implementation is organized around five root workstreams: contract gates, CLI failures, prompt/stub flow, parser robustness, and lint scope.
+- `docs/history/2026-07/TASKBOOK_GAP_PLAN.md` has 34 P0 atomic rows, but several are aggregate acceptance rows. Implementation is organized around five root workstreams: contract gates, CLI failures, prompt/stub flow, parser robustness, and lint scope.
 - Captured immutable canonical schema baselines before editing: Word 1.0 `88cf3a...e9a9`, Document 1.0 `915a98...9604`, Deck 1.4 `d8683d...277`.
 - Contract batch decision: separate schema verification from explicit export, add version/hash history, and evolve DocumentIR 1.0 to 1.1 for format/content and preview-bound enforcement.
 - Contract batch complete: DocumentIR 1.1, positive/negative samples, schema history/version gate, and read-only verify behavior are implemented. Targeted result: `97 passed`; three schema snapshots independently verified.
@@ -41,7 +41,7 @@
 - Prompt/stub content batch complete. Independent parse runs now produce byte-identical prompts; sample-backed few-shot and `est_chars` are present; four-format stub outputs carry a source fact. Targeted result: `17 passed`.
 - Parser robustness batch complete. Targeted parser result: `44 passed`; actual >10MB/30,000-row worksheet is parsed under the 5-second test limit with bounded previews/scans.
 - PPTX lint scope batch complete. Expanded lint result: `45 passed`; renderer/sample result: `16 passed`; representative rendered layouts have no new warnings.
-- P0 closure complete: `TASKBOOK_GAP_PLAN.md` has 34/34 P0 rows marked ✅ with implementation/test evidence; `TASKBOOK_COMPLIANCE.md` was independently recounted as 106 satisfied, 22 partial, 13 unmet, with 25 remaining [A] items all belonging to P1/P2.
+- P0 closure complete: `docs/history/2026-07/TASKBOOK_GAP_PLAN.md` has 34/34 P0 rows marked ✅ with implementation/test evidence; `docs/history/2026-07/TASKBOOK_COMPLIANCE.md` was independently recounted as 106 satisfied, 22 partial, 13 unmet, with 25 remaining [A] items all belonging to P1/P2.
 - Final independent test: `271 passed in 188.84s`. Final verify: parsers 92.90%, IR 93.30%, lint 92.80%, overall 89.50%; four-format semantic E2E and C0 pass.
 - Schema verification is green for WordIR 1.0, DocumentIR 1.1, and DeckIR 1.4; ruff is green. No P0 was moved to [B].
 
@@ -60,7 +60,7 @@
 
 ## 2026-07-10 P0 independent-review remediation
 
-- Started from `P0_REVIEW.md`: 23/34 satisfied, 11/34 partial, with seven root defects and four dependent aggregate rows.
+- Started from `docs/history/2026-07/P0_REVIEW.md`: 23/34 satisfied, 11/34 partial, with seven root defects and four dependent aggregate rows.
 - Baseline from the independent review: `271 passed`; verify parsers 92.90%, IR 93.30%, lint 92.80%, overall 89.50%.
 - Worktree remains heavily dirty from earlier requested work; all remediation will be narrowly scoped and preserve unrelated changes.
 - Phase 12 started: reproduce each review finding with a regression test before changing implementation.
@@ -77,7 +77,7 @@
 - A new EOF worker-cleanup issue was found while raising branch coverage and fixed before closure; EOF now yields E001 and unconditional process cleanup.
 - DocumentIR 1.0 compatibility is implemented because supported workflows persist `document_ir.json`; migration is in-memory, warning-bearing, and still enforces all 1.1 constraints. Usage documentation and tests describe the no-auto-overwrite boundary.
 - `VERIFY_RUNNING` bypass is removed. Direct positive main testing plus external-env failure and low-coverage negatives replace the recursive verify test.
-- `P0_REVIEW.md` and `TASKBOOK_GAP_PLAN.md` now record 34/34 P0 rows as independently satisfied with current file/test evidence.
+- `docs/history/2026-07/P0_REVIEW.md` and `docs/history/2026-07/TASKBOOK_GAP_PLAN.md` now record 34/34 P0 rows as independently satisfied with current file/test evidence.
 - Final full pytest: `288 passed in 31.30s`. Final verify: parsers 93.30%, IR 93.37%, lint 92.88%, overall 89.58%; four-format multi-fact E2E and C0 pass. Schema snapshots/history and ruff are green; no skip/xfail.
 
 ## 2026-07-11 analyze first, then depth-controlled generation
@@ -143,12 +143,12 @@
 - A new EOF worker-cleanup issue was found while raising branch coverage and fixed before closure; EOF now yields E001 and unconditional process cleanup.
 - DocumentIR 1.0 compatibility is implemented because supported workflows persist `document_ir.json`; migration is in-memory, warning-bearing, and still enforces all 1.1 constraints. Usage documentation and tests describe the no-auto-overwrite boundary.
 - `VERIFY_RUNNING` bypass is removed. Direct positive main testing plus external-env failure and low-coverage negatives replace the recursive verify test.
-- `P0_REVIEW.md` and `TASKBOOK_GAP_PLAN.md` now record 34/34 P0 rows as independently satisfied with current file/test evidence.
+- `docs/history/2026-07/P0_REVIEW.md` and `docs/history/2026-07/TASKBOOK_GAP_PLAN.md` now record 34/34 P0 rows as independently satisfied with current file/test evidence.
 - Final full pytest: `288 passed in 31.30s`. Final verify: parsers 93.30%, IR 93.37%, lint 92.88%, overall 89.58%; four-format multi-fact E2E and C0 pass. Schema snapshots/history and ruff are green; no skip/xfail.
 
 ## 2026-07-20 Composite 组合页版式
 
-- 从提交 `fb0cd24` 的干净基线开始；设计报告为 `COMPOSITE_LAYOUT_DESIGN.md`。
+- 从提交 `fb0cd24` 的干净基线开始；设计报告为 `docs/design/COMPOSITE_LAYOUT_DESIGN.md`。
 - 用户确认首版仅嵌入 table / architecture_diagram / title_bullets / cards；process_flow 暂缓但保留后续扩展。
 - 先补回归测试，初始红灯为 `8 failed, 2 passed`，失败均来自尚未实现的 DeckIR 1.7 / composite。
 - DeckIR 已升到 1.7，1.4 / 1.5 / 1.6 可在内存迁移；CompositeRegion 复用四种既有 slide model，非法 table / architecture / bullets / cards 会递归返回原 D003-D006。
@@ -305,3 +305,30 @@
 ### 仍不确定
 
 - 自动测试无法证明目标内网网关完全兼容 OpenAI Chat Completions，也不能替代企业签名策略、目标机安全软件兼容性和 Office 最终审美结论。
+
+## 2026-08-01 仓库治理与分阶段架构重构
+
+### 已完成并通过验收
+
+- 在 `codex/repository-cleanup-20260731` 分支实施；基线提交为 `c9e000e99c30d1f680a0f5574296be0a51e02c1a`。迁移备份为 `dist/huawei_document_generator_windows_dev_20260731.zip`，SHA-256 为 `9aece8fcd42bfb555a21e26130238cdffb45080a280c08c292dacb09c9389245`。
+- 新增 `REPO_AUDIT.md`、`ARCHITECTURE.md`、`REFACTOR_PLAN.md`、`docs/GIT_WORKFLOW.md` 和 `docs/GENERATION.md`；当前运行文档统一归入 `docs/`，设计记录归入 `docs/design/`，历史审计归入 `docs/history/2026-07/`。
+- 删除无正式引用且已有替代实现的旧同步 Web、placeholder renderer、synthetic passing lint、空 storage 包和对应旧测试；删除由 Git 历史可恢复、已被当前文档替代的状态快照与周报。
+- `scripts/demo_e2e.py` 现在始终执行真实 PPT lint；`--lint` 仅作为隐藏兼容参数保留。CLI Word/PPT 分支已拆分，API 的路由装配、请求处理、任务失败映射和产物上下文已按职责分解，未修改公共路由、IR、错误码或输出格式。
+- 仓库治理特征测试锁定正式 `web_api` 入口、IR 唯一契约、HTML 实验隔离、文档归档位置和旧 Web 不得恢复。
+- 全量 Python 回归为 `595 passed, 15 skipped`。`scripts/verify.py` 通过，覆盖率 parsers 93.51%、IR 93.82%、lint 94.30%、整体 88.95%；`verify.ps1` 通过，Graphviz 使用系统 `dot.exe`，整体覆盖率 89.17%。
+- 可靠性报告 `output/qa/report.json` 共 610 项：595 通过、15 跳过、0 失败；JSON、JUnit 与静态 HTML 报告均已生成。
+- WPF 使用锁定 .NET SDK 8.0.423 完成 Release 构建，0 warning/0 error；xUnit/FlaUI 3/3 通过。Ruff、`git diff --check`、删除入口残留扫描和敏感配置扫描均通过。
+
+### 降级或近似
+
+- `pptx_renderer.py`、`pptx_lint.py` 和 WPF `MainWindow.xaml.cs` 仍偏大。本轮没有为减少行数而切割高风险 Office/视觉逻辑；继续拆分须先补稳定的 Office 视觉 golden 与往返保存基线，已列为 R7 独立后续任务。
+- Composio 未配置且本次未获得外部 issue/PR 权限，因此按 `codebase-migrate` 的本地小批次、逐批测试与回滚原则执行，没有创建远程事项。
+
+### 阻塞待人输入
+
+- 真实脱敏业务语料、授权图片、PowerPoint 最终视觉签字、全新 Windows 物理断网验收、真实 NGA 配置及正式代码签名仍按 `QUESTIONS.md` 执行，自动测试不能替代。
+- 本地存在多个 `backup-*` 分支且没有 release tag；需人工确认保留策略后再归档或删除。Codex checkpoint refs 有宿主工具级损坏警告，本轮没有直接编辑 `.git`。
+
+### 仍不确定
+
+- 自动化范围内未发现重构引入的行为回归。目标内网 NGA 协议差异、终端安全软件对便携 EXE 的影响及 Office 最终审美，只能在交付环境继续确认。

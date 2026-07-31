@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from argparse import Namespace
 import sys
 from pathlib import Path
 
@@ -37,18 +38,25 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.type == "word":
-        result = validate_word_ir_text(raw)
-        if not result.ok or result.value is None:
-            print(format_validation_result(result), file=sys.stderr)
-            return 1
-        try:
-            output = render_word_ir(result.value, args.output)
-        except Exception as exc:
-            emit_cli_failure(io_failure(code="E001", loc="output", operation="渲染或保存 DOCX", exc=exc))
-            return 1
-        print(output)
-        return 0
+        return _render_word(args, raw)
+    return _render_deck(args, raw)
 
+
+def _render_word(args: Namespace, raw: str) -> int:
+    result = validate_word_ir_text(raw)
+    if not result.ok or result.value is None:
+        print(format_validation_result(result), file=sys.stderr)
+        return 1
+    try:
+        output = render_word_ir(result.value, args.output)
+    except Exception as exc:
+        emit_cli_failure(io_failure(code="E001", loc="output", operation="渲染或保存 DOCX", exc=exc))
+        return 1
+    print(output)
+    return 0
+
+
+def _render_deck(args: Namespace, raw: str) -> int:
     result = validate_deck_ir_text(raw)
     if not result.ok or result.value is None:
         print(format_validation_result(result), file=sys.stderr)

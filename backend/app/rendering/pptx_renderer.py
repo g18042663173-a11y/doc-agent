@@ -3287,13 +3287,6 @@ def _add_text(
     return shape
 
 
-def _format_cell(cell, theme: dict, *, bold: bool = False, size: float | None = None, color_key: str = "body") -> None:
-    for paragraph in cell.text_frame.paragraphs:
-        _format_paragraph(paragraph, theme)
-        for run in paragraph.runs:
-            _format_run(run, theme, size=size or theme["font_sizes_pt"]["note"], bold=bold, color_key=color_key)
-
-
 def _format_paragraph(paragraph, theme: dict) -> None:
     paragraph.line_spacing = theme["typography"]["line_spacing"]
 
