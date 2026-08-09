@@ -7,12 +7,13 @@ import time
 from typing import Callable, Literal
 
 from app.generators.interface import IRTextGenerator
-from app.generators.nga import NgaGenerator, NgaGeneratorError, NgaHttpConfig
+from app.generators.nga import NgaCliConfig, NgaGenerator, NgaGeneratorError, NgaHttpConfig
 from app.generators.stub import StubGenerator
 
 
 GeneratorName = Literal["stub", "nga"]
-NgaFactory = Callable[[NgaHttpConfig, str], IRTextGenerator]
+GeneratorMode = Literal["auto", "strict"]
+NgaFactory = Callable[[NgaHttpConfig | NgaCliConfig, str], IRTextGenerator]
 
 
 @dataclass(frozen=True)
@@ -20,13 +21,14 @@ class GeneratorSnapshot:
     name: str
     revision: int
     generator: IRTextGenerator
+    mode: GeneratorMode = "auto"
 
 
 @dataclass
 class _Draft:
     name: GeneratorName
     revision: int
-    config: NgaHttpConfig | None
+    config: NgaHttpConfig | NgaCliConfig | None
     credential: str | None
     tested: bool
     latency_ms: int | None = None
@@ -40,13 +42,17 @@ class GeneratorManager:
         *,
         initial_generator: IRTextGenerator | None = None,
         nga_factory: NgaFactory | None = None,
+        mode: GeneratorMode = "auto",
     ) -> None:
+        if mode not in {"auto", "strict"}:
+            raise NgaGeneratorError("E010", "Generator mode must be auto or strict.", retryable=False)
         generator = initial_generator or StubGenerator()
         self._lock = Lock()
         self._counter = 0
         self._active = GeneratorSnapshot(
             name=generator.name,
             revision=self._counter,
+            mode=mode,
             generator=generator,
         )
         initial_name: GeneratorName = "nga" if generator.name == "nga" else "stub"
@@ -58,18 +64,22 @@ class GeneratorManager:
             tested=initial_name == "stub",
         )
         self._active_config = self._draft.config
+        self._draft_mode: GeneratorMode = mode
         self._nga_factory = nga_factory or (lambda config, credential: NgaGenerator(config=config, token=credential))
 
     def configure(
         self,
         *,
         generator: GeneratorName,
-        config: NgaHttpConfig | None = None,
+        config: NgaHttpConfig | NgaCliConfig | None = None,
         credential: str | None = None,
         clear_credential: bool = False,
+        mode: GeneratorMode | None = None,
     ) -> dict:
         if generator not in {"stub", "nga"}:
             raise NgaGeneratorError("E010", "Generator selection is invalid.", retryable=False)
+        if mode is not None and mode not in {"auto", "strict"}:
+            raise NgaGeneratorError("E010", "Generator mode must be auto or strict.", retryable=False)
         if generator == "nga" and config is None:
             raise NgaGeneratorError("E010", "NGA configuration is required.", retryable=False)
         if credential is not None:
@@ -93,6 +103,8 @@ class GeneratorManager:
                 credential=next_credential,
                 tested=generator == "stub",
             )
+            if mode is not None:
+                self._draft_mode = mode
             return self._status_unlocked()
 
     def test_draft(self) -> dict[str, int | bool | str]:
@@ -100,8 +112,10 @@ class GeneratorManager:
             draft = _Draft(**self._draft.__dict__)
         if draft.name == "stub":
             return {"ok": True, "generator": "stub", "revision": draft.revision, "latency_ms": 0}
-        if draft.config is None or not draft.credential:
-            raise NgaGeneratorError("E010", "NGA configuration or credential is missing.", retryable=False)
+        if draft.config is None:
+            raise NgaGeneratorError("E010", "NGA configuration is missing.", retryable=False)
+        if isinstance(draft.config, NgaHttpConfig) and not draft.credential:
+            raise NgaGeneratorError("E010", "NGA credential is missing.", retryable=False)
 
         generator = self._nga_factory(draft.config, draft.credential)
         started = time.monotonic()
@@ -136,8 +150,10 @@ class GeneratorManager:
         if draft.name == "stub":
             generator: IRTextGenerator = StubGenerator()
         else:
-            if draft.config is None or not draft.credential:
-                raise NgaGeneratorError("E010", "NGA configuration or credential is missing.", retryable=False)
+            if draft.config is None:
+                raise NgaGeneratorError("E010", "NGA configuration is missing.", retryable=False)
+            if isinstance(draft.config, NgaHttpConfig) and not draft.credential:
+                raise NgaGeneratorError("E010", "NGA credential is missing.", retryable=False)
             generator = self._nga_factory(draft.config, draft.credential)
         with self._lock:
             if self._draft.revision != draft.revision:
@@ -145,6 +161,7 @@ class GeneratorManager:
             self._active = GeneratorSnapshot(
                 name=draft.name,
                 revision=draft.revision,
+                mode=self._draft_mode,
                 generator=generator,
             )
             self._active_config = draft.config
@@ -162,12 +179,14 @@ class GeneratorManager:
         active: dict = {
             "name": self._active.name,
             "revision": self._active.revision,
+            "mode": self._active.mode,
         }
         if self._active_config is not None:
             active["config"] = self._active_config.model_dump(mode="json")
         draft: dict = {
             "name": self._draft.name,
             "revision": self._draft.revision,
+            "mode": self._draft_mode,
             "credential_configured": bool(self._draft.credential),
             "tested": self._draft.tested,
             "latency_ms": self._draft.latency_ms,

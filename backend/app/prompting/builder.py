@@ -88,6 +88,7 @@ def build_prompt(
     depth: Depth | None = None,
     pages: int | None = None,
     genre: str | None = None,
+    theme: str | None = None,
     visual_plan: VisualPlan | None = None,
     asset_manifest: AssetManifest | None = None,
 ) -> str:
@@ -131,6 +132,8 @@ def build_prompt(
             + "\n[视觉决策纪律] VisualPlan 只提供候选和理由；仍只能输出通过下方 DeckIR Schema 的 JSON。"
             "没有适合视觉时允许使用文字页，不得强行配图或编造资产引用。"
         )
+    if kind == "deck" and theme is not None:
+        prompt += _theme_section(theme)
     if kind == "deck" and asset_manifest is not None:
         prompt += "\n[可用图片资产]\n" + json.dumps(
             [
@@ -668,3 +671,26 @@ def _drop_sheet_tail(sheets: list) -> bool:
 
 def _template_text() -> str:
     return (TEMPLATE_DIR / "ir_generation.txt").read_text(encoding="utf-8")
+
+
+def _theme_section(theme: str) -> str:
+    """Append the named theme's style guide so the generator aligns IR content with it.
+
+    Mirrors the design-system mechanism of open-kimi-ppt: a named preset is the
+    single style source for that run. hw_v1 (legacy default) carries no guide.
+    """
+    from app.rendering.theme import load_theme
+
+    try:
+        theme_data = load_theme(theme)
+    except (FileNotFoundError, OSError):
+        return ""
+    style_guide = theme_data.get("style_guide")
+    if not style_guide:
+        return ""
+    return (
+        f"\n[主题风格 {theme}]\n"
+        f"{style_guide}\n"
+        "[主题纪律] 页面内容、版式选择与信息密度应与上述主题风格一致；"
+        "仍只能输出通过下方 DeckIR Schema 的 JSON。"
+    )

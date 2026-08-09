@@ -189,6 +189,12 @@ public sealed class GeneratorState
     [JsonPropertyName("revision")]
     public int Revision { get; set; }
 
+    [JsonPropertyName("mode")]
+    public string Mode { get; set; } = "auto";
+
+    [JsonPropertyName("fallback")]
+    public bool Fallback { get; set; }
+
     [JsonPropertyName("credential_configured")]
     public bool CredentialConfigured { get; set; }
 

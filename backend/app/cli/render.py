@@ -74,6 +74,7 @@ def _render_deck(args: Namespace, raw: str) -> int:
         report = check_pptx(
             output,
             classification=result.value.meta.classification,
+            theme_name=result.value.meta.theme,
             template_profile=template_result.profile if template_result is not None else None,
         )
     except AssetError as exc:

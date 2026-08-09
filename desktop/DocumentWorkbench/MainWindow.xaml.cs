@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         ["asset-usage-audit"] = "图片使用审计",
         ["visual-plan"] = "视觉计划",
         ["visual-selection-audit"] = "视觉选择审计",
+        ["deck-ir"] = "结构化内容（DeckIR，可改后重渲染）",
     };
 
     private readonly BackendProcessHost _backend;
@@ -54,6 +55,59 @@ public partial class MainWindow : Window
         DataContext = this;
         AssetListBox.ItemsSource = _assetPaths;
         JobsPathTextBox.Text = Path.Combine(backend.ApplicationDataDirectory, "jobs");
+        BuildStageTrack();
+        SystemParameters.StaticPropertyChanged += SystemParameters_StaticPropertyChanged;
+        SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
+    }
+
+    // 与后端任务阶段一一对应（StageLabels），仅做可视化，不伪造进度
+    private static readonly string[] StageOrder =
+    [
+        "queued", "parsing", "normalizing_assets", "planning_visuals", "generating",
+        "profiling_template", "planning_template", "rendering", "linting", "validating_package",
+    ];
+
+    private void BuildStageTrack()
+    {
+        StageTrackText.Inlines.Clear();
+        for (var index = 0; index < StageOrder.Length; index++)
+        {
+            if (index > 0)
+            {
+                StageTrackText.Inlines.Add(new System.Windows.Documents.Run(" → ")
+                {
+                    Foreground = (Brush)FindResource("FaintTextBrush"),
+                });
+            }
+            StageTrackText.Inlines.Add(new System.Windows.Documents.Run(StageLabels.Value(StageOrder[index])));
+        }
+        UpdateStageTrack("queued", "pending");
+    }
+
+    private void UpdateStageTrack(string stageKey, string status)
+    {
+        var current = Array.IndexOf(StageOrder, stageKey);
+        var runIndex = 0;
+        foreach (var inline in StageTrackText.Inlines)
+        {
+            if (inline is not System.Windows.Documents.Run run || run.Text == " → ")
+            {
+                continue;
+            }
+            var state = status == "done" ? 2
+                : current < 0 ? 0
+                : runIndex < current ? 2
+                : runIndex == current ? 1
+                : 0;
+            run.Foreground = (Brush)FindResource(state switch
+            {
+                1 => "AccentOnDarkBrush",
+                2 => "MutedTextBrush",
+                _ => "FaintTextBrush",
+            });
+            run.FontWeight = state == 1 ? FontWeights.SemiBold : FontWeights.Normal;
+            runIndex++;
+        }
     }
 
     public ObservableCollection<JobInfo> Jobs { get; }
@@ -102,6 +156,8 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        SystemParameters.StaticPropertyChanged -= SystemParameters_StaticPropertyChanged;
+        SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
         _lifetime.Cancel();
         _api.Dispose();
     }
@@ -123,7 +179,7 @@ public partial class MainWindow : Window
 
         if (!_settings.NgaEnabled)
         {
-            await _api.ConfigureGeneratorAsync("stub", null, null, false, _lifetime.Token);
+            await _api.ConfigureGeneratorAsync("stub", null, null, false, _settings.GeneratorMode, _lifetime.Token);
             await _api.ActivateGeneratorAsync(_lifetime.Token);
             _generatorBlocked = false;
             GeneratorStateText.Text = "生成器：stub";
@@ -140,7 +196,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await _api.ConfigureGeneratorAsync("nga", _settings.Nga, token, false, _lifetime.Token);
+            await _api.ConfigureGeneratorAsync("nga", _settings.Nga, token, false, _settings.GeneratorMode, _lifetime.Token);
             var tested = await _api.TestGeneratorAsync(_lifetime.Token);
             await _api.ActivateGeneratorAsync(_lifetime.Token);
             _ngaDraftTested = true;
@@ -167,11 +223,14 @@ public partial class MainWindow : Window
 
     private void ApplySettingsToControls()
     {
-        SelectComboByTag(DefaultTargetComboBox, _settings.DefaultTarget);
-        SelectComboByText(DefaultDepthComboBox, _settings.DefaultDepth);
-        SelectComboByTag(TargetComboBox, _settings.DefaultTarget);
-        SelectComboByText(DepthComboBox, _settings.DefaultDepth);
-
+        SelectComboByTag(AppearanceComboBox, _settings.Appearance);
+        ApplyAppearance(_settings.Appearance);
+        SelectComboByTag(DefaultTargetComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTarget) ? "deck" : _settings.DefaultTarget);
+        SelectComboByText(DefaultDepthComboBox, string.IsNullOrWhiteSpace(_settings.DefaultDepth) ? "标准" : _settings.DefaultDepth);
+        SelectComboByTag(DefaultThemeComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTheme) ? "hw_v1" : _settings.DefaultTheme);
+        SelectComboByTag(GenerateThemeComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTheme) ? "hw_v1" : _settings.DefaultTheme);
+        SelectComboByTag(NgaTransportComboBox, string.IsNullOrWhiteSpace(_settings.Nga.Transport) ? "http" : _settings.Nga.Transport);
+        NgaCliPathTextBox.Text = string.IsNullOrWhiteSpace(_settings.Nga.CliPath) ? "nga" : _settings.Nga.CliPath;
         NgaBaseUrlTextBox.Text = _settings.Nga.BaseUrl;
         NgaEndpointTextBox.Text = string.IsNullOrWhiteSpace(_settings.Nga.EndpointPath)
             ? "/v1/chat/completions"
@@ -186,7 +245,30 @@ public partial class MainWindow : Window
         NgaCredentialStateText.Text = CredentialManager.ReadNgaToken() is null
             ? "未保存凭据"
             : "Token 已保存在 Windows 凭据管理器";
+        ApplyNgaTransportVisibility();
         UpdateDeckOptionsVisibility();
+    }
+
+    private void ApplyNgaTransportVisibility()
+    {
+        var isCli = ComboTag(NgaTransportComboBox, "http") == "cli";
+        NgaCliPathLabel.Visibility = isCli ? Visibility.Visible : Visibility.Collapsed;
+        NgaCliPathTextBox.Visibility = isCli ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var name in new[] { "NgaBaseUrlLabel", "NgaEndpointLabel", "NgaTokenLabel", "NgaResponseFormatLabel", "NgaCaLabel" })
+        {
+            var label = FindName(name) as TextBlock;
+            if (label is not null) label.Visibility = isCli ? Visibility.Collapsed : Visibility.Visible;
+        }
+        foreach (var name in new[] { "NgaBaseUrlTextBox", "NgaEndpointTextBox", "NgaTokenPasswordBox", "NgaResponseFormatComboBox", "NgaVerifyTlsCheckBox", "NgaAllowHttpCheckBox", "NgaCaPathTextBox", "NgaCaRow" })
+        {
+            var control = FindName(name) as UIElement;
+            if (control is not null) control.Visibility = isCli ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+
+    private void NgaTransport_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplyNgaTransportVisibility();
     }
 
     private void SetServiceState(bool connected, string text)
@@ -396,6 +478,7 @@ public partial class MainWindow : Window
                 _inputPath,
                 target,
                 depth,
+                target == "deck" ? ComboTag(GenerateThemeComboBox, "hw_v1") : null,
                 target == "deck" ? _templatePath : null,
                 target == "deck" ? _assetPaths.ToList() : [],
                 $"desktop-{Guid.NewGuid():N}",
@@ -460,6 +543,8 @@ public partial class MainWindow : Window
         JobProgressBar.Value = Math.Clamp(job.Progress.Percent, 0, 100);
         ProgressPercentText.Text = $"{Math.Clamp(job.Progress.Percent, 0, 100)}%";
         ProgressTitleText.Text = StageLabels.Value(job.Progress.Stage);
+        ProgressGeneratorText.Text = GeneratorStateText.Text;
+        UpdateStageTrack(job.Progress.Stage, job.Status);
         CancelButton.Visibility = job.Status is "pending" or "running" ? Visibility.Visible : Visibility.Collapsed;
         SetServiceState(true, "本地服务已连接");
 
@@ -660,12 +745,70 @@ public partial class MainWindow : Window
 
     private async void SaveGeneralSettings_Click(object sender, RoutedEventArgs e)
     {
+        _settings.Appearance = AppearanceResolver.Normalize(ComboTag(AppearanceComboBox, AppearanceResolver.System));
         _settings.DefaultTarget = ComboTag(DefaultTargetComboBox, "deck");
         _settings.DefaultDepth = CurrentComboText(DefaultDepthComboBox);
+        _settings.DefaultTheme = ComboTag(DefaultThemeComboBox, "hw_v1");
         await _settingsStore.SaveAsync(_settings);
         SelectComboByTag(TargetComboBox, _settings.DefaultTarget);
         SelectComboByText(DepthComboBox, _settings.DefaultDepth);
+        SelectComboByTag(GenerateThemeComboBox, _settings.DefaultTheme);
         ShowMessage("常规设置已保存。", false);
+    }
+
+    private void AppearanceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (AppearanceComboBox is null || !IsLoaded)
+        {
+            return;
+        }
+        ApplyAppearance(ComboTag(AppearanceComboBox, AppearanceResolver.System));
+    }
+
+    private void ApplyAppearance(string mode)
+    {
+        var source = new Uri(
+            AppearanceResolver.PaletteResource(
+                mode,
+                SystemParameters.HighContrast,
+                AppearanceResolver.SystemUsesLightTheme()),
+            UriKind.Relative);
+        var palette = Resources.MergedDictionaries.FirstOrDefault(
+            dict => dict.Source?.OriginalString.Contains("Palette.") == true);
+        if (palette is null)
+        {
+            Resources.MergedDictionaries.Insert(0, new ResourceDictionary { Source = source });
+        }
+        else
+        {
+            palette.Source = source;
+        }
+        BuildStageTrack();
+    }
+
+    private void SystemParameters_StaticPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SystemParameters.HighContrast))
+        {
+            RefreshSystemAppearance();
+        }
+    }
+
+    private void SystemEvents_UserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category is UserPreferenceCategory.Color or UserPreferenceCategory.General or UserPreferenceCategory.VisualStyle)
+        {
+            RefreshSystemAppearance();
+        }
+    }
+
+    private void RefreshSystemAppearance()
+    {
+        if (!IsLoaded)
+        {
+            return;
+        }
+        _ = Dispatcher.BeginInvoke(() => ApplyAppearance(_settings.Appearance));
     }
 
     private NgaStoredConfig ReadNgaControls()
@@ -679,12 +822,33 @@ public partial class MainWindow : Window
         {
             throw new InvalidDataException("重试次数必须是 0-5。");
         }
+        var transport = ComboTag(NgaTransportComboBox, "http");
+        if (transport == "cli")
+        {
+            if (string.IsNullOrWhiteSpace(NgaModelTextBox.Text))
+            {
+                throw new InvalidDataException("模型不能为空。");
+            }
+            if (string.IsNullOrWhiteSpace(NgaCliPathTextBox.Text))
+            {
+                throw new InvalidDataException("NGA 命令行路径不能为空。");
+            }
+            return new NgaStoredConfig
+            {
+                Transport = "cli",
+                CliPath = NgaCliPathTextBox.Text.Trim(),
+                Model = NgaModelTextBox.Text.Trim(),
+                TimeoutSeconds = timeout,
+                MaxRetries = retries,
+            };
+        }
         if (string.IsNullOrWhiteSpace(NgaBaseUrlTextBox.Text) || string.IsNullOrWhiteSpace(NgaModelTextBox.Text))
         {
             throw new InvalidDataException("服务地址和模型不能为空。");
         }
         return new NgaStoredConfig
         {
+            Transport = "http",
             BaseUrl = NgaBaseUrlTextBox.Text.Trim(),
             EndpointPath = NgaEndpointTextBox.Text.Trim(),
             Model = NgaModelTextBox.Text.Trim(),
@@ -713,7 +877,7 @@ public partial class MainWindow : Window
         _settings.Nga = config;
         await _settingsStore.SaveAsync(_settings);
         _ngaDraftTested = false;
-        var response = await _api.ConfigureGeneratorAsync("nga", config, token, false, _lifetime.Token);
+        var response = await _api.ConfigureGeneratorAsync("nga", config, token, false, _settings.GeneratorMode, _lifetime.Token);
         NgaCredentialStateText.Text = "Token 已保存在 Windows 凭据管理器";
         NgaOperationStatusText.Text = "配置已保存，启用前需要测试连接。";
         return response;
@@ -790,7 +954,7 @@ public partial class MainWindow : Window
         try
         {
             SetNgaControlsEnabled(false);
-            await _api.ConfigureGeneratorAsync("stub", null, null, false, _lifetime.Token);
+            await _api.ConfigureGeneratorAsync("stub", null, null, false, _settings.GeneratorMode, _lifetime.Token);
             await _api.ActivateGeneratorAsync(_lifetime.Token);
             _settings.NgaEnabled = false;
             await _settingsStore.SaveAsync(_settings);
@@ -820,7 +984,7 @@ public partial class MainWindow : Window
         }
         try
         {
-            await _api.ConfigureGeneratorAsync("stub", null, null, false, _lifetime.Token);
+            await _api.ConfigureGeneratorAsync("stub", null, null, false, _settings.GeneratorMode, _lifetime.Token);
             await _api.ActivateGeneratorAsync(_lifetime.Token);
             CredentialManager.DeleteNgaToken();
             _settings.NgaEnabled = false;
@@ -913,15 +1077,22 @@ public partial class MainWindow : Window
 
     private void TargetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateDeckOptionsVisibility();
 
+    private void AdvancedToggle_Click(object sender, RoutedEventArgs e) => UpdateDeckOptionsVisibility();
+
+    private void AdvancedToggle_Checked(object sender, RoutedEventArgs e) => UpdateDeckOptionsVisibility();
+
     private void UpdateDeckOptionsVisibility()
     {
-        if (DeckOptionsPanel is null || DepthPanel is null)
+        if (DeckOptionsPanel is null || DepthPanel is null || AdvancedToggle is null)
         {
             return;
         }
-        var visibility = CurrentTarget() == "deck" ? Visibility.Visible : Visibility.Collapsed;
-        DeckOptionsPanel.Visibility = visibility;
-        DepthPanel.Visibility = visibility;
+        // 简洁/高级渐进披露：高级选项只在选中 PPT 且用户展开时显示；不改变任务请求格式
+        var deckSelected = CurrentTarget() == "deck";
+        DeckOptionsPanel.Visibility = deckSelected && AdvancedToggle.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        DepthPanel.Visibility = deckSelected ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private string CurrentTarget() => ComboTag(TargetComboBox, "deck");

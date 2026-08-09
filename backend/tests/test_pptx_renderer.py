@@ -934,12 +934,14 @@ def test_render_architecture_diagram_as_editable_shapes(tmp_path: Path) -> None:
     assert {shape.text for shape in nodes} == {"门户", "接口服务", "计算引擎", "数据存储"}
     assert {shape.text for shape in groups} == {"接入层", "服务层", "数据层"}
     assert all(shape.text_frame.vertical_anchor == MSO_ANCHOR.TOP for shape in groups)
-    assert {str(shape.fill.fore_color.rgb) for shape in nodes} == {"30B5C5", "FCC800", "C7000B", "61B230"}
+    assert {str(shape.fill.fore_color.rgb) for shape in nodes} == {"C7000B", "FFFFFF"}
+    assert {str(shape.line.color.rgb) for shape in nodes} == {"30B5C5", "FCC800", "C7000B", "61B230"}
     assert all("<p:cxnSp" in shape.element.xml for shape in edges)
     assert "<a:tailEnd" in edges[0].element.xml
     assert any("<a:headEnd" in shape.element.xml for shape in _architecture_edge_segments(slide, edge_index=2))
     assert any("<a:tailEnd" in shape.element.xml for shape in _architecture_edge_segments(slide, edge_index=2))
-    assert all("<a:prstDash" in shape.element.xml for shape in groups)
+    assert all("<a:prstDash" not in shape.element.xml for shape in groups)
+    assert all(str(shape.fill.fore_color.rgb) == "F5F5F5" for shape in groups)
     assert all(not _overlap(first, second) for index, first in enumerate(nodes) for second in nodes[index + 1 :])
     assert all(_is_orthogonal_connector(segment) for segment in edge_segments)
     assert not any(
@@ -1110,18 +1112,18 @@ def test_render_architecture_node_colors_follow_theme_type_mapping_and_default(t
     color_map = theme["layouts"]["architecture_diagram"]["node_type_colors"]
 
     slide = Presentation(str(render_deck_ir(deck, tmp_path / "semantic-colors.pptx"))).slides[0]
-    fills = {
-        shape.name.removeprefix("HW_ARCH_NODE:"): str(shape.fill.fore_color.rgb)
-        for shape in slide.shapes
-        if shape.name.startswith("HW_ARCH_NODE:")
-    }
+    nodes = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_NODE:")]
+    # 新视觉契约：普通节点白底（background），类型语义色体现在边框上
+    borders = {shape.name.removeprefix("HW_ARCH_NODE:"): str(shape.line.color.rgb) for shape in nodes}
+    fills = {shape.name.removeprefix("HW_ARCH_NODE:"): str(shape.fill.fore_color.rgb) for shape in nodes}
 
-    assert fills == {
+    assert borders == {
         "job": theme["colors"][color_map["job"]].removeprefix("#"),
         "module": theme["colors"][color_map["module"]].removeprefix("#"),
         "data": theme["colors"][color_map["data"]].removeprefix("#"),
         "unknown": theme["colors"][color_map["default"]].removeprefix("#"),
     }
+    assert set(fills.values()) == {theme["colors"]["background"].removeprefix("#")}
 
 
 @pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")

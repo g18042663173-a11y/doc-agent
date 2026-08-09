@@ -123,7 +123,11 @@ def test_job_payload_records_the_submitted_generator_snapshot(tmp_path) -> None:
     manager.activate()
 
     assert first.status_code == 202
-    assert first.get_json()["generator"] == {"name": "stub", "revision": 0}
+    generator_payload = first.get_json()["generator"]
+    assert generator_payload["name"] == "stub"
+    assert generator_payload["revision"] == 0
+    assert generator_payload["mode"] == "auto"
+    assert generator_payload["fallback"] is False
     assert manager.snapshot().revision == 1
 
 
@@ -203,3 +207,50 @@ def test_connection_test_rejects_non_json_or_unexpected_model_content() -> None:
             manager.test_draft()
 
         assert captured.value.code == "E014"
+
+
+def test_cli_transport_config_can_be_saved_tested_and_activated(tmp_path) -> None:
+    from app.generators.nga import NgaCliConfig
+
+    @dataclass
+    class CliLabelGenerator:
+        label: str
+        name: str = "nga"
+
+        def generate(self, prompt: str, *, target: str) -> str:
+            if prompt.startswith("NGA_CONNECTION_TEST"):
+                return '{"ok":true}'
+            return f"{self.label}:{target}"
+
+    manager = GeneratorManager(
+        nga_factory=lambda config, _credential: CliLabelGenerator(
+            config.model if isinstance(config, NgaCliConfig) else str(config)
+        ),
+    )
+    client = create_api_app(work_dir=tmp_path, generator_manager=manager).test_client()
+
+    payload = {
+        "generator": "nga",
+        "credential": None,
+        "config": {
+            "config_version": "1.0",
+            "transport": "cli",
+            "model": "w3/GLM-5.1-WX-Auto",
+            "cli_path": "nga",
+            "timeout_seconds": 300,
+            "max_retries": 2,
+        },
+    }
+    configured = client.put("/api/settings/generator", json=payload)
+    assert configured.status_code == 200
+    assert configured.get_json()["draft"]["config"]["transport"] == "cli"
+    assert configured.get_json()["draft"]["credential_configured"] is False
+
+    tested = client.post("/api/settings/generator/test")
+    assert tested.status_code == 200
+    assert tested.get_json()["connection"]["ok"] is True
+
+    activated = client.post("/api/settings/generator/activate")
+    assert activated.status_code == 200
+    assert activated.get_json()["active"]["name"] == "nga"
+    assert activated.get_json()["active"]["config"]["transport"] == "cli"

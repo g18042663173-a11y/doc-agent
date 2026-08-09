@@ -52,6 +52,7 @@ class GenerationOptions(BaseModel):
 
     pages: int | None = Field(default=None, ge=3, le=30)
     depth: Depth | None = None
+    theme: str = Field(default="hw_v1", min_length=1, max_length=64)
 
     @property
     def enabled(self) -> bool:
@@ -147,7 +148,7 @@ def generate_deck(
     if not options.enabled:
         raise ValueError("generate_deck depth orchestration requires explicit options")
     if not options.segmented:
-        return _generate_single(
+        attempt = _generate_single(
             document,
             generator=generator,
             options=options,
@@ -156,7 +157,9 @@ def generate_deck(
             visual_plan=visual_plan,
             asset_manifest=asset_manifest,
         )
-    return _generate_segmented(
+        _apply_theme_override(attempt, options.theme)
+        return attempt
+    attempt = _generate_segmented(
         document,
         generator=generator,
         options=options,
@@ -165,6 +168,19 @@ def generate_deck(
         visual_plan=visual_plan,
         asset_manifest=asset_manifest,
     )
+    _apply_theme_override(attempt, options.theme)
+    return attempt
+
+
+def _apply_theme_override(attempt: DeckGenerationAttempt, theme: str) -> None:
+    """Force the validated deck's meta.theme to the requested theme.
+
+    Runs after schema validation so the theme always matches what the caller
+    selected, regardless of what the generator (AI or stub) wrote.
+    """
+    if attempt.validation.ok and attempt.validation.value is not None:
+        attempt.validation.value.meta.theme = theme
+        attempt.raw_text = attempt.validation.value.model_dump_json(indent=2, by_alias=True)
 
 
 def build_outline_prompt(
@@ -419,6 +435,7 @@ def _generate_single(
         max_output_chars=max_output_chars,
         depth=options.effective_depth,
         pages=options.target_pages,
+        theme=options.theme,
         visual_plan=visual_plan,
         asset_manifest=asset_manifest,
     )
@@ -568,6 +585,7 @@ def _chunk_prompt(
         max_output_chars=max_output_chars,
         depth=options.effective_depth,
         pages=len(pages),
+        theme=options.theme,
         visual_plan=visual_plan,
         asset_manifest=asset_manifest,
     )

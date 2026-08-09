@@ -34,6 +34,15 @@ def test_web_api_serves_frontend_from_same_origin(tmp_path: Path) -> None:
     assert "finishFailure(error.payload ||" in text
     assert "定位：${error.loc}" in text
     assert 'data-testid="service-status"' in text
+    assert 'data-testid="nav-generate"' in text
+    assert 'data-testid="nav-tasks"' in text
+    assert 'data-testid="nav-settings"' in text
+    assert 'data-testid="nav-diagnostics"' in text
+    assert 'value="system">跟随系统' in text
+    assert 'id="settingsThemeMode"' in text
+    assert 'prefers-color-scheme: dark' in text
+    assert '--accent: #0078d4;' in text
+    assert '--product-mark: #c7000b;' in text
     assert 'fetch("/api/version"' in text
     assert 'data-testid="cancel-job"' in text
     assert 'localStorage.setItem(storageKey' in text

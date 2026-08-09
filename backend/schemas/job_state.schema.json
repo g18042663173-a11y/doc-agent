@@ -206,6 +206,20 @@
       "default": null,
       "title": "Expires At"
     },
+    "generator_fallback": {
+      "default": false,
+      "title": "Generator Fallback",
+      "type": "boolean"
+    },
+    "generator_mode": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "strict"
+      ],
+      "title": "Generator Mode",
+      "type": "string"
+    },
     "generator_name": {
       "default": "stub",
       "maxLength": 64,

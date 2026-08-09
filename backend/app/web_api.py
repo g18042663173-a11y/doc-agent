@@ -10,6 +10,7 @@ from pathlib import Path
 from queue import Full, Queue
 import re
 import shutil
+import sys
 from threading import BoundedSemaphore, Event, Lock, Thread
 import time
 from typing import Any, Literal
@@ -27,7 +28,11 @@ from app.generation.analysis import build_analysis_prompt, measure_document, val
 from app.generation.depth import GenerationOptions, generate_deck
 from app.generators.interface import IRTextGenerator
 from app.generators.manager import GeneratorManager
-from app.generators.nga import NgaGeneratorError, NgaHttpConfig
+from app.generators.nga import (
+    NgaCliConfig,
+    NgaGeneratorError,
+    NgaHttpConfig,
+)
 from app.generators.stub import StubGenerator
 from app.ir.document_ir import DocumentIR
 from app.ir.errors import ValidationResult
@@ -39,6 +44,7 @@ from app.parsers.errors import ParseFailure
 from app.reliability.contracts import FailureEnvelope, JobState
 from app.rendering.docx_renderer import render_word_ir
 from app.rendering.pptx_renderer import render_deck_ir
+from app.rendering.theme import THEME_REGISTRY
 from app.template.package import TemplateInputError, validate_pptx_package, validate_template_package
 from app.template.planner import build_template_plan
 from app.template.profile import extract_template_profile
@@ -61,6 +67,7 @@ ALLOWED_DOWNLOAD_ASSETS = {
     "asset-usage-audit",
     "visual-plan",
     "visual-selection-audit",
+    "deck-ir",
 }
 MAX_INPUT_UPLOAD_BYTES = 100 * 1024 * 1024
 MAX_TEMPLATE_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -88,8 +95,11 @@ class ApiJob:
     target: TargetKind
     depth: Depth | None
     work_dir: Path
+    theme: str = "hw_v1"
     generator_name: str = "stub"
     generator_revision: int = 0
+    generator_mode: str = "auto"
+    generator_fallback: bool = False
     status: JobStatus = "pending"
     stage: str = "queued"
     progress_percent: int = 0
@@ -111,9 +121,12 @@ class ApiJob:
             "job_id": self.job_id,
             "type": self.target,
             "depth": self.depth,
+            "theme": self.theme,
             "generator": {
                 "name": self.generator_name,
                 "revision": self.generator_revision,
+                "mode": self.generator_mode,
+                "fallback": self.generator_fallback,
             },
             "status": self.status,
             "progress": {"stage": self.stage, "percent": self.progress_percent},
@@ -156,9 +169,12 @@ class JobStore:
         *,
         target: TargetKind,
         depth: Depth | None,
+        theme: str = "hw_v1",
         work_dir: Path,
         generator_name: str = "stub",
         generator_revision: int = 0,
+        generator_mode: str = "auto",
+        generator_fallback: bool = False,
         template_path: Path | None = None,
         asset_manifest_path: Path | None = None,
         idempotency_key: str | None = None,
@@ -167,9 +183,12 @@ class JobStore:
             job_id=work_dir.name,
             target=target,
             depth=depth,
+            theme=theme,
             work_dir=work_dir,
             generator_name=generator_name,
             generator_revision=generator_revision,
+            generator_mode=generator_mode,
+            generator_fallback=generator_fallback,
             template_path=template_path,
             asset_manifest_path=asset_manifest_path,
             idempotency_key=idempotency_key,
@@ -459,7 +478,7 @@ def _update_generator_settings(app: Flask, manager: GeneratorManager):
                 stage="configuring_generator",
                 retryable=False,
             )
-        allowed = {"generator", "config", "credential", "clear_credential"}
+        allowed = {"generator", "config", "credential", "clear_credential", "mode"}
         if set(payload) - allowed:
             raise ApiRequestError(
                 "E010",
@@ -478,7 +497,30 @@ def _update_generator_settings(app: Flask, manager: GeneratorManager):
                 loc="generator",
                 retryable=False,
             )
-        config = NgaHttpConfig.model_validate(payload.get("config")) if generator_name == "nga" else None
+        mode = payload.get("mode")
+        if mode is not None and mode not in {"auto", "strict"}:
+            raise ApiRequestError(
+                "E010",
+                "mode 只支持 auto 或 strict。",
+                status=400,
+                stage="configuring_generator",
+                loc="mode",
+                retryable=False,
+            )
+        config_payload = payload.get("config")
+        if generator_name == "nga":
+            if not isinstance(config_payload, dict):
+                raise ApiRequestError(
+                    "E010",
+                    "NGA 配置必须是 JSON 对象。",
+                    status=400,
+                    stage="configuring_generator",
+                    loc="config",
+                    retryable=False,
+                )
+            config = _nga_config_from_payload(config_payload)
+        else:
+            config = None
         credential = payload.get("credential")
         if credential is not None and not isinstance(credential, str):
             raise ApiRequestError(
@@ -505,6 +547,7 @@ def _update_generator_settings(app: Flask, manager: GeneratorManager):
                 config=config,
                 credential=credential,
                 clear_credential=clear_credential,
+                mode=mode,
             )
         )
     except ValidationError:
@@ -520,6 +563,21 @@ def _update_generator_settings(app: Flask, manager: GeneratorManager):
         return _generator_error_response(exc, stage="configuring_generator")
     except ApiRequestError as exc:
         return _api_request_error_response(exc)
+
+
+def _nga_config_from_payload(config_payload: dict[str, Any]) -> NgaHttpConfig | NgaCliConfig:
+    transport = config_payload.get("transport", "http")
+    if transport == "cli":
+        cli_fields = {
+            "config_version": config_payload.get("config_version", "1.0"),
+            "transport": "cli",
+            "model": config_payload.get("model"),
+            "cli_path": config_payload.get("cli_path", "nga"),
+            "timeout_seconds": config_payload.get("timeout_seconds", 300),
+            "max_retries": config_payload.get("max_retries", 2),
+        }
+        return NgaCliConfig.model_validate(cli_fields)
+    return NgaHttpConfig.model_validate(config_payload)
 
 
 def _test_generator_settings(app: Flask, manager: GeneratorManager):
@@ -623,7 +681,9 @@ def _generate_request(
         _enforce_rate_limit(app)
         _ensure_disk_capacity(root)
         target = _target_from_form()
+        _preflight_generator_environment(manager, target=target)
         depth = _depth_from_form(target)
+        theme = _theme_from_form(target)
         if not runner.reserve():
             raise ApiRequestError(
                 "E008",
@@ -650,9 +710,11 @@ def _generate_request(
         job = jobs.create(
             target=target,
             depth=depth,
+            theme=theme,
             work_dir=job_dir,
             generator_name=generator_snapshot.name,
             generator_revision=generator_snapshot.revision,
+            generator_mode=generator_snapshot.mode,
             template_path=template_path,
             asset_manifest_path=asset_manifest_path,
             idempotency_key=idempotency_key,
@@ -1065,6 +1127,62 @@ def _depth_from_form(target: TargetKind) -> Depth | None:
     return raw  # type: ignore[return-value]
 
 
+def _theme_from_form(target: TargetKind) -> str:
+    raw = request.form.get("theme", "").strip()
+    if not raw:
+        return "hw_v1"
+    if target != "deck":
+        raise ApiRequestError("E001", "theme 仅支持 deck 生成。", status=400)
+    if raw not in THEME_REGISTRY:
+        available = ", ".join(sorted(THEME_REGISTRY))
+        raise ApiRequestError("E001", f"theme 只支持 {available}。", status=400)
+    return raw
+
+
+def _preflight_generator_environment(manager: GeneratorManager, *, target: str) -> None:
+    """Fail fast before queueing when the active generator cannot run locally.
+
+    Mirrors open-kimi-ppt's step0 (check prerequisites, stop early with a clear
+    message): a missing NGA CLI binary should surface at submit time, not when
+    the job reaches the generating stage.
+    """
+    snapshot = manager.snapshot()
+    if snapshot.name != "nga":
+        return
+    config = snapshot.generator.config if hasattr(snapshot.generator, "config") else None
+    if not isinstance(config, NgaCliConfig):
+        return
+    cli_path = config.cli_path
+    resolved = Path(cli_path)
+    if resolved.is_absolute():
+        available = resolved.is_file()
+    else:
+        available = shutil.which(cli_path) is not None
+    if not available:
+        raise ApiRequestError(
+            "E010",
+            f"NGA 命令行未找到：{cli_path}。",
+            status=400,
+            stage="preflight",
+            loc="generator",
+            suggestion="请确认已安装 NGA 并将命令加入 PATH，或在设置中填写正确的 CLI 路径。",
+            retryable=False,
+        )
+    if sys.platform == "win32" and target == "deck":
+        # DeckIR prompts (~58 KB, schema alone ~52 KB) always exceed the
+        # 32767-character Windows CreateProcess command-line limit, so a deck
+        # job via the CLI transport can never succeed on Windows (WinError 206).
+        raise ApiRequestError(
+            "E010",
+            "NGA 命令行在 Windows 上无法传输 PPT 生成所需的超长请求。",
+            status=400,
+            stage="preflight",
+            loc="generator",
+            suggestion="Windows 命令行长度上限无法承载 DeckIR 请求；请改用 NGA HTTP 服务，或切换 Stub 生成器。",
+            retryable=False,
+        )
+
+
 def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs: JobStore) -> None:
     job = jobs.get(job_id)
     if job is None:
@@ -1298,6 +1416,8 @@ def _job_state(job: ApiJob) -> JobState:
         depth=job.depth,
         generator_name=job.generator_name,
         generator_revision=job.generator_revision,
+        generator_mode=job.generator_mode,
+        generator_fallback=job.generator_fallback,
         status=job.status,
         stage=job.stage,
         progress_percent=job.progress_percent,
@@ -1382,7 +1502,6 @@ def _cleanup_sensitive_job_files(job: ApiJob, *, keep_artifact: bool = False) ->
         work_dir / "document_ir.json",
         work_dir / "prompt.txt",
         work_dir / "raw_ir.txt",
-        work_dir / "deck_ir.json",
         work_dir / "generation_manifest.json",
         *([] if keep_artifact else [work_dir / "word.docx", work_dir / "deck.pptx"]),
     ]:
@@ -1419,6 +1538,52 @@ def _generate_artifact(
     document: DocumentIR,
     generator: IRTextGenerator,
     jobs: JobStore,
+) -> tuple[Path, dict[str, Any], dict[str, Any] | None]:
+    try:
+        return _generate_artifact_with(generator, job, document, jobs)
+    except NgaGeneratorError as exc:
+        if not (job.generator_mode == "auto" and job.generator_name == "nga"):
+            raise
+        jobs.update(
+            job.job_id,
+            generator_fallback=True,
+            stage="falling_back_to_stub",
+            progress_percent=35,
+        )
+        fallback = StubGenerator()
+        artifact, report_payload, manifest = _generate_artifact_with(
+            fallback,
+            job,
+            document,
+            jobs,
+            fallback_reason=exc.code,
+        )
+        manifest = _record_fallback_manifest(job, exc.code, manifest)
+        return artifact, report_payload, manifest
+
+
+def _record_fallback_manifest(job: ApiJob, reason: str, manifest: dict[str, Any] | None) -> dict[str, Any]:
+    fallback_payload = {
+        "generator": {
+            "requested": {"name": job.generator_name, "revision": job.generator_revision},
+            "used": {"name": "stub", "revision": 0},
+            "fallback": True,
+            "fallback_reason": reason,
+        }
+    }
+    if manifest is None:
+        manifest = {}
+    manifest.update(fallback_payload)
+    return manifest
+
+
+def _generate_artifact_with(
+    generator: IRTextGenerator,
+    job: ApiJob,
+    document: DocumentIR,
+    jobs: JobStore,
+    *,
+    fallback_reason: str | None = None,
 ) -> tuple[Path, dict[str, Any], dict[str, Any] | None]:
     context = _prepare_artifact_context(job, document, generator, jobs)
     if job.target == "deck" and job.depth is not None:
@@ -1479,7 +1644,7 @@ def _generate_depth_deck_artifact(
     attempt = generate_deck(
         context.document,
         generator=context.generator,
-        options=GenerationOptions(depth=job.depth),
+        options=GenerationOptions(depth=job.depth, theme=job.theme),
         visual_plan=context.visual_plan,
         asset_manifest=context.asset_manifest,
     )
@@ -1499,11 +1664,16 @@ def _generate_depth_deck_artifact(
     if context.asset_registry is not None:
         context.visual_assets["asset-usage-audit"] = job.work_dir / "asset_usage_audit.json"
     context.jobs.update(job.job_id, stage="linting", progress_percent=90)
-    report = check_pptx(artifact, classification=deck.meta.classification, template_profile=profile)
+    report = check_pptx(artifact, classification=deck.meta.classification, theme_name=deck.meta.theme, template_profile=profile)
     write_reports(report, job.work_dir)
     context.jobs.update(
         job.job_id,
-        assets={**context.visual_assets, **template_assets, "lint": job.work_dir / "report.json"},
+        assets={
+            **context.visual_assets,
+            **template_assets,
+            "lint": job.work_dir / "report.json",
+            "deck-ir": job.work_dir / "deck_ir.json",
+        },
         template_summary=template_summary,
     )
     return artifact, report.to_dict(), attempt.manifest()
@@ -1550,12 +1720,18 @@ def _generate_single_artifact(
         report = check_pptx(
             artifact,
             classification=validation.value.meta.classification,
+            theme_name=validation.value.meta.theme,
             template_profile=profile,
         )
         write_reports(report, job.work_dir)
         context.jobs.update(
             job.job_id,
-            assets={**context.visual_assets, **template_assets, "lint": job.work_dir / "report.json"},
+            assets={
+            **context.visual_assets,
+            **template_assets,
+            "lint": job.work_dir / "report.json",
+            "deck-ir": job.work_dir / "deck_ir.json",
+        },
             template_summary=template_summary,
         )
     return artifact, report.to_dict(), None

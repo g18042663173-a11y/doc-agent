@@ -9,7 +9,9 @@ import pytest
 from pydantic import ValidationError
 
 from app.generators.nga import (
+    MAX_NDJSON_BYTES,
     MAX_RESPONSE_BYTES,
+    NgaCliConfig,
     NgaGenerator,
     NgaGeneratorError,
     NgaHttpConfig,
@@ -229,3 +231,280 @@ def test_nga_generator_requires_runtime_credential_and_valid_ca_path(tmp_path: P
             token="token",
         )
     assert missing_ca.value.code == "E010"
+
+
+# ---------------------------------------------------------------------------
+# NGA CLI transport
+# ---------------------------------------------------------------------------
+
+def _cli_config(**overrides) -> NgaCliConfig:
+    return NgaCliConfig(model="w3/GLM-5.1-WX-Auto", **overrides)
+
+
+def _fake_cli_run(stdout: str = "", returncode: int = 0):
+    import subprocess
+
+    def fake_run(
+        command,
+        *,
+        text,
+        encoding,
+        errors,
+        capture_output,
+        check,
+        timeout,
+    ):
+        assert command[:2] == ["nga", "run"]
+        assert "--model" in command
+        assert "--format" in command
+        assert "json" in command
+        assert command[-1] == "the prompt"
+        return subprocess.CompletedProcess(command, returncode, stdout=stdout, stderr="")
+
+    return fake_run
+
+
+def test_nga_cli_config_validates_model_and_cli_path() -> None:
+    with pytest.raises(ValidationError):
+        NgaCliConfig(model="  ")
+    with pytest.raises(ValidationError, match="single command"):
+        NgaCliConfig(model="m", cli_path="nga\n--bad")
+
+    config = NgaCliConfig(model="w3/GLM-5.1-WX-Auto", cli_path="nga")
+    assert config.transport == "cli"
+    assert config.timeout_seconds == 300
+
+    # subprocess uses list-form argv (no shell), so spaces in the executable
+    # path are safe and must be accepted for typical Windows install locations.
+    spaced = NgaCliConfig(model="m", cli_path="C:/Program Files/NGA/nga.exe")
+    assert spaced.cli_path == "C:/Program Files/NGA/nga.exe"
+
+
+def test_nga_cli_transport_concatenates_text_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    stream = "\n".join(
+        [
+            json.dumps({"type": "step_start", "part": {"type": "step-start"}}),
+            json.dumps({"type": "text", "part": {"type": "text", "text": '{"title":'}}),
+            json.dumps({"type": "tool_use", "part": {"type": "tool", "tool": "bash"}}),
+            json.dumps({"type": "text", "part": {"type": "text", "text": '"ok"}'}}),
+            json.dumps({"type": "step_finish", "part": {"type": "step-finish", "reason": "stop"}}),
+        ]
+    )
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=_fake_cli_run(stdout=stream),
+    )
+    result = generator.generate("the prompt", target="word_ir")
+    assert result == '{"title":"ok"}'
+
+
+def test_nga_cli_transport_works_without_token() -> None:
+    generator = NgaGenerator(
+        config=_cli_config(),
+        token=None,
+        subprocess_run_fn=_fake_cli_run(stdout='{"type":"text","part":{"text":"hi"}}'),
+    )
+    assert generator.generate("the prompt", target="word_ir") == "hi"
+
+
+def test_nga_cli_transport_retries_retryable_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    calls = {"n": 0}
+
+    def flaky_run(command, **kwargs):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="err")
+        return subprocess.CompletedProcess(
+            command, 0, stdout='{"type":"text","part":{"text":"ok"}}', stderr=""
+        )
+
+    generator = NgaGenerator(
+        config=_cli_config(max_retries=2),
+        subprocess_run_fn=flaky_run,
+        sleep_fn=lambda _seconds: None,
+    )
+    assert generator.generate("the prompt", target="word_ir") == "ok"
+    assert calls["n"] == 3
+
+
+def test_nga_cli_transport_nonzero_exit_after_retries_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    generator = NgaGenerator(
+        config=_cli_config(max_retries=1),
+        subprocess_run_fn=_fake_cli_run(returncode=1),
+        sleep_fn=lambda _seconds: None,
+    )
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("the prompt", target="word_ir")
+    assert captured.value.code == "E013"
+    assert captured.value.retryable is True
+
+
+def test_nga_cli_transport_missing_binary_maps_to_e010(monkeypatch: pytest.MonkeyPatch) -> None:
+    def missing_run(command, **kwargs):
+        raise FileNotFoundError("nga")
+
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=missing_run,
+    )
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("the prompt", target="word_ir")
+    assert captured.value.code == "E010"
+    assert captured.value.retryable is False
+
+
+def test_nga_cli_transport_winerror_206_is_not_reported_as_missing_binary() -> None:
+    def overlong_run(command, **kwargs):
+        error = FileNotFoundError("The filename or extension is too long")
+        error.winerror = 206  # Windows maps WinError 206 to FileNotFoundError
+        raise error
+
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=overlong_run,
+    )
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("the prompt", target="word_ir")
+    assert captured.value.code == "E010"
+    assert captured.value.retryable is False
+    assert "length limit" in str(captured.value)
+    assert "not found" not in str(captured.value)
+
+
+def test_nga_cli_transport_rejects_overlong_prompt_before_spawn_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("sys.platform", "win32")
+
+    def must_not_run(command, **kwargs):  # pragma: no cover - guard must fire first
+        raise AssertionError("subprocess must not be spawned for an overlong prompt")
+
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=must_not_run,
+    )
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("x" * 40000, target="deck_ir")
+    assert captured.value.code == "E010"
+    assert captured.value.retryable is False
+    assert "length limit" in str(captured.value)
+
+
+def test_nga_cli_transport_allows_overlong_prompt_off_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("sys.platform", "linux")
+    long_prompt = "the prompt" + "x" * 40000
+
+    def fake_run(command, **kwargs):
+        assert command[-1] == long_prompt
+        import subprocess
+
+        return subprocess.CompletedProcess(
+            command, 0, stdout='{"type":"text","part":{"text":"ok"}}', stderr=""
+        )
+
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=fake_run,
+    )
+    assert generator.generate(long_prompt, target="deck_ir") == "ok"
+
+
+def test_nga_cli_transport_timeout_maps_to_e012_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    def timeout_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=timeout_run,
+        sleep_fn=lambda _seconds: None,
+    )
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("the prompt", target="word_ir")
+    assert captured.value.code == "E012"
+    assert captured.value.retryable is True
+
+
+def test_nga_cli_transport_empty_output_fails_e014() -> None:
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=_fake_cli_run(stdout=""),
+    )
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("the prompt", target="word_ir")
+    assert captured.value.code == "E014"
+
+
+def test_nga_cli_transport_stops_a_stream_that_exceeds_the_output_cap() -> None:
+    class BurstingProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO(b"x" * (MAX_NDJSON_BYTES + 1))
+            self.stderr = BytesIO()
+            self.returncode: int | None = None
+            self.killed = False
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def kill(self) -> None:
+            self.killed = True
+            self.returncode = -9
+
+        def wait(self, timeout: float | None = None) -> int:
+            _ = timeout
+            return self.returncode or 0
+
+    process = BurstingProcess()
+
+    def fake_popen(command, **kwargs):
+        assert command[:2] == ["nga", "run"]
+        assert kwargs["stdout"] is not None
+        assert kwargs["stderr"] is not None
+        return process
+
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_popen_fn=fake_popen,
+    )
+
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("the prompt", target="word_ir")
+
+    assert captured.value.code == "E014"
+    assert captured.value.retryable is False
+    assert process.killed is True
+
+
+def test_nga_cli_transport_unreadable_event_fails_e014() -> None:
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=_fake_cli_run(stdout='{"type":"step_start"}\nnot-json\n'),
+    )
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("the prompt", target="word_ir")
+    assert captured.value.code == "E014"
+
+
+def test_nga_cli_transport_no_text_events_fails_e014() -> None:
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_run_fn=_fake_cli_run(stdout='{"type":"step_start"}\n{"type":"step_finish"}\n'),
+    )
+    with pytest.raises(NgaGeneratorError) as captured:
+        generator.generate("the prompt", target="word_ir")
+    assert captured.value.code == "E014"
+
+
+def test_nga_cli_config_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NGA_TRANSPORT", "cli")
+    monkeypatch.setenv("NGA_MODEL", "w3/GLM-5.1-WX-Auto")
+    generator = NgaGenerator()
+    assert generator.transport == "cli"
+    assert generator.config is not None
+    assert generator.config.model == "w3/GLM-5.1-WX-Auto"
+    assert generator.config.cli_path == "nga"

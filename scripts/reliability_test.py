@@ -155,9 +155,33 @@ def _test_environment() -> dict[str, str]:
     backend = str(ROOT / "backend")
     previous = environment.get("PYTHONPATH")
     environment["PYTHONPATH"] = backend if not previous else f"{backend}{os.pathsep}{previous}"
+    graphviz_bin = _graphviz_runtime_bin()
+    if graphviz_bin is not None:
+        previous_path = environment.get("PATH")
+        environment["PATH"] = (
+            str(graphviz_bin)
+            if not previous_path
+            else f"{graphviz_bin}{os.pathsep}{previous_path}"
+        )
     environment["PYTHONUTF8"] = "1"
     environment["PYTHONIOENCODING"] = "utf-8"
     return environment
+
+
+def _graphviz_runtime_bin() -> Path | None:
+    """Locate the same Graphviz runtime accepted by the Windows verify wrapper.
+
+    The reliability runner starts child Python processes directly, so it cannot
+    rely on a parent PowerShell session having already amended PATH.
+    """
+    executable = "dot.exe" if os.name == "nt" else "dot"
+    candidates = [ROOT / "tools" / "graphviz" / "bin"]
+    if os.name == "nt":
+        candidates.append(Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Graphviz" / "bin")
+    for candidate in candidates:
+        if (candidate / executable).is_file():
+            return candidate
+    return None
 
 
 def _read_junit(path: Path) -> dict[str, Any]:

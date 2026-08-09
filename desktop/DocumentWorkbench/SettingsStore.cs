@@ -32,7 +32,13 @@ public sealed class SettingsStore
 
             await using var stream = File.OpenRead(SettingsPath);
             var value = await JsonSerializer.DeserializeAsync<WorkbenchSettings>(stream, JsonOptions);
-            return value is { SettingsVersion: "1.0" } ? value : new WorkbenchSettings();
+            if (value is not { SettingsVersion: "1.0" })
+            {
+                return new WorkbenchSettings();
+            }
+
+            value.Appearance = AppearanceResolver.Normalize(value.Appearance);
+            return value;
         }
         catch (IOException)
         {
@@ -49,6 +55,7 @@ public sealed class SettingsStore
         await _saveGate.WaitAsync();
         try
         {
+            settings.Appearance = AppearanceResolver.Normalize(settings.Appearance);
             settings.RecentJobIds = settings.RecentJobIds
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Distinct(StringComparer.Ordinal)
@@ -74,6 +81,9 @@ public sealed class WorkbenchSettings
     public string SettingsVersion { get; set; } = "1.0";
     public string DefaultTarget { get; set; } = "deck";
     public string DefaultDepth { get; set; } = "标准";
+    public string DefaultTheme { get; set; } = "hw_v1";
+    public string Appearance { get; set; } = AppearanceResolver.System;
+    public string GeneratorMode { get; set; } = "auto";
     public bool NgaEnabled { get; set; }
     public NgaStoredConfig Nga { get; set; } = new();
     public List<string> RecentJobIds { get; set; } = [];
@@ -82,6 +92,8 @@ public sealed class WorkbenchSettings
 public sealed class NgaStoredConfig
 {
     public string ConfigVersion { get; set; } = "1.0";
+    public string Transport { get; set; } = "http";
+    public string CliPath { get; set; } = "nga";
     public string BaseUrl { get; set; } = "";
     public string EndpointPath { get; set; } = "/v1/chat/completions";
     public string Model { get; set; } = "";

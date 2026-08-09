@@ -56,6 +56,13 @@ def test_workbench_scripts_use_repository_python_local_binding_and_owned_pid() -
     assert 'app\\.web_api' in stop
 
 
+def test_verify_all_runs_the_offline_gate_once_before_reliability_reporting() -> None:
+    verify_all = (ROOT / "scripts" / "win" / "verify_all.ps1").read_text(encoding="utf-8")
+
+    assert '& (Join-Path $RepoRoot "verify.ps1")' in verify_all
+    assert '$reliabilityArgs = @("scripts\\reliability_test.py", "--skip-verify")' in verify_all
+
+
 def test_production_entrypoint_rejects_nonlocal_binding() -> None:
     with pytest.raises(SystemExit) as captured:
         web_api_main(["--host", "0.0.0.0", "--port", "5056"])

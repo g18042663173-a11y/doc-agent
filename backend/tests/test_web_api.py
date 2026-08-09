@@ -262,6 +262,7 @@ def test_generate_deck_with_template_exposes_audit_assets(tmp_path: Path) -> Non
         "structure",
         "visual-plan",
         "visual-selection-audit",
+        "deck-ir",
     }
     for asset in completed["assets"].values():
         response = client.get(asset["download_url"])
@@ -635,7 +636,11 @@ def test_completed_job_persists_across_app_restart_and_removes_sensitive_interme
     restored = restarted.get(f"/api/status/{completed['job_id']}")
     assert restored.status_code == 200
     assert restored.get_json()["status"] == "done"
-    assert restored.get_json()["generator"] == {"name": "stub", "revision": 0}
+    restored_generator = restored.get_json()["generator"]
+    assert restored_generator["name"] == "stub"
+    assert restored_generator["revision"] == 0
+    assert restored_generator["mode"] == "auto"
+    assert restored_generator["fallback"] is False
     assert restarted.get(f"/api/download/{completed['job_id']}").status_code == 200
 
 
@@ -860,3 +865,158 @@ def _textbox(slide, text: str, left: float, top: float, width: float, height: fl
     run = shape.text_frame.paragraphs[0].runs[0]
     run.font.size = Pt(size)
     run.font.name = "Arial"
+
+
+def test_deck_ir_is_exposed_as_controllable_download_asset(tmp_path) -> None:
+    from app.generators.manager import GeneratorManager
+
+    client = create_api_app(work_dir=tmp_path, generator_manager=GeneratorManager()).test_client()
+    client.put("/api/settings/generator", json={"generator": "stub"})
+    client.post("/api/settings/generator/activate")
+    created = client.post(
+        "/api/generate",
+        data={
+            "type": "deck",
+            "depth": "概览",
+            "input_file": (BytesIO(b"# Deck IR\n\n## A\n\n- 1\n- 2"), "deck.md"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert created.status_code == 202
+    completed = _wait_for_terminal_status(client, created.get_json()["job_id"])
+    assert completed["status"] == "done", completed
+    assert "deck-ir" in completed["assets"]
+    downloaded = client.get(completed["assets"]["deck-ir"]["download_url"])
+    assert downloaded.status_code == 200
+    payload = json.loads(downloaded.data.decode("utf-8"))
+    assert payload["ir_type"] == "deck"
+    assert payload["meta"]["theme"] == "hw_v1"
+
+
+def test_preflight_rejects_missing_nga_cli_before_queueing(tmp_path) -> None:
+    from app.generators.manager import GeneratorManager
+    from app.generators.nga import NgaCliConfig, NgaGenerator
+
+    manager = GeneratorManager(
+        nga_factory=lambda config, _cred: NgaGenerator(config=config),
+    )
+    manager.configure(
+        generator="nga",
+        config=NgaCliConfig(model="m", cli_path="/nonexistent/nga-cli"),
+        mode="auto",
+    )
+    manager._draft.tested = True
+    manager.activate()
+    client = create_api_app(work_dir=tmp_path, generator_manager=manager).test_client()
+
+    response = client.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO(b"# T"), "t.md")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "E010"
+    assert response.get_json()["error"]["stage"] == "preflight"
+
+
+def test_preflight_allows_available_nga_cli(tmp_path, monkeypatch) -> None:
+    import subprocess
+    from app.generators.manager import GeneratorManager
+    from app.generators.nga import NgaCliConfig, NgaGenerator
+
+    fake_cli = tmp_path / "fake-nga"
+    fake_cli.write_text("#!/usr/bin/env python3\nprint('{\"type\":\"text\",\"part\":{\"text\":\"ok\"}}')\n", encoding="utf-8")
+    fake_cli.chmod(0o755)
+
+    manager = GeneratorManager(
+        nga_factory=lambda config, _cred: NgaGenerator(config=config, subprocess_run_fn=lambda *a, **k: subprocess.CompletedProcess(a[0] if a else [], 0, stdout='{"type":"text","part":{"text":"{\\"ok\\":true}"}}', stderr="")),
+    )
+    manager.configure(
+        generator="nga",
+        config=NgaCliConfig(model="m", cli_path=str(fake_cli)),
+        mode="auto",
+    )
+    manager._draft.tested = True
+    manager.activate()
+    client = create_api_app(work_dir=tmp_path, generator_manager=manager).test_client()
+
+    response = client.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO(b"# T"), "t.md")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 202
+
+
+def test_preflight_rejects_deck_via_cli_on_windows(tmp_path, monkeypatch) -> None:
+    import subprocess
+    from app.generators.manager import GeneratorManager
+    from app.generators.nga import NgaCliConfig, NgaGenerator
+
+    monkeypatch.setattr("sys.platform", "win32")
+    fake_cli = tmp_path / "fake-nga"
+    fake_cli.write_text("#!/usr/bin/env python3\nprint('ok')\n", encoding="utf-8")
+    fake_cli.chmod(0o755)
+
+    manager = GeneratorManager(
+        nga_factory=lambda config, _cred: NgaGenerator(
+            config=config,
+            subprocess_run_fn=lambda *a, **k: subprocess.CompletedProcess(
+                a[0] if a else [], 0, stdout='{"type":"text","part":{"text":"{\\"ok\\":true}"}}', stderr=""
+            ),
+        ),
+    )
+    manager.configure(
+        generator="nga",
+        config=NgaCliConfig(model="m", cli_path=str(fake_cli)),
+        mode="auto",
+    )
+    manager._draft.tested = True
+    manager.activate()
+    client = create_api_app(work_dir=tmp_path, generator_manager=manager).test_client()
+
+    response = client.post(
+        "/api/generate",
+        data={"type": "deck", "depth": "概览", "input_file": (BytesIO(b"# T"), "t.md")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    payload = response.get_json()["error"]
+    assert payload["code"] == "E010"
+    assert payload["stage"] == "preflight"
+    assert payload["retryable"] is False
+
+
+def test_preflight_allows_deck_via_cli_off_windows(tmp_path, monkeypatch) -> None:
+    import subprocess
+    from app.generators.manager import GeneratorManager
+    from app.generators.nga import NgaCliConfig, NgaGenerator
+
+    monkeypatch.setattr("sys.platform", "linux")
+    fake_cli = tmp_path / "fake-nga"
+    fake_cli.write_text("#!/usr/bin/env python3\nprint('ok')\n", encoding="utf-8")
+    fake_cli.chmod(0o755)
+
+    manager = GeneratorManager(
+        nga_factory=lambda config, _cred: NgaGenerator(
+            config=config,
+            subprocess_run_fn=lambda *a, **k: subprocess.CompletedProcess(
+                a[0] if a else [], 0, stdout='{"type":"text","part":{"text":"{\\"ok\\":true}"}}', stderr=""
+            ),
+        ),
+    )
+    manager.configure(
+        generator="nga",
+        config=NgaCliConfig(model="m", cli_path=str(fake_cli)),
+        mode="auto",
+    )
+    manager._draft.tested = True
+    manager.activate()
+    client = create_api_app(work_dir=tmp_path, generator_manager=manager).test_client()
+
+    response = client.post(
+        "/api/generate",
+        data={"type": "deck", "depth": "概览", "input_file": (BytesIO(b"# T"), "t.md")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 202

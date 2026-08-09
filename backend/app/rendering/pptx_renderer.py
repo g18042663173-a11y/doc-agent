@@ -714,7 +714,7 @@ def _card_content(shape, card, layout: dict, theme: dict) -> None:
         (card.desc, layout["desc_font_size_pt"], False, "body"),
     ]
     if card.tag:
-        parts.append((card.tag, layout["tag_font_size_pt"], False, "secondary"))
+        parts.append((card.tag, layout["tag_font_size_pt"], False, "body"))
     for part_index, (text, size, bold, color_key) in enumerate(parts):
         paragraph = text_frame.paragraphs[0] if part_index == 0 else text_frame.add_paragraph()
         _format_paragraph(paragraph, theme)
@@ -1399,7 +1399,8 @@ def _render_architecture_diagram(
         return
 
     _render_architecture_groups(slide, slide_ir, graphviz_layout.group_layers, layout, theme)
-    _render_graphviz_architecture_edges(slide, slide_ir.edges, graphviz_layout.edges, layout, theme)
+    emphasis_nodes = {node.id for node in slide_ir.nodes if node.type == "emphasis"}
+    _render_graphviz_architecture_edges(slide, slide_ir.edges, graphviz_layout.edges, layout, theme, emphasis_nodes)
     for node in slide_ir.nodes:
         _render_architecture_node(
             slide,
@@ -1660,7 +1661,8 @@ def _render_architecture_diagram_fallback(
 ) -> None:
     boxes, layers = _architecture_node_boxes(slide_ir, layout)
     _render_architecture_groups(slide, slide_ir, layers, layout, theme)
-    _render_architecture_edges(slide, slide_ir.edges, boxes, layers, layout, theme)
+    emphasis_nodes = {node.id for node in slide_ir.nodes if node.type == "emphasis"}
+    _render_architecture_edges(slide, slide_ir.edges, boxes, layers, layout, theme, emphasis_nodes)
     for node in slide_ir.nodes:
         _render_architecture_node(slide, node, boxes[node.id], layout, theme)
 
@@ -1671,10 +1673,14 @@ def _render_graphviz_architecture_edges(
     routed_edges: tuple[ArchitectureEdgeLayout, ...],
     layout: dict,
     theme: dict,
+    emphasis_nodes: set[str] | None = None,
 ) -> None:
     edge_by_index = {index: edge for index, edge in enumerate(edges, start=1)}
     for routed_edge in routed_edges:
         edge = edge_by_index[routed_edge.edge_index]
+        is_key_path = bool(emphasis_nodes) and (
+            edge.from_node in emphasis_nodes or edge.to in emphasis_nodes
+        )
         tolerance = layout["edge_route_alignment_tolerance_in"]
         route = _simplify_architecture_route(
             _orthogonalize_architecture_route(list(routed_edge.points), tolerance),
@@ -1699,8 +1705,8 @@ def _render_graphviz_architecture_edges(
                     f"HW_ARCH_EDGE_SEGMENT:{routed_edge.edge_index}:{segment_index}:"
                     f"{edge.from_node}->{edge.to}"
                 )
-            connector.line.color.rgb = _rgb(theme["colors"]["secondary"])
-            connector.line.width = Pt(layout["edge_width_pt"])
+            connector.line.color.rgb = _rgb(theme["colors"]["hw_red"] if is_key_path else theme["colors"]["secondary"])
+            connector.line.width = Pt(layout["edge_width_pt"] + (0.75 if is_key_path else 0))
             if edge.style == "dashed":
                 connector.line.dash_style = MSO_LINE_DASH_STYLE.DASH
             _set_connector_arrowheads(
@@ -2091,10 +2097,10 @@ def _render_architecture_groups(slide, slide_ir, layers, layout: dict, theme: di
             Inches(bounds["height_in"]),
         )
         frame.name = f"HW_ARCH_GROUP:{group_id}"
-        frame.fill.background()
+        frame.fill.solid()
+        frame.fill.fore_color.rgb = _rgb(theme["colors"]["table_stripe"])
         frame.line.color.rgb = _rgb(theme["colors"]["border"])
         frame.line.width = Pt(layout["group_border_pt"])
-        frame.line.dash_style = MSO_LINE_DASH_STYLE.DASH
         text_frame = frame.text_frame
         text_frame.clear()
         _fit_text_frame(text_frame)
@@ -2116,9 +2122,11 @@ def _render_architecture_edges(
     layers: list[tuple[str | None, str | None, list[str], dict[str, float]]],
     layout: dict,
     theme: dict,
+    emphasis_nodes: set[str] | None = None,
 ) -> None:
     occupied_boxes = list(boxes.values())
     for index, edge in enumerate(edges, start=1):
+        is_key_path = bool(emphasis_nodes) and (edge.from_node in emphasis_nodes or edge.to in emphasis_nodes)
         route = _architecture_edge_route(
             edge,
             index,
@@ -2139,8 +2147,8 @@ def _render_architecture_edges(
                 connector.name = f"HW_ARCH_EDGE:{index}:{segment_index}:{edge.from_node}->{edge.to}"
             else:
                 connector.name = f"HW_ARCH_EDGE_SEGMENT:{index}:{segment_index}:{edge.from_node}->{edge.to}"
-            connector.line.color.rgb = _rgb(theme["colors"]["secondary"])
-            connector.line.width = Pt(layout["edge_width_pt"])
+            connector.line.color.rgb = _rgb(theme["colors"]["hw_red"] if is_key_path else theme["colors"]["secondary"])
+            connector.line.width = Pt(layout["edge_width_pt"] + (0.75 if is_key_path else 0))
             if edge.style == "dashed":
                 connector.line.dash_style = MSO_LINE_DASH_STYLE.DASH
             _set_connector_arrowheads(
@@ -2559,8 +2567,14 @@ def _render_architecture_node(
     shape.name = f"HW_ARCH_NODE:{node.id}"
     color_key = layout["node_type_colors"].get(node.type, layout["node_type_colors"]["default"])
     shape.fill.solid()
-    shape.fill.fore_color.rgb = _rgb(theme["colors"][color_key])
-    shape.line.color.rgb = _rgb(theme["colors"][color_key])
+    if color_key == "hw_red":
+        # 关键节点：实心强调底 + 白字，保持视觉焦点
+        shape.fill.fore_color.rgb = _rgb(theme["colors"][color_key])
+        shape.line.color.rgb = _rgb(theme["colors"][color_key])
+    else:
+        # 普通节点：白底 + 类型色细边框 + 深色文字，避免大面积高饱和色块
+        shape.fill.fore_color.rgb = _rgb(theme["colors"]["background"])
+        shape.line.color.rgb = _rgb(theme["colors"][color_key])
     shape.line.width = Pt(layout["node_border_pt"])
     text_frame = shape.text_frame
     text_frame.clear()

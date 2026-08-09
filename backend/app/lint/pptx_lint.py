@@ -500,15 +500,15 @@ def _architecture_items(slide, slide_index: int, theme: dict) -> list[PptxLintIt
     for shape in slide.shapes:
         name = getattr(shape, "name", "")
         if name.startswith("HW_ARCH_NODE:"):
-            fill = _shape_fill_color(shape)
-            if fill is None or fill.upper() not in allowed_node_fills:
+            line = _shape_line_color(shape)
+            if line is None or line.upper() not in allowed_node_fills:
                 return items + [
                     _item(
                         "HW-W02",
                         "Warning",
                         slide_index,
-                        f"架构节点填充色 {fill or '未设置'} 不在规定 accent 色板。",
-                        "节点填充色必须来自 layouts.architecture_diagram.node_type_colors 对应主题色。",
+                        f"架构节点边框色 {line or '未设置'} 不在规定 accent 色板。",
+                        "节点边框色必须来自 layouts.architecture_diagram.node_type_colors 对应主题色。",
                     )
                 ]
         for prefix, expected_size in expected_sizes.items():

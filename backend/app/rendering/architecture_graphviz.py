@@ -132,9 +132,15 @@ def layout_architecture_with_graphviz(
         graph.edge(node_names[edge.from_node], node_names[edge.to], **attributes)
 
     try:
-        payload = graph.pipe(encoding="utf-8", quiet=True)
+        # Keep Graphviz streams binary. On localized Windows installations dot
+        # can emit non-UTF-8 font diagnostics on stderr; asking graphviz for
+        # text mode causes its reader thread to fail before we can safely fall
+        # back to the deterministic layout.
+        payload = graph.pipe(encoding=None, quiet=True)
+        if isinstance(payload, bytes):
+            payload = payload.decode("utf-8")
         data = json.loads(payload)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise GraphvizLayoutUnavailable(f"dot execution failed: {exc}") from exc
     except Exception as exc:
         if exc.__class__.__module__.startswith("graphviz"):

@@ -22,7 +22,11 @@ IR 是唯一契约。模型文本必须先剥壳和校验,非法 IR 不进入 re
 - 安装命令：`.\bootstrap_windows.ps1`。
 - 浏览器兼容入口启动命令：`.\start_workbench.ps1`。
 - 测试与发布门禁：`.\verify.ps1`。
-- WPF 构建入口：`scripts/package_document_workbench.py`。
+- **一键脚本入口（推荐）**：`scripts/win/README.md`（verify_all / build_all /
+  package_setup / start_workbench_ui，覆盖验证、打包、安装程序、启动工作台）。
+- WPF 构建入口：`scripts/package_document_workbench.py`（便携 ZIP）；
+  `scripts/package_installer.py`（Inno Setup 安装程序，需先装 Inno Setup 6，
+  设计见 `docs/design/INSTALLER_DESIGN.md`）。
 - 生产 PPT 引擎：DeckIR 2.0 到 `python-pptx`；`experiments/html2pptx/` 仅为隔离对照实验。
 - 本仓库不包含训练或推理入口；NGA 是受约束的 IR generator adapter，不是模型训练代码。
 
@@ -225,7 +229,7 @@ PYTHONPATH=backend python scripts/make_lint_violation.py
 python scripts/record_demo.py
 ```
 
-详细说明见 `docs/交付资产说明.md`、`docs/使用说明.md`、`docs/内网接入.md`、`docs/验收手册.md`。
+详细说明见 `docs/交付资产说明.md`、`docs/使用说明.md`（含生成器配置决策表：Stub / NGA 本机命令行 / NGA HTTP）、`docs/内网接入.md`、`docs/验收手册.md`。Windows 机器上的分步验收与人工交付清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`。
 
 ## 仓库结构与开发规则
 

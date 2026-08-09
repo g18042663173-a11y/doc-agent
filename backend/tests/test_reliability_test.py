@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -107,6 +108,18 @@ def test_reliability_junit_reader_counts_failure_elements(tmp_path: Path) -> Non
 
     assert result["failed"] == 1
     assert public == [{"name": "suite::case", "kind": "failure", "error_codes": ["D001"]}]
+
+
+def test_reliability_environment_prepends_discovered_graphviz(monkeypatch, tmp_path: Path) -> None:
+    module = _load_reliability_module()
+    graphviz_bin = tmp_path / "graphviz" / "bin"
+    graphviz_bin.mkdir(parents=True)
+    monkeypatch.setattr(module, "_graphviz_runtime_bin", lambda: graphviz_bin)
+    monkeypatch.setenv("PATH", "existing-path")
+
+    environment = module._test_environment()
+
+    assert environment["PATH"].split(os.pathsep)[0] == str(graphviz_bin)
 
 
 def _load_reliability_module():

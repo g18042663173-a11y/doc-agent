@@ -70,8 +70,25 @@ public sealed class NativeUiSmokeTests
             TimeSpan.FromMilliseconds(100));
         Assert.NotNull(window.FindFirstDescendant(condition.ByAutomationId("refresh-diagnostics")));
 
-        window.Close();
-        application.WaitWhileMainHandleIsMissing(TimeSpan.FromSeconds(2));
+        CloseAndAssertExit(application);
+    }
+
+    private static void CloseAndAssertExit(Application application)
+    {
+        try
+        {
+            Assert.True(
+                application.Close(killIfCloseFails: false),
+                "主窗口关闭后应用进程未在关闭超时内退出。");
+            Assert.True(application.HasExited, "主窗口关闭后应用进程仍在运行。");
+        }
+        finally
+        {
+            if (!application.HasExited)
+            {
+                application.Kill();
+            }
+        }
     }
 
     private static string FindRepositoryRoot()

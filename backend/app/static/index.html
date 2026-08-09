@@ -7,24 +7,44 @@
   <title>文档生成工作台</title>
   <style>
     :root {
-      --hw-red: #c7000b;
-      --hw-red-deep: #a30009;
-      --ink: #1d1d1a;
-      --muted: #666b70;
-      --line: #dfe3e6;
-      --line-strong: #c7cdd1;
-      --canvas: #f5f6f6;
+      /* Windows Settings interaction tokens. Huawei red is reserved for the product mark and PPT output swatches. */
+      --product-mark: #c7000b;
+      --accent: #0078d4;
+      --accent-hover: #0067c0;
+      --accent-pressed: #005a9e;
+      --accent-subtle: #dcebfa;
+      /* Legacy aliases keep the existing component selectors semantic during the transition. */
+      --hw-red: var(--accent);
+      --hw-red-deep: var(--accent-hover);
+      --hw-red-soft: var(--accent-subtle);
+      --accent-coral: var(--accent);
+      --accent-orange: #ed6d00;
+      --accent-yellow: #fcc800;
+      --accent-green: #61b230;
+      --accent-cyan: #30b5c5;
+      --academic-blue: #1f4e79;
+      --ink: #1a1a1a;
+      --muted: #616161;
+      --faint: #707070;
+      --line: #e0e0e0;
+      --line-strong: #c7c7c7;
+      --canvas: #f3f3f3;
       --surface: #ffffff;
-      --surface-soft: #fafbfb;
-      --success: #2f7d4b;
-      --success-soft: #eef8f1;
-      --info: #346c89;
-      --info-soft: #eef5f8;
-      --warning: #a76518;
-      --warning-soft: #fff6e9;
-      --danger-soft: #fff1f2;
-      --radius: 6px;
-      --shadow: 0 2px 8px rgba(20, 29, 35, .06);
+      --surface-soft: #f6f6f6;
+      --surface-muted: #f6f6f6;
+      --success: #107c10;
+      --success-soft: #edf7ed;
+      --info: #005fb8;
+      --info-soft: #e8f3fc;
+      --warning: #8a5a00;
+      --warning-soft: #fff4ce;
+      --danger: #c42b1c;
+      --danger-soft: #fdf0ef;
+      --radius: 4px;
+      --radius-sm: 4px;
+      --shadow: none;
+      --shadow-pop: 0 4px 12px rgba(0, 0, 0, .14);
+      --focus-ring: 0 0 0 2px #005fb8;
       --page-max: 1180px;
       --space-1: 8px;
       --space-2: 12px;
@@ -32,6 +52,7 @@
       --space-4: 24px;
       --space-5: 32px;
       --space-6: 48px;
+      --ease: .16s ease;
     }
 
     * { box-sizing: border-box; }
@@ -42,15 +63,26 @@
       color: var(--ink);
       background: var(--canvas);
       font: 14px/1.55 "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    button, input { font: inherit; }
+    ::selection { background: var(--accent-subtle); }
+    button, input, select { font: inherit; }
     button { cursor: pointer; }
     button:disabled { cursor: not-allowed; }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--accent-coral);
+      outline-offset: 2px;
+      border-radius: var(--radius-sm);
+    }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 5px; border: 2px solid var(--canvas); }
+    ::-webkit-scrollbar-track { background: transparent; }
 
     .topbar {
-      height: 68px;
+      height: 64px;
       background: var(--surface);
       border-bottom: 1px solid var(--line);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, .25);
     }
     .topbar__inner {
       width: min(var(--page-max), calc(100% - 48px));
@@ -63,11 +95,13 @@
     }
     .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .brand__mark {
-      width: 28px;
-      height: 28px;
-      background: var(--hw-red);
+      width: 30px;
+      height: 30px;
+      background: var(--product-mark);
+      border-radius: 7px;
       position: relative;
       flex: 0 0 auto;
+      box-shadow: none;
     }
     .brand__mark::after {
       content: "";
@@ -77,29 +111,43 @@
       right: 4px;
       bottom: 4px;
       background: var(--surface);
+      border-radius: 2px;
     }
-    .brand__name { font-size: 16px; font-weight: 700; white-space: nowrap; }
+    .brand__name { font-size: 16px; font-weight: 700; white-space: nowrap; letter-spacing: .01em; }
     .brand__divider { width: 1px; height: 18px; background: var(--line); }
-    .brand__product { color: var(--muted); white-space: nowrap; }
+    .brand__product { color: var(--muted); white-space: nowrap; font-size: 13px; }
     .topbar__state {
       display: inline-flex;
       align-items: center;
       gap: 7px;
+      padding: 5px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
       color: var(--muted);
+      background: var(--surface-soft);
       font-size: 12px;
       white-space: nowrap;
     }
-    .state-dot { width: 7px; height: 7px; background: var(--success); border-radius: 50%; }
-    .topbar__state.is-connecting .state-dot { background: var(--warning); }
+    .state-dot { width: 7px; height: 7px; background: var(--success); border-radius: 50%; box-shadow: 0 0 0 3px rgba(70, 160, 107, .25); }
+    .topbar__state.is-connecting .state-dot { background: var(--warning); box-shadow: 0 0 0 3px rgba(224, 164, 60, .25); }
     .topbar__state.is-disconnected .state-dot,
-    .topbar__state.is-incompatible .state-dot { background: var(--hw-red); }
+    .topbar__state.is-incompatible .state-dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
 
     main { width: min(var(--page-max), calc(100% - 48px)); margin: 0 auto; padding: var(--space-5) 0 var(--space-6); }
     .page-heading { margin-bottom: var(--space-4); display: flex; justify-content: space-between; align-items: end; gap: var(--space-3); }
-    .eyebrow { margin: 0 0 6px; color: var(--hw-red); font-size: 12px; font-weight: 700; }
-    h1 { margin: 0; font-size: 28px; line-height: 1.25; font-weight: 700; }
+    .eyebrow { margin: 0 0 6px; color: var(--accent-coral); font-size: 12px; font-weight: 700; letter-spacing: .14em; }
+    h1 { margin: 0; font-size: 28px; line-height: 1.25; font-weight: 600; letter-spacing: .01em; }
     .page-heading p { margin: 8px 0 0; color: var(--muted); }
-    .contract-note { color: var(--muted); font-size: 12px; text-align: right; }
+    .contract-note {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      padding: 6px 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      white-space: nowrap;
+    }
 
     .layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .9fr); gap: var(--space-4); align-items: start; }
     .surface { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
@@ -107,84 +155,163 @@
     .section { padding: var(--space-4); border-bottom: 1px solid var(--line); }
     .section:last-child { border-bottom: 0; }
     .section-heading { display: flex; align-items: baseline; gap: 10px; margin-bottom: var(--space-3); }
-    .section-number { color: var(--hw-red); font-size: 12px; font-weight: 700; }
+    .section-number { color: var(--accent-coral); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
     h2 { margin: 0; font-size: 16px; line-height: 1.3; }
     .section-subtitle { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
 
     .dropzone {
-      min-height: 176px;
+      min-height: 184px;
       display: grid;
       place-items: center;
       padding: var(--space-4);
-      border: 1px dashed var(--line-strong);
+      border: 1.5px dashed var(--line-strong);
       border-radius: var(--radius);
       text-align: center;
       background: var(--surface-soft);
-      transition: border-color .16s ease, background .16s ease;
+      transition: border-color var(--ease), background var(--ease), box-shadow var(--ease);
     }
-    .dropzone.is-dragover { border-color: var(--hw-red); background: #fff8f8; }
-    .dropzone.is-file { display: block; min-height: auto; padding: 0; background: var(--surface); border-style: solid; }
+    .dropzone:hover { border-color: var(--faint); }
+    .dropzone.is-dragover { border-color: var(--accent-coral); background: var(--accent-subtle); box-shadow: var(--focus-ring); }
+    .dropzone.is-file { display: block; place-items: normal; min-height: auto; padding: 0; background: var(--surface); border: 1px solid var(--line); }
     .upload-icon {
-      width: 34px;
-      height: 34px;
-      margin: 0 auto 10px;
-      border: 1px solid var(--line-strong);
+      width: 38px;
+      height: 38px;
+      margin: 0 auto 12px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
       position: relative;
       background: var(--surface);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
     }
-    .upload-icon::before { content: ""; position: absolute; top: 8px; left: 15px; width: 2px; height: 12px; background: var(--hw-red); }
-    .upload-icon::after { content: ""; position: absolute; top: 8px; left: 11px; width: 8px; height: 8px; border-left: 2px solid var(--hw-red); border-top: 2px solid var(--hw-red); transform: rotate(45deg); }
+    .upload-icon::before { content: ""; position: absolute; top: 10px; left: 17px; width: 2px; height: 13px; border-radius: 1px; background: var(--accent-coral); }
+    .upload-icon::after { content: ""; position: absolute; top: 10px; left: 13px; width: 8px; height: 8px; border-left: 2px solid var(--accent-coral); border-top: 2px solid var(--accent-coral); border-top-left-radius: 2px; transform: rotate(45deg); }
     .dropzone__title { margin: 0; font-weight: 700; }
-    .dropzone__hint { margin: 5px 0 14px; color: var(--muted); font-size: 12px; }
+    .dropzone__hint { margin: 5px 0 14px; color: var(--muted); font-size: 12px; letter-spacing: .04em; }
     .file-input { display: none; }
-    .button { min-height: 36px; padding: 0 14px; border: 1px solid transparent; border-radius: 4px; font-weight: 700; transition: background .16s ease, border-color .16s ease, color .16s ease; }
+    .button {
+      min-height: 36px;
+      padding: 0 18px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      font-weight: 700;
+      letter-spacing: .02em;
+      transition: background var(--ease), border-color var(--ease), color var(--ease), box-shadow var(--ease), transform var(--ease);
+    }
     .button--primary { background: var(--hw-red); color: #fff; }
-    .button--primary:hover:not(:disabled) { background: var(--hw-red-deep); }
-    .button--secondary { color: var(--ink); border-color: var(--line-strong); background: #fff; }
-    .button--secondary:hover:not(:disabled) { border-color: var(--hw-red); color: var(--hw-red); }
-    .button:disabled { color: #a8adb1; background: #edf0f1; border-color: #edf0f1; }
-    .file-row { display: flex; align-items: center; gap: 12px; padding: 13px 14px; text-align: left; }
-    .file-badge { display: grid; place-items: center; width: 35px; height: 35px; background: #fbe9eb; color: var(--hw-red); font-size: 10px; font-weight: 700; }
+    .button--primary:hover:not(:disabled) { background: var(--hw-red-deep); box-shadow: none; }
+    .button--primary:active:not(:disabled) { transform: translateY(1px); }
+    .button--secondary { color: var(--ink); border-color: var(--line-strong); background: var(--surface); }
+    .button--secondary:hover:not(:disabled) { border-color: var(--accent-coral); color: var(--accent-coral); background: var(--accent-subtle); }
+    .button:disabled { color: #6b6675; background: #2e2a34; border-color: #2e2a34; }
+    .file-row { display: flex; align-items: center; gap: 12px; padding: 14px; text-align: left; }
+    .file-badge { display: grid; place-items: center; width: 38px; height: 38px; border-radius: var(--radius-sm); background: var(--hw-red-soft); color: var(--accent-coral); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
     .file-meta { min-width: 0; flex: 1; }
     .file-name { display: block; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .file-size { display: block; color: var(--muted); font-size: 12px; }
-    .file-remove { padding: 6px; border: 0; color: var(--muted); background: transparent; font-size: 18px; line-height: 1; }
-    .file-remove:hover { color: var(--hw-red); }
+    .file-remove { padding: 6px; border: 0; border-radius: var(--radius-sm); color: var(--muted); background: transparent; font-size: 18px; line-height: 1; }
+    .file-remove:hover { color: var(--accent-coral); background: var(--hw-red-soft); }
 
     .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
-    .field-label { display: block; margin-bottom: 9px; color: var(--muted); font-size: 12px; font-weight: 700; }
-    .segment { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+    .field-label { display: block; margin-bottom: 9px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+    .segment { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; padding: 3px; border-radius: var(--radius); background: var(--canvas); }
     .segment--three { grid-template-columns: repeat(3, 1fr); }
-    .segment button { min-height: 35px; padding: 0 9px; border: 0; border-right: 1px solid var(--line-strong); color: var(--muted); background: var(--surface); font-size: 13px; }
-    .segment button:last-child { border-right: 0; }
-    .segment button.is-selected { color: var(--hw-red); background: #fff5f5; font-weight: 700; box-shadow: inset 0 -2px 0 var(--hw-red); }
+    .segment button { min-height: 34px; padding: 0 9px; border: 0; border-radius: var(--radius-sm); color: var(--muted); background: transparent; font-size: 13px; transition: background var(--ease), color var(--ease), box-shadow var(--ease); }
+    .segment button:hover:not(.is-selected):not(:disabled) { color: var(--ink); }
+    .segment button.is-selected { color: var(--accent-coral); background: var(--surface-muted); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, .4); }
     .segment.is-disabled { opacity: .42; pointer-events: none; }
-    .template-picker { display: flex; align-items: center; gap: 12px; margin-top: var(--space-3); padding: 12px 14px; border: 1px solid var(--line); background: var(--surface-soft); }
+    #themeField.is-disabled { opacity: .42; pointer-events: none; }
+    .theme-swatch { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+    .theme-swatch i { width: 11px; height: 11px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35); }
+    .template-picker { display: flex; align-items: center; gap: 12px; margin-top: var(--space-3); padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
     .template-picker.is-disabled { opacity: .45; pointer-events: none; }
     .template-picker__meta { min-width: 0; flex: 1; }
     .template-picker__meta strong, .template-picker__meta span { display: block; }
     .template-picker__meta strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .template-picker__meta span { color: var(--muted); font-size: 11px; }
-    .template-picker__remove { border: 0; background: transparent; color: var(--muted); font-size: 18px; }
+    .template-picker__remove { border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font-size: 18px; padding: 4px 6px; }
+    .template-picker__remove:hover { color: var(--accent-coral); background: var(--hw-red-soft); }
     .asset-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    .asset-item { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 4px 8px; border: 1px solid var(--line); background: var(--surface); font-size: 11px; }
+    .asset-list:empty { margin-top: 0; }
+    .asset-item { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); font-size: 11px; }
     .asset-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .asset-item button { border: 0; background: transparent; color: var(--muted); font-size: 14px; }
+    .asset-item button { border: 0; border-radius: 3px; background: transparent; color: var(--muted); font-size: 14px; }
+    .asset-item button:hover { color: var(--accent-coral); }
     .action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: var(--space-4); }
     .action-note { color: var(--muted); font-size: 12px; }
 
-    .analysis { display: none; background: var(--info-soft); border: 1px solid #d7e9f1; }
+    .engine-bar {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: var(--space-4);
+      padding: 11px 14px;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--hw-red);
+      border-radius: var(--radius-sm);
+      background: var(--surface-soft);
+      font-size: 12px;
+    }
+    .engine-bar.is-stub { border-left-color: var(--faint); }
+    .engine-bar.is-nga { border-left-color: var(--success); }
+    .engine-bar__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+    .engine-bar.is-stub .engine-bar__dot { background: var(--faint); }
+    .engine-bar.is-nga .engine-bar__dot { background: var(--success); box-shadow: 0 0 0 3px rgba(70, 160, 107, .25); }
+    .engine-bar__text { color: var(--ink); }
+    .engine-bar__link { border: 0; padding: 0; background: transparent; color: var(--accent-coral); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+    .engine-bar__link:hover { color: #ff7a6c; }
+
+    .generator-settings { margin-top: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+    .generator-settings summary { padding: 12px 14px; cursor: pointer; font-weight: 700; font-size: 13px; color: var(--ink); border-radius: var(--radius-sm); transition: background var(--ease); }
+    .generator-settings summary:hover { background: var(--surface-soft); }
+    .generator-settings summary::-webkit-details-marker { color: var(--muted); }
+    .generator-state { display: inline-block; margin-left: 8px; padding: 3px 10px; border-radius: 999px; color: var(--muted); background: var(--surface-muted); border: 1px solid var(--line); font-size: 11px; font-weight: 400; }
+    .generator-settings__body { padding: 0 14px 14px; border-top: 1px solid var(--line); }
+    .generator-status-card { margin: 14px 0 4px; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--hw-red); border-radius: var(--radius-sm); background: var(--surface-soft); }
+    .generator-status-card__row { display: flex; align-items: center; gap: 8px; }
+    .generator-status-card__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+    .generator-status-card__dot.is-active { background: var(--success); box-shadow: 0 0 0 3px rgba(70, 160, 107, .25); }
+    .generator-status-card__dot.is-warn { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+    .generator-status-card__detail { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .generator-settings__field { min-width: 0; }
+    .field-hint { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .required-mark { color: var(--accent-coral); font-weight: 700; }
+    .generator-settings__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; padding: 14px 0 4px; }
+    .generator-settings__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+    .text-input {
+      width: 100%;
+      min-height: 36px;
+      padding: 0 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      color: var(--ink);
+      background: var(--surface);
+      font-size: 13px;
+      transition: border-color var(--ease), box-shadow var(--ease);
+    }
+    .text-input:hover { border-color: var(--faint); }
+    .text-input:focus { outline: 0; border-color: var(--accent-coral); box-shadow: var(--focus-ring); }
+    select.text-input {
+      appearance: none;
+      -webkit-appearance: none;
+      padding-right: 32px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23B9B4BE' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      cursor: pointer;
+    }
+
+    .analysis { display: none; background: var(--info-soft); }
     .analysis.is-visible { display: block; }
     .analysis-summary { display: flex; justify-content: space-between; gap: var(--space-3); align-items: center; }
     .analysis-summary strong { font-size: 16px; }
-    .recommended { display: inline-flex; align-items: center; padding: 3px 8px; color: var(--info); background: #fff; border: 1px solid #c8e1ec; font-size: 12px; font-weight: 700; }
+    .recommended { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; color: var(--info); background: transparent; border: 1px solid rgba(111, 168, 201, .45); font-size: 12px; font-weight: 700; white-space: nowrap; }
     .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin: 14px 0; }
-    .metric { padding: 10px; background: rgba(255,255,255,.72); border: 1px solid #d7e9f1; }
-    .metric b { display: block; font-size: 19px; line-height: 1.1; }
+    .metric { padding: 12px; border-radius: var(--radius-sm); background: rgba(255, 255, 255, .04); border: 1px solid rgba(111, 168, 201, .28); }
+    .metric b { display: block; font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; }
     .metric span { color: var(--muted); font-size: 11px; }
     .tier-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .tier { padding: 9px; border: 1px solid #d7e9f1; background: rgba(255,255,255,.54); color: var(--muted); font-size: 12px; }
-    .tier.is-recommended { border-color: var(--info); color: var(--ink); background: #fff; }
+    .tier { padding: 10px; border: 1px solid rgba(111, 168, 201, .22); border-radius: var(--radius-sm); background: rgba(255, 255, 255, .03); color: var(--muted); font-size: 12px; }
+    .tier.is-recommended { border-color: var(--info); color: var(--ink); background: rgba(111, 168, 201, .14); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
     .tier b { display: block; color: var(--ink); }
 
     .progress-panel { display: none; }
@@ -192,60 +319,264 @@
     .progress-top { display: flex; justify-content: space-between; gap: var(--space-3); align-items: center; }
     .progress-actions { display: flex; align-items: center; gap: 10px; }
     .progress-title { font-weight: 700; }
-    .elapsed { color: var(--muted); font-size: 12px; }
-    .progress-track { height: 5px; margin: 14px 0 13px; background: #e8ecee; overflow: hidden; }
-    .progress-fill { width: 0%; height: 100%; background: var(--hw-red); transition: width .4s ease; }
-    .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-    .step { color: #9aa1a5; font-size: 11px; text-align: center; }
-    .step::before { content: ""; display: block; width: 7px; height: 7px; margin: 0 auto 5px; border: 1px solid #b8bec2; border-radius: 50%; background: #fff; }
+    .elapsed { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .progress-track { height: 6px; margin: 14px 0 15px; border-radius: 3px; background: var(--surface-muted); overflow: hidden; }
+    .progress-fill { width: 0%; height: 100%; border-radius: 3px; background: var(--hw-red); transition: width .4s ease; }
+    .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: linear-gradient(var(--line), var(--line)) center 4px / calc(100% - 60px) 1px no-repeat; }
+    .step { color: var(--faint); font-size: 11px; text-align: center; }
+    .step::before { content: ""; display: block; width: 8px; height: 8px; margin: 0 auto 6px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); }
     .step.is-active, .step.is-done { color: var(--ink); }
-    .step.is-active::before { border-color: var(--hw-red); background: var(--hw-red); box-shadow: 0 0 0 3px #fde9eb; }
+    .step.is-active { font-weight: 700; }
+    .step.is-active::before { border-color: var(--hw-red); background: var(--hw-red); box-shadow: 0 0 0 3px var(--accent-subtle); }
     .step.is-done::before { border-color: var(--success); background: var(--success); }
 
     .result { display: none; }
     .result.is-visible { display: block; }
-    .result--success { background: var(--success-soft); border: 1px solid #cde7d5; }
-    .result--error { background: var(--danger-soft); border: 1px solid #f1cbd0; }
+    .result--success { background: var(--success-soft); border-top: 2px solid var(--success); }
+    .result--error { background: var(--danger-soft); border-top: 2px solid var(--danger); }
     .result__row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
     .result__title { margin: 0; font-size: 16px; }
     .result__detail { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-    .failure-diagnostic { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(180, 35, 24, .22); color: var(--muted); font-size: 12px; }
+    .failure-diagnostic { margin-top: 14px; padding: 12px 14px 2px; border: 1px solid var(--danger); border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--muted); font-size: 12px; }
     .failure-diagnostic__head { display: flex; gap: 9px; align-items: baseline; color: var(--ink); }
-    .failure-diagnostic__head strong { color: var(--hw-red); }
+    .failure-diagnostic__head strong { color: var(--accent-coral); letter-spacing: .04em; }
     .failure-diagnostic p { margin: 7px 0 0; }
-    .failure-diagnostic .button { margin-top: 10px; }
+    .failure-diagnostic .button { margin: 10px 0 12px; }
     .lint-summary { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
-    .lint-chip { padding: 3px 7px; border: 1px solid transparent; font-size: 11px; font-weight: 700; }
-    .lint-chip--error { color: #aa2632; border-color: #efc4c9; background: #fff; }
-    .lint-chip--warning { color: var(--warning); border-color: #efd8b7; background: #fff; }
-    .lint-chip--info { color: var(--info); border-color: #c8e1ec; background: #fff; }
+    .lint-chip { padding: 3px 10px; border: 1px solid transparent; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .lint-chip--error { color: var(--danger); border-color: var(--danger); background: transparent; }
+    .lint-chip--warning { color: var(--warning); border-color: rgba(224, 164, 60, .4); background: transparent; }
+    .lint-chip--info { color: var(--info); border-color: rgba(111, 168, 201, .4); background: transparent; }
     .lint-items { margin: 11px 0 0; padding: 0; list-style: none; }
-    .lint-items li { padding: 7px 0; border-top: 1px solid rgba(47, 125, 75, .16); color: var(--muted); font-size: 12px; }
+    .lint-items li { padding: 7px 0; border-top: 1px solid rgba(70, 160, 107, .2); color: var(--muted); font-size: 12px; }
     .lint-items b { color: var(--ink); }
-    .audit-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .audit-links a { color: var(--info); font-size: 12px; font-weight: 700; text-decoration: none; border-bottom: 1px solid currentColor; }
+    .audit-links { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; }
+    .audit-links a { color: var(--info); font-size: 12px; font-weight: 700; text-decoration: none; border-bottom: 1px solid currentColor; padding-bottom: 1px; transition: color var(--ease); }
+    .audit-links a:hover { color: #8fc0de; }
 
     .side-panel { padding: var(--space-4); }
     .side-panel + .side-panel { border-top: 1px solid var(--line); }
-    .side-label { margin: 0 0 8px; color: var(--hw-red); font-size: 11px; font-weight: 700; }
+    .side-label { margin: 0 0 8px; color: var(--accent-coral); font-size: 11px; font-weight: 700; letter-spacing: .14em; }
     h3 { margin: 0; font-size: 16px; line-height: 1.35; }
     .side-panel p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
-    .pipeline { margin: 18px 0 0; padding: 0; list-style: none; }
-    .pipeline li { position: relative; display: flex; align-items: center; gap: 10px; padding: 0 0 13px; color: var(--muted); font-size: 12px; }
+    .pipeline { margin: 18px 0 0; padding: 0; list-style: none; counter-reset: pipeline; }
+    .pipeline li { position: relative; display: flex; align-items: center; gap: 10px; padding: 0 0 14px; color: var(--muted); font-size: 12px; counter-increment: pipeline; }
     .pipeline li:last-child { padding-bottom: 0; }
-    .pipeline li::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; border: 1px solid var(--line-strong); border-radius: 50%; background: #fff; z-index: 1; }
-    .pipeline li:not(:last-child)::after { content: ""; position: absolute; top: 9px; left: 4px; width: 1px; height: 13px; background: var(--line); }
-    .pipeline li:first-child::before { background: var(--hw-red); border-color: var(--hw-red); }
-    .status-card { margin-top: var(--space-3); padding: 13px; background: var(--surface-soft); border-left: 3px solid var(--hw-red); }
+    .pipeline li::before {
+      content: counter(pipeline, decimal-leading-zero);
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 700;
+      z-index: 1;
+    }
+    .pipeline li:not(:last-child)::after { content: ""; position: absolute; top: 22px; left: 10px; width: 1px; height: 12px; background: var(--line); }
+    .pipeline li:first-child::before { background: var(--hw-red); border-color: var(--hw-red); color: #fff; }
+    .status-card { margin-top: var(--space-3); padding: 13px; border-radius: var(--radius-sm); background: var(--surface-soft); border: 1px solid var(--line); border-left: 3px solid var(--hw-red); }
     .status-card strong { display: block; font-size: 13px; }
     .status-card span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
-    .privacy-note { display: flex; gap: 9px; align-items: flex-start; }
-    .privacy-mark { width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid var(--line-strong); color: var(--hw-red); font-size: 11px; font-weight: 700; flex: 0 0 auto; }
+    .privacy-note { display: flex; gap: 10px; align-items: flex-start; }
+    .privacy-mark { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--accent-coral); font-size: 11px; font-weight: 700; flex: 0 0 auto; }
 
-    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 3; max-width: min(420px, calc(100% - 40px)); padding: 12px 14px; color: #fff; background: #333; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .18s ease, transform .18s ease; }
+    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 3; max-width: min(420px, calc(100% - 40px)); padding: 12px 16px; border-radius: var(--radius-sm); color: var(--ink); background: var(--surface-muted); box-shadow: var(--shadow-pop); opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .18s ease, transform .18s ease; }
     .toast.is-visible { opacity: 1; transform: translateY(0); }
-    .toast.is-error { background: var(--hw-red); }
+    .toast.is-error { background: var(--danger); }
 
+    /* Windows Settings visual language: semantic system colors, compact rows, no branded control chrome. */
+    :root {
+      color-scheme: light;
+      --product-mark: #c7000b;
+      --accent: #0078d4;
+      --accent-hover: #0067c0;
+      --accent-pressed: #005a9e;
+      --accent-subtle: #dcebfa;
+      --hw-red: var(--accent);
+      --hw-red-deep: var(--accent-hover);
+      --hw-red-soft: var(--accent-subtle);
+      --accent-coral: var(--accent);
+      --ink: #1a1a1a;
+      --muted: #616161;
+      --faint: #707070;
+      --line: #e0e0e0;
+      --line-strong: #c7c7c7;
+      --canvas: #f3f3f3;
+      --surface: #ffffff;
+      --surface-soft: #f6f6f6;
+      --surface-muted: #f6f6f6;
+      --success: #107c10;
+      --success-soft: #edf7ed;
+      --info: #005fb8;
+      --info-soft: #e8f3fc;
+      --warning: #8a5a00;
+      --warning-soft: #fff4ce;
+      --danger: #c42b1c;
+      --danger-soft: #fdf0ef;
+      --shadow: none;
+      --shadow-pop: 0 4px 12px rgba(0, 0, 0, .14);
+      --focus-ring: 0 0 0 2px #005fb8;
+      --radius: 4px;
+      --radius-sm: 4px;
+      --ease: .12s ease;
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --accent: #4cc2ff;
+      --accent-hover: #76d0ff;
+      --accent-pressed: #2ea8e6;
+      --accent-subtle: #28425c;
+      --hw-red: var(--accent);
+      --hw-red-deep: var(--accent-hover);
+      --hw-red-soft: var(--accent-subtle);
+      --accent-coral: var(--accent);
+      --ink: #f5f5f5;
+      --muted: #c8c8c8;
+      --faint: #a0a0a0;
+      --line: #3d3d3d;
+      --line-strong: #5a5a5a;
+      --canvas: #202020;
+      --surface: #2b2b2b;
+      --surface-soft: #333333;
+      --surface-muted: #333333;
+      --success: #6ccb5f;
+      --success-soft: #263d27;
+      --info: #4cc2ff;
+      --info-soft: #263b4a;
+      --warning: #f2c94c;
+      --warning-soft: #493d1f;
+      --danger: #ff99a4;
+      --danger-soft: #4c2e34;
+      --shadow-pop: 0 4px 14px rgba(0, 0, 0, .36);
+      --focus-ring: 0 0 0 2px #4cc2ff;
+    }
+    :root[data-theme="light"] { color-scheme: light; }
+    ::selection { background: var(--hw-red-soft); color: var(--ink); }
+    :root[data-theme] .brand__mark { background: var(--product-mark); }
+    :root[data-theme] .button:disabled { color: var(--faint); background: var(--surface-muted); border-color: var(--surface-muted); }
+    :root[data-theme] .dropzone.is-dragover { background: var(--hw-red-soft); }
+    :root[data-theme] .recommended,
+    :root[data-theme] .metric,
+    :root[data-theme] .tier,
+    :root[data-theme] .tier.is-recommended { background: var(--surface); border-color: var(--line); box-shadow: none; }
+    :root[data-theme] .engine-bar__link:hover,
+    :root[data-theme] .audit-links a:hover { color: var(--accent-coral); }
+    :root[data-theme] .failure-diagnostic { border-color: var(--danger); background: var(--danger-soft); }
+    :root[data-theme] .lint-chip--error { color: var(--danger); border-color: var(--danger); background: transparent; }
+    :root[data-theme] .lint-chip--warning { color: var(--warning); border-color: var(--warning); background: transparent; }
+    :root[data-theme] .lint-chip--info { color: var(--info); border-color: var(--info); background: transparent; }
+
+    body { background: var(--canvas); }
+    .topbar { height: 52px; background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: none; }
+    .topbar__inner { width: min(calc(100% - 32px), 1360px); }
+    .brand { gap: 8px; }
+    .brand__mark { width: 18px; height: 18px; border-radius: 3px; box-shadow: none; }
+    .brand__mark::after { width: 6px; height: 6px; border-radius: 1px; }
+    .brand__name { font-size: 14px; }
+    .brand__product { color: var(--muted); font-size: 12px; }
+    .theme-mode { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+    .theme-mode select { height: 30px; min-width: 102px; padding: 0 24px 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; }
+    .theme-mode select:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--hw-red); }
+    .topbar__state { border-radius: 4px; background: transparent; border-color: transparent; padding: 5px 0 5px 8px; }
+
+    main.app-shell { width: min(calc(100% - 32px), 1360px); min-height: calc(100vh - 52px); margin: 0 auto; padding: 20px 0 32px; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 24px; }
+    .app-nav { align-self: start; position: sticky; top: 68px; display: grid; gap: 2px; padding-right: 16px; border-right: 1px solid var(--line); }
+    .app-nav__button { min-height: 40px; padding: 0 12px; border: 0; border-left: 3px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+    .app-nav__button:hover { background: var(--surface-muted); }
+    .app-nav__button.is-selected { border-left-color: var(--hw-red); background: var(--hw-red-soft); color: var(--ink); font-weight: 700; }
+    .app-nav__button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    .app-content { min-width: 0; }
+    .workbench-view[hidden] { display: none; }
+    .page-heading { min-height: 0; margin: 0 0 18px; padding: 0 0 18px; border-bottom: 1px solid var(--line); background: transparent; box-shadow: none; }
+    .page-heading h1 { font-size: 24px; line-height: 1.25; font-weight: 600; }
+    .page-heading p { margin-top: 6px; color: var(--muted); }
+    .page-heading > .button { flex: 0 0 auto; white-space: nowrap; }
+    .eyebrow { margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0; }
+    .contract-note { align-self: center; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 12px; }
+    .layout { grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; }
+    .surface { border-radius: 4px; border-color: var(--line); box-shadow: none; }
+    .section { padding: 16px; }
+    .section + .section { border-top-color: var(--line); }
+    .section-number { width: 24px; height: 24px; border-radius: 3px; background: var(--hw-red-soft); color: var(--hw-red); font-size: 12px; }
+    .section-heading h2 { font-size: 16px; }
+    .dropzone { min-height: 148px; border-radius: 4px; background: var(--surface-muted); border-color: var(--line); }
+    .dropzone:hover { border-color: var(--hw-red); }
+    .button { min-height: 36px; border-radius: 4px; box-shadow: none; }
+    .button--primary { background: var(--hw-red); border-color: var(--hw-red); color: #fff; }
+    :root[data-theme="dark"] .button--primary { color: #000; }
+    .button--primary:hover { background: var(--hw-red-deep); border-color: var(--hw-red-deep); }
+    .button--secondary { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
+    .button--secondary:hover { background: var(--surface-muted); border-color: var(--hw-red); }
+    .text-input, .theme-mode select { border-radius: 4px; border-color: var(--line-strong); background-color: var(--surface); color: var(--ink); }
+    .text-input:focus, .text-input:focus-visible { border-color: var(--hw-red); box-shadow: var(--focus-ring); outline: none; }
+    .segment { border-radius: 4px; background: var(--surface-muted); border-color: var(--line); }
+    .segment button { border-radius: 3px; color: var(--muted); }
+    .segment button.is-selected { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hw-red); }
+    .generator-settings, .template-picker, .engine-bar { border-radius: 4px; border-color: var(--line); background: var(--surface); }
+    .generator-settings summary { border-radius: 4px; }
+    .generator-status-card { border-radius: 4px; background: var(--surface-muted); border-color: var(--line); }
+    .side { background: transparent; }
+    .side-panel { padding: 16px; }
+    .side-panel + .side-panel { border-top-color: var(--line); }
+    .status-card { border-left-color: var(--hw-red); border-radius: 4px; background: var(--surface-muted); }
+    .privacy-mark { border-radius: 3px; color: var(--info); }
+    .progress-track { border-radius: 2px; background: var(--surface-muted); }
+    .progress-fill { background: var(--hw-red); }
+    .step::before { border-color: var(--line-strong); background: var(--surface); }
+    .step.is-active::before, .step.is-done::before { background: var(--hw-red); border-color: var(--hw-red); }
+    .toast { border-radius: 4px; background: var(--surface); border: 1px solid var(--line); }
+    .toast.is-error { background: var(--danger); color: #fff; }
+
+    .task-list, .settings-list, .diagnostics-list { overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+    .task-empty { padding: 24px; color: var(--muted); }
+    .task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    .task-row:last-child, .settings-row:last-child, .diagnostics-list > div:last-child { border-bottom: 0; }
+    .task-row__title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+    .task-row__detail { margin-top: 5px; color: var(--muted); font-size: 12px; }
+    .task-status { display: inline-flex; min-height: 22px; align-items: center; padding: 0 7px; border: 1px solid currentColor; border-radius: 3px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .task-status--done { color: var(--success); }
+    .task-status--failed, .task-status--canceled { color: var(--danger); }
+    .task-row__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .settings-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px); gap: 24px; align-items: center; min-height: 82px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    .settings-row h2 { margin: 0; font-size: 15px; font-weight: 600; }
+    .settings-row p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .settings-row__control { width: 100%; }
+    .settings-row__value { justify-self: end; color: var(--muted); font-size: 13px; }
+    .diagnostics-list > div { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 16px; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+    .diagnostics-list dt { font-weight: 600; }
+    .diagnostics-list dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+
+    @media (forced-colors: active) {
+      .app-nav__button.is-selected, .segment button.is-selected { forced-color-adjust: auto; border-color: Highlight; }
+      .button--primary { forced-color-adjust: auto; }
+    }
+    @media (max-width: 860px) {
+      main.app-shell { grid-template-columns: 1fr; align-content: start; gap: 16px; }
+      .app-nav { position: static; grid-template-columns: repeat(4, minmax(max-content, 1fr)); overflow-x: auto; padding: 0 0 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .app-nav__button { text-align: center; border-left: 0; border-bottom: 3px solid transparent; }
+      .app-nav__button.is-selected { border-left-color: transparent; border-bottom-color: var(--hw-red); }
+    }
+    @media (max-width: 620px) {
+      .topbar__inner, main.app-shell { width: min(100% - 24px, 1360px); }
+      .theme-mode > span { display: none; }
+      .theme-mode select { min-width: 88px; }
+      .topbar__state { display: inline-flex; max-width: 132px; padding-left: 5px; font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .layout { grid-template-columns: 1fr; }
+      .side { display: block; }
+      .side-panel + .side-panel { border-left: 0; border-top: 1px solid var(--line); }
+      .settings-row, .task-row { grid-template-columns: 1fr; gap: 12px; }
+      .settings-row__value, .task-row__actions { justify-self: start; justify-content: flex-start; }
+      .diagnostics-list > div { grid-template-columns: 1fr; gap: 4px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; }
+    }
     @media (max-width: 880px) {
       .layout { grid-template-columns: 1fr; }
       .side { display: grid; grid-template-columns: 1fr 1fr; }
@@ -256,13 +587,13 @@
       .topbar__inner, main { width: min(100% - 28px, var(--page-max)); }
       .topbar__inner { padding: 14px 0; }
       .brand__divider, .brand__product { display: none; }
-      .topbar__state { font-size: 11px; }
+      .topbar__state { font-size: 11px; padding: 4px 10px; }
       main { padding: 26px 0 36px; }
       .page-heading { align-items: start; }
       .contract-note { display: none; }
       h1 { font-size: 23px; }
       .section, .side-panel { padding: 18px; }
-      .options-grid, .side { grid-template-columns: 1fr; }
+      .options-grid, .side, .generator-settings__grid { grid-template-columns: 1fr; }
       .side-panel + .side-panel { border-top: 1px solid var(--line); border-left: 0; }
       .metrics, .tier-list { grid-template-columns: 1fr; }
       .result__row, .analysis-summary { align-items: flex-start; flex-direction: column; }
@@ -279,18 +610,37 @@
         <span class="brand__divider" aria-hidden="true"></span>
         <span class="brand__product">离线智能文档工具链</span>
       </div>
-      <div id="serviceState" class="topbar__state is-connecting" data-testid="service-status"><span class="state-dot" aria-hidden="true"></span><span id="serviceStateText">正在连接本地服务</span></div>
+      <div class="topbar__actions">
+        <label class="theme-mode" for="themeToggle">
+          <span>外观</span>
+          <select id="themeToggle" data-testid="theme-toggle" aria-label="工作台外观">
+            <option value="system">跟随系统</option>
+            <option value="light">浅色</option>
+            <option value="dark">深色</option>
+          </select>
+        </label>
+        <div id="serviceState" class="topbar__state is-connecting" data-testid="service-status"><span class="state-dot" aria-hidden="true"></span><span id="serviceStateText">正在连接本地服务</span></div>
+      </div>
     </div>
   </header>
 
-  <main>
+  <main class="app-shell">
+    <nav class="app-nav" aria-label="工作台导航">
+      <button class="app-nav__button is-selected" type="button" data-view="generate" data-testid="nav-generate" aria-current="page">生成</button>
+      <button class="app-nav__button" type="button" data-view="tasks" data-testid="nav-tasks">任务</button>
+      <button class="app-nav__button" type="button" data-view="settings" data-testid="nav-settings">设置</button>
+      <button class="app-nav__button" type="button" data-view="diagnostics" data-testid="nav-diagnostics">诊断</button>
+    </nav>
+
+    <div class="app-content">
+    <section id="generateView" class="workbench-view" aria-labelledby="generateTitle">
     <div class="page-heading">
       <div>
-        <p class="eyebrow">DOCUMENT WORKBENCH</p>
-        <h1>从资料到可编辑交付文档</h1>
+        <p class="eyebrow">文档生成</p>
+        <h1 id="generateTitle">创建交付文档</h1>
         <p>上传源文件，分析内容规模，生成并复检 Word 或 PPTX 产物。</p>
       </div>
-      <div class="contract-note">解析 &rarr; IR &rarr; 渲染 &rarr; 合规检查</div>
+      <div class="contract-note">结构化生成 · 可审计产物</div>
     </div>
 
     <div class="layout">
@@ -327,7 +677,86 @@
                 <button class="depth-option" type="button" data-depth="详细" data-testid="depth-detailed">详细</button>
               </div>
             </div>
+            <div id="themeField">
+              <span class="field-label">PPT 主题</span>
+              <select id="themeSelect" class="text-input" data-testid="theme-select">
+                <option value="hw_v1">华为默认</option>
+                <option value="hw-report">汇报版（信息密度高）</option>
+                <option value="hw-proposal">方案版（图文并茂）</option>
+                <option value="hw-academic">学术版（严谨克制）</option>
+              </select>
+              <span id="themeSwatch" class="theme-swatch" aria-hidden="true"></span>
+            </div>
           </div>
+          <details id="generatorSettings" class="generator-settings" data-testid="generator-settings">
+            <summary>AI 生成设置 <span id="generatorStateText" class="generator-state">当前：Stub（确定性生成）</span></summary>
+            <div class="generator-settings__body">
+              <div id="generatorStatusCard" class="generator-status-card" data-testid="generator-status-card">
+                <div class="generator-status-card__row">
+                  <span class="generator-status-card__dot" id="generatorStatusDot"></span>
+                  <strong id="generatorStatusTitle">当前使用：Stub 生成器</strong>
+                </div>
+                <span id="generatorStatusDetail" class="generator-status-card__detail">确定性生成，无需 AI 服务，适合流程验证与离线环境。</span>
+              </div>
+              <div class="generator-settings__grid">
+                <div class="generator-settings__field">
+                  <span class="field-label">调用方式 <b class="required-mark">*</b></span>
+                  <select id="ngaTransport" class="text-input" data-testid="nga-transport">
+                    <option value="cli">本机 NGA 命令行（推荐，内网首选）</option>
+                    <option value="http">HTTP 服务（OpenAI 兼容接口）</option>
+                  </select>
+                  <span id="transportHint" class="field-hint">本机已登录 NGA 直接可用：认证、Token 刷新由 NGA 自行管理，无需填写任何凭据。</span>
+                </div>
+                <div id="ngaCliPathField" class="generator-settings__field">
+                  <span class="field-label">NGA 命令行路径</span>
+                  <input id="ngaCliPath" class="text-input" type="text" value="nga" placeholder="nga 或完整路径" data-testid="nga-cli-path">
+                  <span class="field-hint">安装 NGA（codeagent）后的命令名；已加入 PATH 时保持默认 "nga"。</span>
+                </div>
+                <div id="ngaBaseUrlField" class="generator-settings__field">
+                  <span class="field-label">服务地址（Base URL）<b class="required-mark">*</b></span>
+                  <input id="ngaBaseUrl" class="text-input" type="text" placeholder="https://your-nga.example/v1" data-testid="nga-base-url">
+                  <span class="field-hint">内网 OpenAI 兼容服务的根地址，不含接口路径。</span>
+                </div>
+                <div id="ngaEndpointField" class="generator-settings__field">
+                  <span class="field-label">接口路径</span>
+                  <input id="ngaEndpoint" class="text-input" type="text" value="/v1/chat/completions" data-testid="nga-endpoint">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">模型 <b class="required-mark">*</b></span>
+                  <input id="ngaModel" class="text-input" type="text" placeholder="w3/GLM-5.1-WX-Auto" data-testid="nga-model">
+                  <span class="field-hint">两种调用方式都需要指定模型名。</span>
+                </div>
+                <div id="ngaTokenField" class="generator-settings__field">
+                  <span class="field-label">Bearer Token <b class="required-mark">*</b></span>
+                  <input id="ngaToken" class="text-input" type="password" placeholder="sk-..." data-testid="nga-token">
+                  <span class="field-hint">仅保存在内存中，刷新页面后需重新输入。</span>
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">超时（秒）</span>
+                  <input id="ngaTimeout" class="text-input" type="number" min="1" max="900" value="300" data-testid="nga-timeout">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">重试次数</span>
+                  <input id="ngaRetries" class="text-input" type="number" min="0" max="5" value="2" data-testid="nga-retries">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">生成模式</span>
+                  <select id="generatorMode" class="text-input" data-testid="generator-mode">
+                    <option value="auto">auto：AI 不可用时自动回退确定性生成（推荐）</option>
+                    <option value="strict">strict：AI 不可用即失败，不降级</option>
+                  </select>
+                  <span class="field-hint">auto 降级后结果会标注「已自动使用确定性生成器完成」；strict 保持严格失败。</span>
+                </div>
+              </div>
+              <div class="generator-settings__actions">
+                <button id="saveGeneratorSettings" class="button button--secondary" type="button" data-testid="save-generator-settings">保存配置</button>
+                <button id="testGeneratorConnection" class="button button--secondary" type="button" data-testid="test-generator-connection">测试连接</button>
+                <button id="activateGenerator" class="button button--primary" type="button" data-testid="activate-generator">启用生成器</button>
+                <button id="switchToStub" class="button button--secondary" type="button" data-testid="switch-to-stub">切换回 Stub</button>
+                <span id="generatorOperationStatus" class="action-note"></span>
+              </div>
+            </div>
+          </details>
           <div id="templatePicker" class="template-picker">
             <div class="template-picker__meta"><strong id="templateName">使用默认华为自绘主题</strong><span id="templateDetail">可选上传 .pptx 模板，系统将生成可审计页面映射</span></div>
             <button id="templateBrowse" class="button button--secondary" type="button" data-testid="browse-template">选择模板</button>
@@ -343,6 +772,11 @@
             <button id="assetBrowse" class="button button--secondary" type="button" data-testid="browse-assets">选择图片</button>
             <button id="assetRemoveAll" class="template-picker__remove" type="button" aria-label="移除全部图片" hidden data-testid="remove-all-assets">×</button>
             <input id="assetInput" class="file-input" type="file" accept=".png,.jpg,.jpeg,.webp" multiple data-testid="asset-files">
+          </div>
+          <div id="engineBar" class="engine-bar" data-testid="engine-bar">
+            <span class="engine-bar__dot" id="engineBarDot" aria-hidden="true"></span>
+            <span class="engine-bar__text" id="engineBarText">生成引擎：确定性 Stub（未接入 AI）</span>
+            <button type="button" class="engine-bar__link" id="engineBarLink">更改设置</button>
           </div>
           <div class="action-row">
             <button id="analyzeButton" class="button button--secondary" type="button" disabled data-testid="analyze-button">分析资料</button>
@@ -390,14 +824,72 @@
         <div class="side-panel">
           <p class="side-label">PROCESS</p>
           <h3>每一步都可复核</h3>
-          <p>源文件不会直接进入渲染器。系统先解析为结构化中间表示，再生成可编辑交付件。</p>
-          <ol class="pipeline"><li>结构化解析</li><li>内容生成与校验</li><li>可编辑文档渲染</li><li>主题与版式复检</li></ol>
-          <div class="status-card"><strong>当前使用：Stub 生成器</strong><span>用于本地确定性验证。内网模型接入后可替换生成器，不改变前端调用方式。</span></div>
+          <p>源文件不会直接变成成品。系统先解析内容结构，再由生成引擎产出结构化草稿，经校验后渲染为可编辑文档。</p>
+          <ol class="pipeline"><li>解析资料结构</li><li>生成内容草稿并校验</li><li>渲染可编辑文档</li><li>版式与合规复检</li></ol>
+          <div class="status-card"><strong>生成引擎可选三种</strong><span>确定性 Stub（离线可用）、本机 NGA 命令行（内网首选，登录一次即可）、OpenAI 兼容 HTTP 服务。在"AI 生成设置"中切换，当前引擎显示在"开始生成"上方。</span></div>
         </div>
         <div class="side-panel">
           <div class="privacy-note"><span class="privacy-mark" aria-hidden="true">i</span><div><h3>使用边界</h3><p>合规检查能发现结构、主题和版式规则问题；最终语义与视觉交付仍应由业务人员复核。</p></div></div>
         </div>
       </aside>
+    </div>
+    </section>
+
+    <section id="tasksView" class="workbench-view" aria-labelledby="tasksTitle" hidden>
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">任务</p>
+          <h1 id="tasksTitle">最近任务</h1>
+          <p>查看本机任务的状态、产物和可恢复操作。</p>
+        </div>
+        <button id="refreshTasks" class="button button--secondary" type="button" data-testid="refresh-tasks-web">刷新</button>
+      </div>
+      <div id="taskList" class="task-list" aria-live="polite" data-testid="task-list"></div>
+    </section>
+
+    <section id="settingsView" class="workbench-view" aria-labelledby="settingsTitle" hidden>
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">设置</p>
+          <h1 id="settingsTitle">工作台设置</h1>
+          <p>外观、生成器和本地数据边界。</p>
+        </div>
+      </div>
+      <div class="settings-list">
+        <div class="settings-row">
+          <div><h2>外观</h2><p>默认跟随系统；手动选择会保留在此浏览器中。</p></div>
+          <select id="settingsThemeMode" class="text-input settings-row__control" aria-label="设置页外观">
+            <option value="system">跟随系统（推荐）</option>
+            <option value="light">浅色</option>
+            <option value="dark">深色</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <div><h2>生成器</h2><p>Stub 可离线运行；NGA 配置仅在本机会话中使用。</p></div>
+          <button id="openGeneratorSettings" class="button button--secondary" type="button">管理</button>
+        </div>
+        <div class="settings-row">
+          <div><h2>任务保留</h2><p>完成、失败和取消的任务按服务端策略保留 24 小时；敏感中间文件会在结束后清理。</p></div>
+          <span class="settings-row__value">24 小时</span>
+        </div>
+        <div class="settings-row">
+          <div><h2>隐私</h2><p>浏览器不会保存 Token、原始 Prompt 或输入正文；所有请求只发送到当前工作台的本机 API。</p></div>
+          <span class="settings-row__value">本机</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="diagnosticsView" class="workbench-view" aria-labelledby="diagnosticsTitle" hidden>
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">诊断</p>
+          <h1 id="diagnosticsTitle">运行诊断</h1>
+          <p>仅展示本机服务和依赖状态，不显示凭据或文档正文。</p>
+        </div>
+        <button id="refreshDiagnostics" class="button button--secondary" type="button" data-testid="refresh-diagnostics-web">刷新</button>
+      </div>
+      <dl id="diagnosticsList" class="diagnostics-list" aria-live="polite" data-testid="diagnostics-list"></dl>
+    </section>
     </div>
   </main>
 
@@ -407,7 +899,7 @@
     (() => {
       const storageKey = "huawei-workbench-last-job-v1";
       const state = { file: null, template: null, assets: [], type: "deck", depth: "标准", jobId: null, idempotencyKey: null, timer: null, elapsedTimer: null, startedAt: null, busy: false, jobRunning: false, pollFailures: 0, connected: false, compatible: false };
-      const stageText = { queued: "任务已创建，等待执行", parsing: "正在解析源文件", normalizing_assets: "正在校验图片资产", planning_visuals: "正在规划视觉表达", generating: "正在生成结构化内容", profiling_template: "正在分析模板母版与页面原型", planning_template: "正在规划页面与模板映射", rendering: "正在渲染可编辑文档", validating_package: "正在检查 PPTX 包关系", linting: "正在执行合规检查", done: "交付件已准备完成", validation_failed: "IR 校验未通过", failed: "任务执行失败", canceled: "任务已取消", timed_out: "任务执行超时", interrupted: "服务重启导致任务中断", rate_limited: "请求频率受限" };
+      const stageText = { queued: "任务已创建，等待执行", parsing: "正在解析源文件", normalizing_assets: "正在校验图片资产", planning_visuals: "正在规划视觉表达", generating: "正在生成结构化内容", profiling_template: "正在分析模板母版与页面原型", planning_template: "正在规划页面与模板映射", rendering: "正在渲染可编辑文档", validating_package: "正在检查 PPTX 包关系", linting: "正在执行合规检查", done: "交付件已准备完成", validation_failed: "内容草稿未通过校验", failed: "任务执行失败", canceled: "任务已取消", timed_out: "任务执行超时", interrupted: "服务重启导致任务中断", rate_limited: "请求频率受限" };
       const stageOrder = ["parsing", "generating", "rendering", "linting"];
       const el = (id) => document.getElementById(id);
       const dropzone = el("dropzone");
@@ -463,6 +955,223 @@
           setConnection("disconnected", "本地服务未连接");
         }
       };
+
+      const generatorStatusText = (settings) => {
+        if (!settings?.active) return "当前：未知";
+        const active = settings.active;
+        const mode = active.mode === "strict" ? "strict" : "auto";
+        if (active.name !== "nga") return `当前：Stub（确定性生成，${mode} 模式）`;
+        const config = active.config || {};
+        const transport = config.transport === "cli" ? "本机 CLI" : "HTTP";
+        return `当前：NGA（${config.model || "?"}，${transport}，${mode} 模式）`;
+      };
+
+      const renderEngineBar = (settings) => {
+        const bar = el("engineBar");
+        if (!bar) return;
+        const active = settings?.active || {};
+        if (active.name === "nga") {
+          const config = active.config || {};
+          const isCli = config.transport === "cli";
+          const mode = active.mode === "strict" ? "strict" : "auto";
+          bar.className = "engine-bar is-nga";
+          el("engineBarText").textContent =
+            `生成引擎：NGA（${config.model || "?"}${isCli ? " · 本机命令行" : " · HTTP"} · ${mode} 模式）`;
+        } else {
+          bar.className = "engine-bar is-stub";
+          el("engineBarText").textContent = "生成引擎：确定性 Stub（未接入 AI）";
+        }
+      };
+
+      const renderGeneratorStatusCard = (settings) => {
+        const card = el("generatorStatusCard");
+        if (!card) return;
+        const active = settings?.active || {};
+        const dot = el("generatorStatusDot");
+        const title = el("generatorStatusTitle");
+        const detail = el("generatorStatusDetail");
+        if (active.name === "nga") {
+          const config = active.config || {};
+          const isCli = config.transport === "cli";
+          dot.className = "generator-status-card__dot is-active";
+          title.textContent = `当前使用：NGA 生成器（${config.model || "?"}${isCli ? "，本机 CLI" : "，HTTP"}）`;
+          detail.textContent = isCli
+            ? "本机 NGA 命令行生成：认证由 NGA 管理，失败时按生成模式处理（auto 自动回退 Stub）。"
+            : "内网 OpenAI 兼容服务生成：凭据由工作台保存，失败时按生成模式处理（auto 自动回退 Stub）。";
+        } else {
+          dot.className = "generator-status-card__dot is-warn";
+          title.textContent = "当前使用：Stub 生成器";
+          detail.textContent = "确定性生成，无需 AI 服务，适合流程验证与离线环境。配置 NGA 后可切换到 AI 生成。";
+        }
+      };
+
+      const loadGeneratorSettings = async () => {
+        try {
+          const response = await fetch("/api/settings/generator", { cache: "no-store" });
+          const settings = await readJson(response);
+          el("generatorStateText").textContent = generatorStatusText(settings);
+          renderGeneratorStatusCard(settings);
+          renderEngineBar(settings);
+          const active = settings.active || {};
+          if (active.name === "nga" && active.config) {
+            const config = active.config;
+            const isCli = config.transport === "cli";
+            el("ngaTransport").value = isCli ? "cli" : "http";
+            applyTransportVisibility();
+            if (isCli) {
+              el("ngaCliPath").value = config.cli_path || "nga";
+            } else {
+              el("ngaBaseUrl").value = config.base_url || "";
+              el("ngaEndpoint").value = config.endpoint_path || "/v1/chat/completions";
+            }
+            el("ngaModel").value = config.model || "";
+            el("ngaTimeout").value = String(config.timeout_seconds ?? (isCli ? 300 : 120));
+            el("ngaRetries").value = String(config.max_retries ?? 2);
+            el("generatorMode").value = active.mode === "strict" ? "strict" : "auto";
+          }
+          applyTransportVisibility();
+        } catch (_error) {
+          el("generatorStateText").textContent = "当前：无法读取生成器状态";
+        }
+      };
+
+      const applyTransportVisibility = () => {
+        const isCli = el("ngaTransport").value === "cli";
+        el("transportHint").textContent = isCli
+          ? "本机已登录 NGA 直接可用：认证、Token 刷新由 NGA 自行管理，无需填写任何凭据。"
+          : "适用于内网 OpenAI 兼容 AI 服务：需服务根地址、接口路径与 Bearer Token。";
+        for (const id of ["ngaCliPathField"]) el(id).style.display = isCli ? "" : "none";
+        for (const id of ["ngaBaseUrlField", "ngaEndpointField", "ngaTokenField"]) el(id).style.display = isCli ? "none" : "";
+      };
+      el("ngaTransport").addEventListener("change", applyTransportVisibility);
+
+      const readGeneratorForm = () => {
+        const transport = el("ngaTransport").value;
+        const common = {
+          generator: "nga",
+          mode: el("generatorMode").value === "strict" ? "strict" : "auto",
+        };
+        if (transport === "cli") {
+          return {
+            ...common,
+            credential: null,
+            config: {
+              config_version: "1.0",
+              transport: "cli",
+              model: el("ngaModel").value.trim(),
+              cli_path: el("ngaCliPath").value.trim() || "nga",
+              timeout_seconds: Number(el("ngaTimeout").value) || 300,
+              max_retries: Number(el("ngaRetries").value) || 2,
+            },
+          };
+        }
+        return {
+          ...common,
+          credential: el("ngaToken").value || null,
+          config: {
+            config_version: "1.0",
+            base_url: el("ngaBaseUrl").value.trim(),
+            endpoint_path: el("ngaEndpoint").value.trim(),
+            model: el("ngaModel").value.trim(),
+            timeout_seconds: Number(el("ngaTimeout").value) || 120,
+            max_retries: Number(el("ngaRetries").value) || 2,
+            verify_tls: true,
+            response_format: "json_object",
+            allow_insecure_http: false,
+          },
+        };
+      };
+
+      const validateGeneratorForm = (payload) => {
+        if (payload.config.transport === "cli") {
+          return payload.config.model ? null : "请填写模型名。";
+        }
+        if (!payload.config.base_url || !payload.config.model) return "请填写服务地址和模型。";
+        return null;
+      };
+
+      const setGeneratorStatus = (message, isError = false) => {
+        const status = el("generatorOperationStatus");
+        status.textContent = message;
+        status.style.color = isError ? "var(--danger)" : "var(--muted)";
+      };
+
+      el("saveGeneratorSettings").addEventListener("click", async () => {
+        try {
+          const payload = readGeneratorForm();
+          const invalid = validateGeneratorForm(payload);
+          if (invalid) {
+            setGeneratorStatus(invalid, true);
+            return;
+          }
+          const response = await fetch("/api/settings/generator", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const settings = await readJson(response);
+          el("generatorStateText").textContent = generatorStatusText(settings);
+          renderGeneratorStatusCard(settings);
+          renderEngineBar(settings);
+          setGeneratorStatus("配置已保存，启用前需测试连接。");
+        } catch (error) {
+          setGeneratorStatus(error.payload?.error?.message || "配置保存失败。", true);
+        }
+      });
+
+      el("testGeneratorConnection").addEventListener("click", async () => {
+        try {
+          const payload = readGeneratorForm();
+          const invalid = validateGeneratorForm(payload);
+          if (invalid) {
+            setGeneratorStatus(invalid, true);
+            return;
+          }
+          const saved = await fetch("/api/settings/generator", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          await readJson(saved);
+          const tested = await fetch("/api/settings/generator/test", { method: "POST" });
+          const result = await readJson(tested);
+          setGeneratorStatus(result.connection?.ok ? `连接成功（${result.connection.latency_ms ?? "?"}ms）。` : "连接测试未通过。", !result.connection?.ok);
+        } catch (error) {
+          setGeneratorStatus(error.payload?.error?.message || "连接测试失败。", true);
+        }
+      });
+
+      el("activateGenerator").addEventListener("click", async () => {
+        try {
+          const response = await fetch("/api/settings/generator/activate", { method: "POST" });
+          const settings = await readJson(response);
+          el("generatorStateText").textContent = generatorStatusText(settings);
+          renderGeneratorStatusCard(settings);
+          renderEngineBar(settings);
+          setGeneratorStatus(settings.active?.name === "nga" ? "已启用 NGA 生成器。" : "已启用 Stub。");
+        } catch (error) {
+          setGeneratorStatus(error.payload?.error?.message || "启用失败（可能未测试连接）。", true);
+        }
+      });
+
+      el("switchToStub").addEventListener("click", async () => {
+        try {
+          const saved = await fetch("/api/settings/generator", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ generator: "stub", mode: el("generatorMode").value === "strict" ? "strict" : "auto" }),
+          });
+          await readJson(saved);
+          const activated = await fetch("/api/settings/generator/activate", { method: "POST" });
+          const settings = await readJson(activated);
+          el("generatorStateText").textContent = generatorStatusText(settings);
+          renderGeneratorStatusCard(settings);
+          renderEngineBar(settings);
+          setGeneratorStatus("已切换回 Stub。");
+        } catch (error) {
+          setGeneratorStatus(error.payload?.error?.message || "切换失败。", true);
+        }
+      });
 
       const persistJob = (status = "running") => {
         if (!state.jobId) return;
@@ -544,8 +1253,27 @@
       ["dragleave", "drop"].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); dropzone.classList.remove("is-dragover"); }));
       dropzone.addEventListener("drop", (event) => { if (!state.busy) selectFile(event.dataTransfer.files?.[0]); });
 
-      typeOptions.forEach((button) => button.addEventListener("click", () => { state.type = button.dataset.type; typeOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); el("depthSegment").classList.toggle("is-disabled", state.type !== "deck"); el("templatePicker").classList.toggle("is-disabled", state.type !== "deck"); el("assetPicker").classList.toggle("is-disabled", state.type !== "deck"); if (state.type !== "deck") { clearTemplate(); clearAssets(); } updateActions(); }));
+      typeOptions.forEach((button) => button.addEventListener("click", () => { state.type = button.dataset.type; typeOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); el("depthSegment").classList.toggle("is-disabled", state.type !== "deck"); el("themeField").classList.toggle("is-disabled", state.type !== "deck"); el("templatePicker").classList.toggle("is-disabled", state.type !== "deck"); el("assetPicker").classList.toggle("is-disabled", state.type !== "deck"); if (state.type !== "deck") { clearTemplate(); clearAssets(); } updateActions(); }));
       depthOptions.forEach((button) => button.addEventListener("click", () => { state.depth = button.dataset.depth; depthOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); }));
+
+      const themeSwatches = {
+        hw_v1: ["#C7000B", "#F85948", "#ED6D00", "#30B5C5"],
+        "hw-report": ["#C7000B", "#ED6D00", "#FCC800", "#30B5C5"],
+        "hw-proposal": ["#C7000B", "#F85948", "#61B230", "#30B5C5"],
+        "hw-academic": ["#1F4E79", "#F85948", "#30B5C5", "#666666"],
+      };
+      const renderThemeSwatch = () => {
+        const swatch = el("themeSwatch");
+        if (!swatch) return;
+        swatch.replaceChildren();
+        (themeSwatches[el("themeSelect").value] || themeSwatches.hw_v1).forEach((color) => {
+          const dot = document.createElement("i");
+          dot.style.background = color;
+          swatch.append(dot);
+        });
+      };
+      el("themeSelect").addEventListener("change", renderThemeSwatch);
+      renderThemeSwatch();
 
       el("analyzeButton").addEventListener("click", async () => {
         if (!state.file || state.busy) return;
@@ -583,7 +1311,7 @@
         if (!state.file || state.busy) return;
         hideResult(); state.jobRunning = true; state.idempotencyKey = state.idempotencyKey || newIdempotencyKey(); setBusy(true); startProgress();
         try {
-          const data = formDataForFile(); data.append("type", state.type); if (state.type === "deck") { data.append("depth", state.depth); if (state.template) data.append("template_file", state.template); state.assets.forEach((file) => data.append("asset_files", file)); }
+          const data = formDataForFile(); data.append("type", state.type); if (state.type === "deck") { data.append("depth", state.depth); data.append("theme", el("themeSelect").value); if (state.template) data.append("template_file", state.template); state.assets.forEach((file) => data.append("asset_files", file)); }
           const response = await fetch("/api/generate", { method: "POST", headers: { "Idempotency-Key": state.idempotencyKey }, body: data });
           const job = await readJson(response);
           state.jobId = job.job_id; persistJob(job.status); setBusy(true); renderProgress(job); pollJob();
@@ -620,7 +1348,10 @@
       const finishSuccess = (job) => {
         stopProgress(); state.jobRunning = false; persistJob("done"); state.idempotencyKey = null; setBusy(false); renderProgress({ progress: { stage: "done", percent: 100 } });
         const panel = el("resultPanel"); panel.className = "section result result--success is-visible";
-        el("resultTitle").textContent = "生成完成，产物已通过流程检查"; el("resultDetail").textContent = job.template ? `${job.artifact?.name || "文档"} 已按模板生成：${job.template.prototype_replace} 页复用原型，${job.template.master_redraw} 页安全重绘。` : `${job.artifact?.name || "文档"} 已准备就绪，可直接下载并进行人工复核。`;
+        const fallback = job.generator?.fallback;
+        const fallbackNote = fallback ? `（AI 生成器不可用，已自动使用确定性生成器完成）` : "";
+        el("resultTitle").textContent = `生成完成，产物已通过流程检查${fallbackNote}`;
+        el("resultDetail").textContent = job.template ? `${job.artifact?.name || "文档"} 已按模板生成：${job.template.prototype_replace} 页复用原型，${job.template.master_redraw} 页安全重绘。` : `${job.artifact?.name || "文档"} 已准备就绪，可直接下载并进行人工复核。`;
         const download = el("downloadButton"); download.href = job.artifact?.download_url || "#"; download.hidden = false; download.textContent = `下载 ${job.artifact?.name || "产物"}`;
         renderLint(job.report); renderAssets(job.assets); showToast("生成完成，产物可下载");
       };
@@ -642,7 +1373,12 @@
         failureReportLink.href = failureReport?.download_url || "#";
         const details = error.items || []; const list = el("lintItems"); list.replaceChildren();
         details.slice(0, 3).forEach((item) => { const row = document.createElement("li"); const code = document.createElement("b"); code.textContent = `${item.code || "Error"} `; row.append(code, document.createTextNode(item.message || "校验失败")); list.append(row); });
-        showToast("生成任务失败", true);
+        // The persistent failure panel is the actionable error surface.  Clear any
+        // transient notice so it cannot cover its support code on small screens.
+        const toast = el("toast");
+        window.clearTimeout(showToast.timer);
+        toast.className = "toast";
+        toast.textContent = "";
       };
 
       el("cancelButton").addEventListener("click", async () => {
@@ -663,7 +1399,7 @@
         (report?.items || []).slice(0, 3).forEach((item) => { const row = document.createElement("li"); const code = document.createElement("b"); code.textContent = `${item.code} `; row.append(code, document.createTextNode(item.message)); list.append(row); });
       };
       const renderAssets = (assets = {}) => {
-        const labels = { profile: "模板 Profile", plan: "页面映射 Plan", structure: "模板结构报告", "replacement-audit": "替换审计报告", lint: "合规报告", "package-report": "包关系报告", "asset-manifest": "图片资产清单", "asset-usage-audit": "图片使用审计", "visual-plan": "视觉计划", "visual-selection-audit": "视觉选择审计" };
+        const labels = { profile: "模板 Profile", plan: "页面映射 Plan", structure: "模板结构报告", "replacement-audit": "替换审计报告", lint: "合规报告", "package-report": "包关系报告", "asset-manifest": "图片资产清单", "asset-usage-audit": "图片使用审计", "visual-plan": "视觉计划", "visual-selection-audit": "视觉选择审计", "deck-ir": "结构化内容（DeckIR，可改后重渲染）" };
         const links = el("auditLinks"); links.replaceChildren();
         Object.entries(assets).forEach(([name, asset]) => { const link = document.createElement("a"); link.href = asset.download_url; link.textContent = labels[name] || asset.name; links.append(link); });
       };
@@ -712,7 +1448,128 @@
           else if (!error.payload) { state.jobRunning = true; setBusy(true); startProgress(state.startedAt); pollJob(); }
         }
       };
-      updateActions(); loadServiceVersion(); restoreLastJob(); window.setInterval(loadServiceVersion, 15000);
+      el("engineBarLink").addEventListener("click", () => {
+        const details = el("generatorSettings");
+        details.open = true;
+        details.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+      const viewButtons = [...document.querySelectorAll(".app-nav__button")];
+      const views = {
+        generate: el("generateView"),
+        tasks: el("tasksView"),
+        settings: el("settingsView"),
+        diagnostics: el("diagnosticsView"),
+      };
+      const taskStatusLabel = (status) => ({ pending: "等待执行", running: "处理中", done: "已完成", failed: "失败", canceled: "已取消" }[status] || status || "未知");
+      const renderTaskList = (jobs) => {
+        const list = el("taskList");
+        list.replaceChildren();
+        if (!jobs.length) {
+          const empty = document.createElement("p"); empty.className = "task-empty"; empty.textContent = "当前没有可显示的任务。"; list.append(empty); return;
+        }
+        jobs.forEach((job) => {
+          const row = document.createElement("article"); row.className = "task-row";
+          const content = document.createElement("div");
+          const title = document.createElement("div"); title.className = "task-row__title";
+          const name = document.createElement("span"); name.textContent = `${job.type === "deck" ? "PPT 汇报" : "Word 文档"}${job.depth ? ` · ${job.depth}` : ""}`;
+          const status = document.createElement("span"); status.className = `task-status task-status--${job.status}`; status.textContent = taskStatusLabel(job.status);
+          title.append(name, status);
+          const detail = document.createElement("div"); detail.className = "task-row__detail";
+          const generator = job.generator?.name || "stub";
+          const progress = job.progress?.stage ? (stageText[job.progress.stage] || job.progress.stage) : "等待状态";
+          detail.textContent = `生成器：${generator}${job.generator?.fallback ? "（已回退 Stub）" : ""} · ${progress} · ${job.job_id}`;
+          content.append(title, detail);
+          const actions = document.createElement("div"); actions.className = "task-row__actions";
+          if (job.status === "done" && job.artifact?.download_url) {
+            const download = document.createElement("a"); download.className = "button button--secondary"; download.href = job.artifact.download_url; download.textContent = "下载产物"; actions.append(download);
+          }
+          const inspect = document.createElement("button"); inspect.className = "button button--secondary"; inspect.type = "button"; inspect.textContent = "查看";
+          inspect.addEventListener("click", () => {
+            state.jobId = job.job_id; state.idempotencyKey = null; persistJob(job.status || "pending");
+            void switchView("generate"); void restoreLastJob();
+          });
+          actions.append(inspect);
+          row.append(content, actions); list.append(row);
+        });
+      };
+      const loadTasks = async () => {
+        const list = el("taskList");
+        list.replaceChildren();
+        try {
+          const response = await fetch("/api/jobs", { cache: "no-store" });
+          const payload = await readJson(response);
+          renderTaskList(Array.isArray(payload.jobs) ? payload.jobs : []);
+        } catch (error) {
+          const message = document.createElement("p"); message.className = "task-empty"; message.textContent = error.message || "无法读取任务列表。"; list.append(message);
+        }
+      };
+      const renderDiagnostics = (payload) => {
+        const list = el("diagnosticsList"); list.replaceChildren();
+        const graphviz = payload.graphviz || {};
+        const rows = [
+          ["应用版本", payload.application?.version || "--"],
+          ["API / DeckIR", `${payload.application?.api_version || "--"} / ${payload.application?.deck_ir_version || "--"}`],
+          ["当前生成器", `${payload.generator?.name || "--"} · 修订 ${payload.generator?.revision ?? "--"}`],
+          ["任务队列", `等待 ${payload.runner?.queued ?? "--"} / 容量 ${payload.runner?.queue_capacity ?? "--"}`],
+          ["任务统计", `运行 ${payload.jobs?.running ?? 0}，完成 ${payload.jobs?.done ?? 0}，失败 ${payload.jobs?.failed ?? 0}`],
+          ["Graphviz", graphviz.available ? `${graphviz.source || "system"} · ${graphviz.version || "可用"}` : "不可用，已启用确定性回退"],
+        ];
+        rows.forEach(([label, value]) => {
+          const row = document.createElement("div"); const term = document.createElement("dt"); const detail = document.createElement("dd");
+          term.textContent = label; detail.textContent = value; row.append(term, detail); list.append(row);
+        });
+      };
+      const loadDiagnostics = async () => {
+        const list = el("diagnosticsList"); list.replaceChildren();
+        try {
+          const response = await fetch("/api/diagnostics", { cache: "no-store" });
+          renderDiagnostics(await readJson(response));
+        } catch (error) {
+          const row = document.createElement("div"); const term = document.createElement("dt"); const detail = document.createElement("dd");
+          term.textContent = "诊断"; detail.textContent = error.message || "无法读取诊断信息。"; row.append(term, detail); list.append(row);
+        }
+      };
+      const switchView = async (view) => {
+        Object.entries(views).forEach(([name, panel]) => { panel.hidden = name !== view; });
+        viewButtons.forEach((button) => { const selected = button.dataset.view === view; button.classList.toggle("is-selected", selected); button.setAttribute("aria-current", selected ? "page" : "false"); });
+        if (view === "tasks") await loadTasks();
+        if (view === "diagnostics") await loadDiagnostics();
+      };
+      viewButtons.forEach((button) => button.addEventListener("click", () => { void switchView(button.dataset.view); }));
+      el("refreshTasks").addEventListener("click", () => { void loadTasks(); });
+      el("refreshDiagnostics").addEventListener("click", () => { void loadDiagnostics(); });
+      el("openGeneratorSettings").addEventListener("click", () => {
+        void switchView("generate");
+        const details = el("generatorSettings"); details.open = true;
+        window.setTimeout(() => details.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      });
+      updateActions(); loadServiceVersion(); loadGeneratorSettings(); restoreLastJob(); window.setInterval(loadServiceVersion, 15000);
+    })();
+  </script>
+  <script>
+    (() => {
+      const storageKey = "huawei-workbench-theme-v1";
+      const root = document.documentElement;
+      const systemPreference = window.matchMedia("(prefers-color-scheme: dark)");
+      const controls = [document.getElementById("themeToggle"), document.getElementById("settingsThemeMode")].filter(Boolean);
+      const normalize = (value) => ["system", "light", "dark"].includes(value) ? value : "system";
+      const resolvedTheme = (mode) => mode === "system" ? (systemPreference.matches ? "dark" : "light") : mode;
+      const apply = (mode) => {
+        const normalized = normalize(mode);
+        root.dataset.theme = resolvedTheme(normalized);
+        root.dataset.themeMode = normalized;
+        controls.forEach((control) => { control.value = normalized; });
+      };
+      const save = (mode) => {
+        const normalized = normalize(mode);
+        window.localStorage.setItem(storageKey, normalized);
+        apply(normalized);
+      };
+      apply(normalize(window.localStorage.getItem(storageKey)));
+      controls.forEach((control) => control.addEventListener("change", () => save(control.value)));
+      systemPreference.addEventListener("change", () => {
+        if (root.dataset.themeMode === "system") apply("system");
+      });
     })();
   </script>
 </body>

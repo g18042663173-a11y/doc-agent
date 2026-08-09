@@ -1,4 +1,5 @@
 .pytest_cache/
+.playwright-cli/
 .ruff_cache/
 .mypy_cache/
 .hypothesis/

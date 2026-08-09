@@ -1,5 +1,299 @@
 # Progress
 
+## 2026-08-08 2.1.0 审计、原生化与发布候选
+
+- 候选分支：`codex/audit-2.1.0`；保留既有实验工作树和全部 `backup-*` 恢复分支，未修改
+  宿主工具留下的 `.git/refs/codex/turn-diffs/checkpoints/...` 损坏 checkpoint refs。
+- Windows 11 自动化门禁：`scripts/win/verify_all.ps1 -Ui` 通过。C0 覆盖率为
+  parsers 93.51%、IR 93.94%、lint 94.30%、整体 89.20%；可靠性报告 671/671 通过，
+  浏览器工作台截图覆盖桌面/移动端、系统/浅色/深色、设置、任务、运行、成功和失败。
+- 修复：Graphviz 不再以文本模式读取本地化 `dot` 的 stderr，避免非 UTF-8 字体诊断造成
+  后台读取线程 `UnicodeDecodeError`；新增二进制流回归测试。
+- 修复测试门禁：FlaUI 原先错误地等待“主窗口出现”；现改为 `Application.Close(false)` 并
+  断言 WPF 进程真实退出，失败时清理由测试启动的进程。WPF xUnit/FlaUI 16/16 通过，
+  重建便携包验收 1/1 通过且无 `DocumentWorkbench` / `pythonw` 残留。
+- 修复截图证据：FlaUI 的屏幕坐标采集在本机 150% DPI/虚拟显示下会抓到后台 Chrome。验收测试和
+  `scripts/win/capture_window.ps1` 现以目标 HWND 的 `PrintWindow` 采集，并使用 Per-Monitor V2
+  DPI 上下文；最终截图在
+  `output/qa/audit-2.1.0/portable-final-printwindow-20260808121728/shots/`。
+- 修复深色主题可读性：`PageTitle`、`SectionTitle`、`FieldLabel` 明确继承 token 化的
+  `TextBlock` 样式，避免 WPF 默认黑色文字覆盖深色 `TextBrush`；有 XAML 回归测试保护。
+- 已重建本轮 ZIP 和安装程序，逐文件清单、外部 SHA-256 和禁止内容检查通过。最终 ZIP
+  SHA-256 为 `2ecf5b4dad419cd46ce6a1bb99ca00fe0422e757d593c2d5f7fc925787c3b537`，安装程序为
+  `b10330dac2fe8ccac3e8477a7cc1688797563499f3c8a43acb35b16e20ca87b3`。完整结论见
+  `docs/AUDIT_2.1.0.md`；最终哈希以 `dist/*.sha256` 为准。
+- 当前检查点：自动化 Windows 11 技术候选通过；**不创建正式发布分支**。等待 Windows 10、
+  干净断网环境、真实 NGA、Office 视觉签字和代码签名流程（见 `QUESTIONS.md`）。
+
+## 2026-08-07 NGA CLI 超长 prompt 防御性修复（发布阻断 bug）
+
+- 问题：`_send_cli` 把完整 prompt 作为位置参数传给 `nga run`；Windows
+  CreateProcess 命令行上限 32767 字符，deck prompt（约 58 KB）必然触发
+  WinError 206，且 CPython 将其映射为 FileNotFoundError，被误报为
+  E010「CLI not found」（本机已实测复现，临界约 32740 字符）。
+- 修复（`backend/app/generators/nga.py`）：
+  - win32 下 spawn 前做最坏情况长度预估（list2cmdline 引号转义上界），超限直接
+    抛 E010「prompt exceeds the Windows command-line length limit; use the HTTP
+    transport or a smaller input」（不可重试），不再误报；
+  - `except FileNotFoundError` 区分 winerror 206（超长）与真实「找不到 CLI」。
+  - 非 Windows 不受影响（ARG_MAX 约 2 MB）；auto 模式降级 stub 的既有逻辑不变，
+    但 fallback_reason / 错误消息现在是真实原因。
+- 测试：`test_nga_generator.py` 新增 3 例（winerror 206 不误报、win32 超限不
+  spawn、非 win32 长 prompt 放行）；全量 661 passed，ruff 全绿。
+- 待确认：永久修复（stdin/文件传 prompt）取决于内网 `nga run` 是否支持，已记入
+  `QUESTIONS.md` 第 7 条。
+
+### 同轮中级项处理（代码审查遗留）
+
+- `NgaCliConfig.validate_cli_path` 放行含空格路径（subprocess list 传参无 shell，
+  空格无注入风险；`C:\Program Files\...` 可配置），仍拒绝空白与换行。
+- `_preflight_generator_environment` 增加确定性拦截：win32 + CLI 传输 + deck 目标
+  在提交时直接 400/E010（DeckIR prompt 必然超 Windows 命令行上限），建议改 HTTP
+  传输或 Stub；调用点改为先解析 target 再 preflight。
+- 测试：`test_web_api.py` 新增 2 例（win32 deck 拦截、非 win32 deck 放行），
+  `test_nga_generator.py` 更新路径校验用例；全量 663 passed，ruff 全绿。
+- 附带发现：`generators/codex.py::_generate_cli` 已用 stdin 传 prompt
+  （`input=prompt`），证明 stdin 路线在本项目有先例，待内网确认 `nga run`
+  是否同样支持。
+
+### 重打包（当前最新分发物）
+
+- WPF xUnit/FlaUI 5/5 通过；Release publish 成功。
+- 便携 ZIP sha256 `39e2f8ddb9fb260ba86c840bf6c1789e7ba0f2b3694907eb66f5db959ff1fe2b`
+  （105.7 MB / 2199 文件，已抽查 ZIP 内含 nga.py 守卫与 web_api.py preflight 拦截）。
+- 安装程序 sha256 `170fb933cd118ac9cfaba4034034d4166c4f754be447977c33cff8441f0911de`
+  （91.9 MB）。
+
+## 2026-08-06 Windows 一键脚本入口（scripts/win）
+
+### 已完成并通过静态验证
+
+- 把 WINDOWS_ACCEPTANCE_20260806 清单中的手动命令合并为一键 PowerShell 脚本，
+  免去手动复制命令：验证、打包、安装程序、启动工作台四个入口。
+- 新增 `scripts/win/`：
+  - `verify_all.ps1`：verify.ps1 门禁 + 可靠性测试（可选 `-Ui`）+
+    本轮专项（主题/auto 降级/NGA CLI）+ ruff，四步中文分步提示；
+  - `build_all.ps1`：WPF xUnit/FlaUI 测试 + Release 构建 + 便携 ZIP，
+    可选 `-PythonEmbed` / `-GraphvizRoot` 覆盖默认路径；
+  - `package_setup.ps1`：从便携 ZIP 编译 Inno Setup 安装程序，
+    可选 `-Zip` / `-Iscc` / `-Overwrite`；
+  - `start_workbench_ui.ps1`：一键启动浏览器工作台（转发 start_workbench.ps1）；
+  - `README.md`：入口引导（首次准备、日常使用表、典型流程、桌面端提示）。
+- 脚本规范：`$ErrorActionPreference="Stop"` + `Set-StrictMode` + UTF-8 环境 +
+  三级路径回退到项目根；ruff 不涉及（PowerShell）。
+- 验证：四脚本关键字段（错误处理、param、路径回退、Python 定位）静态检查通过；
+  沙箱无 PowerShell，实际执行留待 Windows 机器。
+- README 与验收清单已补一键脚本指引。
+
+## 2026-08-06 安装程序（Inno Setup，用户目录免提权）
+
+### 已完成并通过设计评审
+
+- 目标：给更多人分发，安装到用户目录免管理员权限；双击安装包 → 桌面/开始菜单
+  快捷方式 → 点图标即用。
+- 设计：`docs/design/INSTALLER_DESIGN.md`；选型 Inno Setup 6（免提权、成熟、
+  内网通用）；保留 ZIP 绿色版，Setup 为正式安装版，二者同源（复用
+  `package_document_workbench.py` 产物），不重复打包逻辑。
+- 新增：
+  - `installer.iss`：`PrivilegesRequired=lowest`（免提权）、
+    默认装到 `%LOCALAPPDATA%\Programs\HuaweiDocumentGenerator\<VERSION>`、
+    桌面+开始菜单快捷方式、卸载注册到"添加或删除程序"、中文向导、
+    卸载不删 `%LOCALAPPDATA%\HuaweiDocumentGenerator`（设置/任务/凭据保留）。
+  - `scripts/package_installer.py`：从现有便携 ZIP 解压 → 定位 ISCC.exe →
+    编译 → 生成 `HuaweiDocumentGenerator-Setup-<VERSION>.exe` + SHA-256；
+    不重复打包逻辑。
+- 验证：解压逻辑端到端正确（2198 个文件、exe/backend/python 均在）；
+  ISCC 缺失时明确报错且 exit code 非零；ruff 全绿；
+  全量回归 649 passed, 1 skipped（7 个环境限制 deselected 与本次无关）。
+- 签名暂挂：内网代码签名证书到位前不启用（`SigntoolOptions` 预留）；
+  SHA-256 清单照常生成保证可追溯。
+- 验收步骤已补入 `docs/WINDOWS_ACCEPTANCE_20260806.md` 第五步附加。
+
+### 降级或近似
+
+- 旧 ZIP（2026-07-30）无 `runtime/graphviz` / `file-hashes.json`，沙箱
+  解压验证基于旧产物；实际 Windows 打包会重新生成含这些文件的 ZIP 再编译。
+- 沙箱无 Inno Setup，`installer.iss` 实际编译留待 Windows 机器。
+
+## 2026-08-06 open-kimi-ppt 借鉴收尾（留档 + IR 可见化 + 前置检查）
+
+### 已完成并通过验收
+
+- `docs/design/REVIEW_OPEN_KIMI_PPT.md` 留档：五项启发点完整结论——
+  命名主题已吸收（上轮）、视觉质检明确不采用（内网无多模态，GLM-5.1 纯文本，
+  已有 lint+人工签字替代）、前置检查与 IR 可见化本轮落地、双产物机制评估；
+  同时记录"我们的优势不可放弃"（python-pptx 自包含离线 vs 浏览器在线依赖）。
+- **IR 可见化（deck-ir 受控下载）**：`deck_ir.json` 加入 `ALLOWED_DOWNLOAD_ASSETS`，
+  从敏感清理名单排除，作为任务受控资产保留；前端/WPF 下载区显示
+  "结构化内容（DeckIR，可改后重渲染）"链接。安全边界保持：prompt.txt /
+  raw_ir.txt / document_ir.json 仍清理，deck-ir 与产物同级别（标题属交付内容）。
+- **前置环境检查**：`_preflight_generator_environment` 在任务入队前检查
+  NGA-CLI 的 cli_path 存在性（绝对路径 is_file / 命令名 shutil.which），
+  缺失返回 E010（stage=preflight），不再等任务跑到 generating 阶段才报错。
+- 新增测试 3 个：deck-ir 受控下载（内容含 ir_type/theme、可下载）、
+  缺失 CLI 提交前拒绝、可用 CLI 正常放行。
+- 全量回归：649 passed, 1 skipped（7 个环境限制 deselected 与本次无关）；
+  ruff 全绿。
+
+### 明确不采用
+
+- 多模态视觉质检循环（内网无视觉模型）；结构化 AI 二审列为可选后续。
+- 浏览器导出/在线编辑器依赖（违反离线要求）。
+
+## 2026-08-06 命名主题预设（hw-report / hw-proposal / hw-academic）
+
+### 已完成并通过验收
+
+- 借鉴 open-kimi-ppt 的"命名设计系统点名即用"机制：用户一句"用 xxx 主题"就
+  套用整套风格，解决"用户说不清风格"的痛点。
+- 新增三套主题 JSON（`backend/app/rendering/themes/`）：hw-report（汇报版，
+  信息密度高）、hw-proposal（方案版，图文并茂）、hw-academic（学术版，
+  深蓝主色严谨克制）；每套含 `style_guide` 风格描述；从 hw_theme.json 派生，
+  结构完整一致。
+- `theme.py` 新增 `THEME_REGISTRY` + `resolve_theme()` 白名单校验（未知主题
+  报 `UnknownThemeError`）。
+- 生成链路：`GenerationOptions.theme`（默认 hw_v1）；`generate_deck` 校验后
+  **统一覆盖 `meta.theme`**（无论 AI/Stub 生成什么，最终由请求主题决定）；
+  `_apply_theme_override` 覆盖单页与分段两条路径。
+- 入口：CLI `--theme`（demo_e2e/generate）、API `/api/generate` 表单 `theme`
+  字段（白名单校验，非法 E001，word 拒绝）、前端"PPT 主题"下拉框（word 时
+  禁用）、WPF 常规设置"默认 PPT 主题"下拉框 + `WorkbenchSettings.DefaultTheme`。
+- Prompt 注入：`build_prompt(theme=...)` 在末尾注入 `[主题风格 <name>]` 区块
+  （参考 open-kimi-ppt 的 design.md 唯一风格源机制）；hw_v1 不注入，
+  原 Prompt 字节零变化（既有快照测试兼容）。
+- 测试：新增 `test_theme_presets.py` 14 个用例（三套主题加载/渲染/覆盖/
+  注入/白名单/默认不变）。API 端到端确认：非法主题 400 E001、合法主题 202、
+  word 带 theme 拒绝；`meta.theme` 覆盖端到端通过。
+- 全量回归：646 passed, 1 skipped（7 个环境限制 deselected 与本次无关）；
+  ruff 全绿。
+
+### 降级或近似
+
+- Word 保持单主题（用户确认不做 Word 主题预设）。
+- 三套主题差异在现有字段内（色板/字号/版式密度/style_guide），未新增结构字段。
+
+### 仍待人工/后续
+
+- 三套主题的视觉验收需在 Windows PowerPoint 目标字体环境下人工确认。
+- 沙箱无 Windows 工具链，WPF 编译与 verify.ps1 留待 Windows 机器。
+
+## 2026-08-06 前端体验设计优化（引擎可见性）
+
+### 已完成并通过验收
+
+- 核心洞察：功能已齐（Stub / NGA-CLI / NGA-HTTP + auto/strict），但侧栏
+  "当前使用：Stub 生成器"是**写死的**，不随实际状态变化，用户无法知道
+  当前用哪个引擎在生成。
+- **新增生成引擎指示条**（`engine-bar`，位于"开始生成"按钮正上方）：
+  - 动态状态点 + 文案（"生成引擎：NGA（model · 本机命令行 · auto 模式）" /
+    "生成引擎：确定性 Stub（未接入 AI）"）；
+  - 随设置状态实时联动（4 处设置变更点统一更新）；
+  - "更改设置"链接点击展开设置面板并平滑滚动定位。
+- 侧栏写死文案改为静态说明（"生成引擎可选三种…当前引擎显示在开始生成上方"）。
+- 文案用户化：`解析 → IR → 渲染 → 合规检查` 改为
+  `解析 → 生成 → 渲染 → 复检`；"IR 校验未通过"改为"内容草稿未通过校验"；
+  侧栏技术描述改为用户语言。
+- 验证：HTML 标签配对、JS 括号配对、服务实测 7 项检查全 PASS
+  （引擎条元素/联动/侧栏文案/工序文案）；全量回归 633 passed, 1 skipped；
+  ruff 全绿。
+- 沙箱无 root 无法安装 Chromium 系统库，真实浏览器截图验证留待 Windows
+  环境（页面静态与动态逻辑均已通过代码级验证）。
+
+## 2026-08-06 设置界面重排与生成器配置文档
+
+### 已完成并通过验收
+
+- 浏览器设置面板重排（`static/index.html`）：
+  - 新增**生成器状态卡**：当前使用 Stub / NGA（本机 CLI / HTTP）+ 模式 + 说明，
+    一眼看清当前配置；
+  - "调用方式"选项带动态提示（CLI：认证由 NGA 自行管理无需凭据；
+    HTTP：需服务地址与 Token）；
+  - 字段按需显示 + 必填标记 + 示例占位符（如 `w3/GLM-5.1-WX-Auto`）；
+  - auto/strict 模式旁附说明文字（auto 降级会标注、strict 严格失败）。
+- `docs/使用说明.md` 新增"生成器配置（AI 接入）"章节：
+  三种方式决策表（Stub / NGA 本机命令行 / NGA HTTP）+ 配置入口（WPF/浏览器/
+  环境变量）+ auto/strict 说明 + 模型调用方式与输出解析。
+- README 增加对配置决策表的指引。
+- 验证：HTML 标签配对与 JS 括号配对通过；服务启动后页面正常渲染设置面板；
+  全量回归 633 passed, 1 skipped（6 个环境限制 deselected 与本次无关）；
+  ruff 全绿。
+
+## 2026-08-06 NGA CLI 传输接入（本机命令行调用）
+
+### 已完成并通过验收
+
+- 目标环境的 NGA 不是 HTTP 服务，而是本机命令行工具：
+  `nga run "prompt" -m <model> --format json`，输出 NDJSON 事件流；认证由
+  CLI 自管（`nga providers login`，OAuth + DPAPI + 自动刷新），项目无需 Token。
+- `backend/app/generators/nga.py` 新增 `NgaCliConfig`（transport=cli）与
+  `_send_cli`：subprocess 调用 `nga run --model <model> --format json <prompt>`，
+  `_extract_ndjson_text` 解析 NDJSON 事件流（step_start/text/tool_use/step_finish
+  四类），拼接 `type=="text"` 事件的 `part.text`。
+- cli 模式**免 Token**（认证归 CLI）；http 模式保持原 Token 要求。
+  错误映射：CLI 未找到→E010、超时→E012（可重试）、非零退出→E013（可重试）、
+  空/非法输出→E014。环境变量：`NGA_TRANSPORT=cli`、`NGA_CLI_PATH`、`NGA_MODEL`。
+- `web_api._nga_config_from_payload` 按 `transport` 分派配置模型并过滤 CLI 字段；
+  `GeneratorManager` cli 配置无需 credential 即可 test/activate。
+- WPF：NGA 面板新增"调用方式"下拉（HTTP/CLI），CLI 时隐藏 HTTP 专属字段并显示
+  CLI 路径；`NgaStoredConfig` 新增 `Transport`/`CliPath`。浏览器设置面板同样新增
+  调用方式切换 + CLI 路径字段。
+- 单元测试 10 个（NDJSON 拼接、命令参数、免 Token、重试、错误映射、环境变量）
+  + 设置 API CLI 端到端 1 个；fake NGA CLI 走通
+  配置→测试→启用→生成 word.docx 全链路，CLI 失败时 auto 降级回退 Stub
+  并标记 `fallback: true`。
+- 全量回归：633 passed, 1 skipped（6 个环境限制 deselected 与本次无关）；
+  ruff 全绿。
+
+### 仍待人工/后续
+
+- 真实 NGA CLI 在目标电脑上的端到端验证（`nga providers login` 后直接可用）；
+  沙箱为 Linux，用 fake CLI 验证了协议与全链路，未验证真实二进制。
+- Windows 侧需跑一次完整 `verify.ps1` 门禁。
+
+## 2026-08-06 auto 生成器降级与设置补全
+
+### 已完成并通过验收
+
+- 需求：用户希望在另一台电脑上的使用经验基础上，"默认开 AI，用不了自动降级"。
+  设计文档 `docs/design/AUTO_GENERATOR_FALLBACK_DESIGN.md`，核心决策（用户确认）：
+  默认 `auto` 模式（NGA 失败自动回退 Stub 并显式标注）、保留 `strict` 可选、
+  降级不写进产物本体、Stub 不参与回退链。
+- `GeneratorManager` 新增 `GeneratorMode = Literal["auto", "strict"]`（默认 auto）：
+  `GeneratorSnapshot` 携带 mode，`configure/activate/status` 均支持 mode，
+  draft 与 active 状态返回 mode 字段。
+- `web_api`：任务快照/`job_state` 新增 `generator_mode` 与 `generator_fallback`
+  字段（job_state schema 同步导出）；`_generate_artifact` 外层编排降级——
+  NGA 失败且 auto 模式时改用 Stub 重跑生成链，manifest 记录
+  `generator: {requested, used, fallback, fallback_reason}`（稳定错误码）；
+  strict 模式维持"失败即失败"；设置 API 接受 `mode` 字段。
+- 前端 `static/index.html`：新增 AI 生成设置面板（NGA 地址/接口/模型/Token/
+  超时/重试 + auto/strict 开关 + 保存/测试/启用/切回 Stub），Token 仅存内存
+  draft 不落盘；任务成功结果展示降级提示"AI 生成器不可用，已自动使用
+  确定性生成器完成"。
+- WPF：`WorkbenchSettings.GeneratorMode`（默认 "auto"）持久化；
+  `ApiModels.GeneratorState` 增加 Mode/Fallback；`WorkbenchApiClient` 与
+  `MainWindow` 所有配置调用点透传 mode。
+- 新增 `backend/tests/test_auto_fallback.py` 12 个用例：auto 默认、strict 可选、
+  设置 API mode 读写、NGA 失败自动回退（word + deck manifest）、job_state 落盘、
+  strict 不降级、Stub 无回退标记、Stub 失败不回退、schema 兼容。
+- WPF 测试新增 `GeneratorModeDefaultsToAutoAndRoundTrips`。
+- 验证：相关测试 99 passed；全量 pytest 621 passed、1 skipped
+  （6 个 deselected 为沙箱环境限制：Python 3.10 无 `datetime.UTC`、Windows
+  wheelhouse、Node 实验，与本次改动无关）；ruff 全绿。
+
+### 降级或近似
+
+- 浏览器设置面板的 Token 只存后端内存 draft，刷新页面需重新输入
+  （WPF 走 Credential Manager 不受影响）；非敏感配置如地址/模型/模式可持久化。
+- 降级标注只写 API 响应、job_state 与 manifest 审计，不写进 DOCX/PPTX 本体
+  （避免污染交付物）。
+
+### 仍待人工/后续
+
+- 真实 NGA 端点端到端验证（配置→测试→启用→生成→下载）仍在 `QUESTIONS.md`。
+- 沙箱为 Linux/Python 3.10，未能执行 Windows `.venv` 的 `verify.ps1` 门禁；
+  `job_state` schema 快照已重新导出，Windows 侧需跑一次完整 `verify.ps1`。
+
 ## 2026-07-29 实际使用可靠性测试与故障治理
 
 - HTML 技术参考已审计：附件描述的是 `HTML -> html2pptx -> PptxGenJS` 浏览器布局转换，只作为经验参考；生产 PPTX 继续保持 DeckIR 1.9 到 python-pptx，不引入 HTML/PptxGenJS/浏览器渲染。
@@ -370,3 +664,167 @@
 
 - 损坏的 Codex checkpoint ref 会让 Git geometric repack 和部分全局枚举报错；当前提交有效、
   工作树与分支正常，但该宿主工具引用需要由其所有者处理，本轮未直接编辑 `.git`。
+
+## 2026-08-06 Windows 真机执行 + 前端审美改版
+
+### 已完成并通过验收
+
+- **Windows 真机任务 1（代码级验证）全绿**：`verify_all.ps1` —— C0 门禁通过、
+  覆盖率 app/parsers=93.51%、ir=93.94%、lint=94.30%、overall=89.29%，专项 49 passed，
+  ruff 全绿。QA 报告 `output/qa/report.json`。
+- **Windows 真机任务 2（WPF 编译 + 便携 ZIP）通过**：xUnit 4/4；Release 构建成功；
+  `dist/document-workbench-windows-x64-2.1.0.zip`（105.7 MB）+ sha256。
+- **前端审美改版**：`backend/app/static/index.html` 全量重设计，色板对齐
+  `docs/风格规范.md` 与 `rendering/themes/*.json`；胶囊分段控件、自定义下拉箭头、
+  红色聚焦环、`:focus-visible`、`prefers-reduced-motion`、PPT 主题色板联动（学术版切蓝色系）。
+  所有 `data-testid` 与 JS 契约保留，`test_web_api_static` 通过；截图留档 `output/ui-redesign/`。
+- **修复接力书未记录的坑**：全部 `.ps1` 原为 UTF-8 无 BOM，Windows PowerShell 5.1 按 GBK
+  解析直接 ParserError；已补 BOM 并记入 `TASK_HANDOFF.md` 快速定位章节。
+
+### 阻塞待人输入
+
+- 任务 3（安装程序编译）：Inno Setup 6 未安装，需人工安装后跑 `scripts/win/package_setup.ps1 -Overwrite`。
+- 任务 4-8（工作台功能验收、NGA 接入、视觉签字、QUESTIONS 待办）仍为人工项，见 `TASK_HANDOFF.md`。
+
+## 2026-08-06 双端设计 Token 统一
+
+### 已完成并通过验收
+
+- 新建 `docs/design/FRONTEND_TOKENS.md`：Web/WPF 界面 token 单一事实源（颜色/形状/动效/字体 +
+  有意的平台差异说明），规则为"改实现前先改表"。
+- 修正 WPF 色板 7 项（`MainWindow.xaml` 资源块）：主红 `#C7002B→#C7000B`、深红、墨色、次要文字、
+  边框、画布、焦点色蓝→红；`scripts/build_desktop_icon.py` 同步修正并重建 `app-icon.ico`。
+- 回归：`scripts/test_workbench_ui.py` 全 pass（desktop/mobile 双视口）、`test_web_api_static` 通过、
+  WPF xUnit 4/4、Release 0 警告 0 错误；WPF 实机启动截屏确认新色板生效。
+  截图留档 `output/frontend-unification/`。
+
+### 仍不确定
+
+- WPF 视觉细节（圆角、胶囊徽章、悬停态）尚未向 Web 对齐——计划方案 B，留待任务 7 人工验收时定夺。
+
+## 2026-08-06 专业办公效率风格增强
+
+- Web：圆角档位收紧（卡片 6px / 控件 4px）、主标题改半粗、分析指标数字 tabular-nums、按钮 36px 密度。
+- WPF：清除 3 个离调色板硬编码色（导航选中标记 `#F23D61`、导航焦点 `#8FB4FF`、子导航选中底 `#FDECEF`），
+  新增 `AccentPressedBrush #8C0008`（主按钮按压态）与 `AccentOnDarkBrush #F85948`（深导航上的红色强调）。
+- `docs/design/FRONTEND_TOKENS.md` 同步新增 token；全仓 grep 无离板色残留。
+- 验证：WPF Release 0 警告 + xUnit 4/4；Web 静态测试 + UI 回归双视口全 pass；双端实机截图复核
+  （`output/frontend-unification/web-desktop-v2.png`、`wpf-screen-v2.png`）。
+
+## 2026-08-06 稳定性收尾 + 交付重打包
+
+### 已完成并通过验收
+
+- **修复 2 个 Web 设置面板真 bug**（`backend/app/static/index.html`）：
+  ① CLI 模式下"保存配置/测试连接"被错误要求 `base_url`，永远无法通过——接力书任务 5（NGA 接入）
+  会被此卡死；已改为按传输方式校验（CLI 仅需模型名）。② Stub 激活时加载页面不应用字段显隐，
+  HTTP 专用字段在 CLI 模式下全部误显示。两项均经真实服务器 + Playwright E2E 验证（5 断言）。
+- **回归覆盖**：`scripts/test_workbench_ui.py` 新增 CLI 设置流程检查（显隐 + 双模式校验提示）。
+- **全量自测全绿**：verify_all 四步——C0 门禁（E2E 8 链路、覆盖率 89.29%）、可靠性 657 passed / 0 failed、
+  专项 49 passed、ruff 全绿；UI 回归 desktop/mobile 全 pass；WPF xUnit 4/4、Release 0 警告 0 错误。
+- **交付重打包**：`dist/document-workbench-windows-x64-2.1.0.zip`（105.7 MB，2199 文件），
+  新 sha256 `64a4c353d4fd44663f8b12489c52cb6392f8b816e2cc591401cca511f0230cfb`；
+  已抽查 ZIP 内 `index.html` 含本次 bug 修复与主题色板联动。
+
+### 降级或近似
+
+- 全量 pytest 在 Graphviz 不在 PATH 的裸 shell 下有 15 个无害线程告警（确定性回退按设计生效）；
+  verify 环境（Graphviz 在 PATH）无此告警。
+
+### 阻塞待人输入
+
+- 5056 端口有两个 8/6 23:09 残留的 `app.web_api` 进程（PID 9388/11232），执行任务 4 前需结束。
+- 安装程序编译仍需 Inno Setup 6（人工安装）。
+
+## 2026-08-06 任务 3 解除阻塞：安装程序已编译
+
+- 清理 5056 端口残留 `app.web_api` 进程（PID 9388/11232，8/6 23:09 遗留），端口已释放。
+- 静默安装 Inno Setup 6.7.3（GitHub 官方发布包，Authenticode 验签 Valid / Pyrsys B.V.）；
+  补装简体中文语言包 `ChineseSimplified.isl`（jrsoftware 官方翻译库，issrc main 分支）。
+- `package_setup.ps1 -Overwrite` 通过：`dist/HuaweiDocumentGenerator-Setup-2.1.0.exe`（91.8 MB）
+  + sha256 `6671199c3828716ba6bbecc1d958806f300d6de4bd0abce0c1e353518a1b197f`，源为最新便携 ZIP。
+- 至此任务 0-3 全部完成；剩余任务 4-8 为人工验收项（工作台功能、NGA 接入、视觉签字、WPF/安装程序验收、QUESTIONS 待办）。
+
+## 2026-08-07 Web UI 视觉验收（AI 代行，用户委托）
+
+- Playwright + Chrome 实机渲染 12 张全状态截图逐张审阅（`output/visual-review/`，
+  工具 `scripts/visual_review_shots.py`，开发专用、不进交付物）。
+- **修复 2 项真实视觉缺陷**（均在 `backend/app/static/index.html`）：
+  ① 文件已选行被 `.dropzone` 的 `place-items:center` 穿透（Chromium block 布局
+  justify-items 新特性）导致内容居中、删除按钮不靠右——`.dropzone.is-file` 补
+  `place-items: normal`；② 移动端（≤620px）AI 生成设置双列网格截字——该断点下
+  `.generator-settings__grid` 收为单列。
+- 回归：`test_web_api_static` 通过；`test_workbench_ui` 双视口 pass；ruff 全绿。
+- 签字结论：`output/ui-visual-signoff.txt`（通过）。
+- 边界：TASK_HANDOFF 任务 6（三套 PPT 主题视觉签字）需 PowerPoint + 华为字体环境，
+  本机无渲染条件，仍为人工待办；任务 7（WPF/安装程序双击验收）同为人工。
+- 因 index.html 有修复，已重跑 build_all + package_setup 刷新 dist 交付物：
+  ZIP sha256 `643a3a80a2a840d1e530f86c0b6e8cfb6d6f61d984dbe6cc953bd807798de7be`
+  （105.7 MB / 2199 文件，已抽查含两处修复）；
+  安装程序 sha256 `22a837050707f6cdfd04a919362884d432a827057bed1d54eb5bd966d5874fa2`（91.8 MB）。
+  WPF xUnit 4/4、Release 构建随 build_all 复验通过。
+
+## 2026-08-07 任务 6/7 代行验收（用户委托 AI 按人工标准执行）
+
+### 任务 6：三套 PPT 主题视觉签字 —— 通过
+
+- 本机有 PowerPoint 16.0 + 微软雅黑/Arial（主题白名单字体），满足"PowerPoint + 目标字体环境"。
+- 同一源文档（samples/input/项目汇报.pptx）Stub 生成三主题各 11 页，COM 实机导出 33 张 PNG 逐页审阅。
+- **修复 3 项缺陷**：
+  ① hw-academic 学术蓝不生效（渲染器锚点统一取 `colors.hw_red`，主题仅覆盖 accent1/hlink，
+  学术版与汇报版曾逐像素一致）→ `hw-academic.json` 的 hw_red 改为 #1F4E79；
+  ② `check_pptx(theme_name=)` 四处调用点（web_api×2、cli/render、demo_e2e）未透传主题，
+  非默认主题误报 HW-W02 → 全部透传 `deck.meta.theme`，`cli/check.py` 新增 `--theme`，
+  `test_theme_presets.py` 新增回归 `test_named_theme_lint_uses_own_palette`；
+  ③ hw-proposal 行距 10.08pt 破坏 8pt 基线（HW-W06×5）→ 0.111111in；
+  卡片 tag 灰底灰字对比度 4.23:1（HW-W09，三主题共性）→ tag 色 token secondary→body。
+- 修复后三主题 lint 全 0 误 0 警；全量后端 643 passed / 0 failed。
+- 签字：`output/theme-visual-signoff.txt`；证据：`output/theme-visual-signoff/*/png + contact.png`。
+- 工具留档：`scripts/win/export_deck_png.ps1`（PowerPoint COM 导 PNG，纯 ASCII 无 BOM 陷阱）。
+
+### 任务 7：WPF + 安装程序验收 —— 通过
+
+- 新增 `desktop/DocumentWorkbench.Tests/PortableAcceptanceTests.cs`（FlaUI 走查，
+  `DOCUMENT_WORKBENCH_EXE` 缺省时跳过；新增 System.Drawing.Common 8.0.10 引用用于截图）。
+- 便携包 exe 与"已安装实例"各跑一遍走查：断言全过，截图 `output/desktop-qa/*-shots/`。
+- 安装程序：中文向导真实走完 → `%LOCALAPPDATA%\Programs\HuaweiDocumentGenerator\2.1.0\`
+  → 桌面/开始菜单图标 → 完成页自动启动 → `unins000.exe /VERYSILENT` exit 0
+  → 目录/图标清除、`settings.json` 卸载前后 md5 一致。
+- 记录：`output/desktop-qa/installer-acceptance.txt`（含证据瑕疵如实说明）。
+- 工具留档：`scripts/win/capture_window.ps1`、`scripts/win/capture_installer_wizard.ps1`。
+- 注意：Git Bash 直调 unins000.exe 静默卸载会挂起（子进程分离），须用 PowerShell
+  `Start-Process -Wait` 调用。
+
+### 任务 6 修复后重打包（最终分发物）
+
+- 便携 ZIP sha256 `59412d85e0ee722e2773765fa672622a98ce371ac85d691deafd66084143593e`
+  （105.7 MB / 2199 文件，已抽查含学术蓝锚点与 lint 主题透传修复）。
+- 安装程序 sha256 `387899fc42f39031a7b35cfd50bbdcc0877ab46ae8d844ffa072fc0121c67273`（91.8 MB）。
+- build_all 随包复验：xUnit 全过、Release 0 警告 0 错误。
+
+### 边界（仍需人工）
+
+- 任务 4（工作台 Web UI 功能走查）可由 `.\scripts\win\start_workbench_ui.ps1` 人工或后续会话执行；
+- 任务 5（NGA 真机接入）需内网凭据；任务 8（QUESTIONS.md 长期待办）需人工收集真实语料。
+
+## 2026-08-07 AI Arena 交互模式吸收 + 双主题（用户委托实施）
+
+- **双主题**：WPF 调色板抽为 `Themes/Palette.Dark.xaml` / `Palette.Light.xaml`（合并字典 +
+  样式全部 DynamicResource），"设置 > 常规 > 外观"即时切换并持久化 `settings.json: appearance`；
+  浅色模式侧导航保持深色签名。Web 端 `:root[data-theme="light"]` 变量覆盖 + 顶栏切换按钮
+  （localStorage 持久化），截图验证两色均正常。
+- **简洁/高级渐进披露**：生成页默认只留输入资料/输出类型/深度/分析/生成；
+  模板、图片资产、输出主题（新增任务级 `GenerateThemeComboBox`，仍走 hw_v1 等既有值）
+  收进"高级选项"折叠面板（DisclosureToggle，键盘可操作）。不改任务请求格式。
+- **任务面板**：阶段链可视化为 10 段 Run（排队→…→校验包结构，对应 StageLabels），
+  当前阶段红色加粗、已完成灰色、未开始淡色；进度区加生成器快照；结果页分块为
+  主产物 / 合规与审计 / 下一步（含重新提交）。
+- **修复的真实缺陷**：设置页"默认输出类型/默认 PPT 深度"启动不回显（ApplySettingsToControls
+  补两项预选）；UIA 程序化 Toggle 不触发 Click → 高级面板改挂 Checked/Unchecked 事件。
+- **测试**：`PortableAcceptanceTests` 扩展（高级面板显隐断言、浅色切换截图、1024×700 与
+  宽屏截图）；xUnit 5/5；后端 658 passed 无回归；ruff 全绿；UI 回归 pass。
+- **留档**：`output/desktop-qa/arena-shots/`（8 张实机截图）、`output/visual-review-dual/`。
+- 注：本机 150% DPI 实测覆盖；100%/200% DPI 与 1366×768 物理分辨率留人工复核项。
+- **已重打包（当前最新分发物）**：ZIP sha256 `0a6d0411d41c48a48147a60df60a048ed042c147b27a45e341978064fc2b36a2`；
+  安装程序 sha256 `55070608157d1a9c79181b98a9c9124990b250bfc44cc11234d244acfa9da38f`。
+  含架构图渲染改造 + 深色/浅色双主题 + AI Arena 交互吸收全部改动。

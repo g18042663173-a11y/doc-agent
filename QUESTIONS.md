@@ -1,5 +1,7 @@
 # QUESTIONS
 
+> 分步执行清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`（Windows 验收与人工交付清单）。
+
 ## 人工待办
 
 1. 真实业务语料:需要提供脱敏后的真实 docx / xlsx / pptx 各至少 3 个,放入 `samples/input/real/`,用于解析与模板生成回归。
@@ -20,3 +22,13 @@
 6. Windows 代码签名:正式推广前需要内网代码签名证书、时间戳服务和发布审批流程。
    - 当前默认值:2.1.0 ZIP 为无签名内部试点包，清单和 SHA-256 完整，不宣称已满足正式推广签名门禁。
    - TODO:对最终 `DocumentWorkbench.exe` 签名并在干净 Windows 10/11 验证签名链、SmartScreen/终端防护策略和升级后的文件哈希。
+7. NGA CLI 长 prompt 传输方式:Windows CreateProcess 命令行上限 32767 字符，deck prompt（约 58 KB）以位置参数传给 `nga run` 必然触发 WinError 206（已在 Windows 实测复现）。
+   - 当前默认值:`generators/nga.py::_send_cli` 在 win32 上做长度预估守卫，超限或收到 WinError 206 时抛出 E010「prompt exceeds the Windows command-line length limit; use the HTTP transport or a smaller input」，不再误报为「CLI not found」；auto 模式仍按既有逻辑记录 `generator_fallback` 并降级 stub。
+   - TODO:向内网 NGA CLI 维护方确认 `nga run` 是否支持从 stdin 或文件读取 prompt（如 `nga run -` 或 `--prompt-file`）；若支持，将 `_send_cli` 改为 stdin/临时文件传参并补真实 CLI 冒烟，临时文件须写入 job 工作目录并随 24 小时清理策略删除，不落 prompts 持久化。
+8. 2.1.0 发布人工门禁:当前 Windows 11 自动化候选已完成（含 150% DPI 的便携包窗口级截图），
+   但尚无 Windows 10、干净断网机、真实 NGA 与 Office 最终签字证据。
+   - 当前默认值:保留 `codex/audit-2.1.0`；ZIP/安装 EXE 仅作为技术候选交付，哈希见
+     `dist/*.sha256`，不创建 `codex/release-2.1.0`，不宣称可正式推广。
+   - TODO:按 `docs/WINDOWS_ACCEPTANCE_20260806.md` 在 Windows 10/11 各完成便携包和
+     Inno Setup 安装/卸载、150%/200% DPI、系统主题/高对比度、离线 Stub Word/PPT、真实
+     NGA（若授权）和设置保留验收；附环境、截图和签字后再批准发布分支。

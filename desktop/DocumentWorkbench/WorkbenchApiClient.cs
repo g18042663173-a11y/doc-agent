@@ -47,6 +47,7 @@ public sealed class WorkbenchApiClient : IDisposable
         string inputPath,
         string target,
         string? depth,
+        string? theme,
         string? templatePath,
         IReadOnlyList<string> assetPaths,
         string idempotencyKey,
@@ -57,6 +58,10 @@ public sealed class WorkbenchApiClient : IDisposable
         if (target == "deck" && !string.IsNullOrWhiteSpace(depth))
         {
             content.Add(new StringContent(depth), "depth");
+        }
+        if (target == "deck" && !string.IsNullOrWhiteSpace(theme))
+        {
+            content.Add(new StringContent(theme), "theme");
         }
         AddFile(content, "input_file", inputPath);
         if (target == "deck" && !string.IsNullOrWhiteSpace(templatePath))
@@ -82,16 +87,18 @@ public sealed class WorkbenchApiClient : IDisposable
         NgaStoredConfig? config,
         string? credential,
         bool clearCredential,
+        string? mode = null,
         CancellationToken cancellationToken = default)
     {
         object payload = generator == "stub"
-            ? new { generator = "stub" }
+            ? new { generator = "stub", mode }
             : new
             {
                 generator = "nga",
                 config,
                 credential,
                 clear_credential = clearCredential,
+                mode,
             };
         return SendJsonAsync<GeneratorSettingsResponse>(HttpMethod.Put, "api/settings/generator", payload, cancellationToken);
     }

@@ -1532,7 +1532,7 @@ def test_check_pptx_warns_when_autofit_cannot_preserve_minimum_font_size(
         assert "不会截断" in overflow_warnings[0].suggestion
 
 
-def test_check_pptx_architecture_reports_node_fill_outside_accent_palette(tmp_path: Path) -> None:
+def test_check_pptx_architecture_reports_node_border_outside_accent_palette(tmp_path: Path) -> None:
     from app.ir.deck_ir import DeckIR
     from app.lint.pptx_lint import check_pptx
     from app.rendering.pptx_renderer import render_deck_ir
@@ -1556,7 +1556,7 @@ def test_check_pptx_architecture_reports_node_fill_outside_accent_palette(tmp_pa
     path = render_deck_ir(deck, tmp_path / "architecture-color.pptx")
     prs = Presentation(str(path))
     node = next(shape for shape in prs.slides[0].shapes if shape.name.startswith("HW_ARCH_NODE:"))
-    node.fill.fore_color.rgb = _rgb("123456")
+    node.line.color.rgb = _rgb("123456")
     prs.save(path)
 
     report = check_pptx(path, classification=deck.meta.classification)

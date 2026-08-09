@@ -11,6 +11,7 @@ def build_parser() -> CodedArgumentParser:
     parser = CodedArgumentParser(description="Check generated or external document artifacts.")
     parser.add_argument("file", type=Path)
     parser.add_argument("--classification", default=None)
+    parser.add_argument("--theme", default="hw_v1", help="PPTX 主题名（hw_v1 / hw-report / hw-proposal / hw-academic）")
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
 
@@ -21,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if suffix == ".pptx":
             try:
-                report = check_pptx(args.file, classification=args.classification)
+                report = check_pptx(args.file, classification=args.classification, theme_name=args.theme)
             except Exception as exc:
                 report = PptxLintReport(
                     [

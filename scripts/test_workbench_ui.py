@@ -25,6 +25,10 @@ from app.web_api import APP_VERSION, create_api_app
 
 
 VIEWPORTS = (("desktop", 1280, 900), ("mobile", 390, 844))
+NATIVE_THEME_TOKENS = {
+    "light": {"accent": "#0078d4", "selected_background": "rgb(220, 235, 250)"},
+    "dark": {"accent": "#4cc2ff", "selected_background": "rgb(40, 66, 92)"},
+}
 
 
 class FailOnceGenerator:
@@ -98,6 +102,70 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             unsafe_template = _write_ole_template(fixture_root / "template-with-ole.pptx")
             page.goto(f"http://127.0.0.1:{server.server_port}/static/index.html", wait_until="networkidle")
             page.get_by_test_id("service-status").get_by_text(f"本地服务 v{APP_VERSION}").wait_for(timeout=5_000)
+
+            # Windows Settings visual shell: fresh browser state follows the system,
+            # preserves manual overrides, and exposes all four workbench views.
+            theme_mode = page.get_by_test_id("theme-toggle")
+            if theme_mode.input_value() != "system":
+                raise AssertionError("fresh workbench theme must default to system")
+            _assert_native_theme_tokens(page, page.locator("html").get_attribute("data-theme"))
+            page.screenshot(path=str(output_dir / f"workbench-{name}-system.png"), full_page=True)
+            theme_mode.select_option("dark")
+            if page.locator("html").get_attribute("data-theme-mode") != "dark":
+                raise AssertionError("manual dark appearance was not applied")
+            _assert_native_theme_tokens(page, "dark")
+            page.screenshot(path=str(output_dir / f"workbench-{name}-dark.png"), full_page=True)
+            theme_mode.select_option("light")
+            if page.locator("html").get_attribute("data-theme-mode") != "light":
+                raise AssertionError("manual light appearance was not applied")
+            _assert_native_theme_tokens(page, "light")
+            page.screenshot(path=str(output_dir / f"workbench-{name}-light.png"), full_page=True)
+            theme_mode.select_option("dark")
+            if page.locator("html").get_attribute("data-theme-mode") != "dark":
+                raise AssertionError("manual dark appearance was not restored")
+            page.get_by_test_id("nav-settings").click()
+            page.locator("#settingsView").wait_for(state="visible")
+            if page.locator("#settingsThemeMode").input_value() != "dark":
+                raise AssertionError("settings appearance control did not reflect the header override")
+            page.locator("#settingsThemeMode").select_option("system")
+            if page.locator("html").get_attribute("data-theme-mode") != "system":
+                raise AssertionError("settings appearance control did not restore system mode")
+            page.screenshot(path=str(output_dir / f"workbench-{name}-settings.png"), full_page=True)
+            page.get_by_test_id("nav-diagnostics").click()
+            page.get_by_test_id("diagnostics-list").locator("dt").first.wait_for(timeout=5_000)
+            refresh_box = page.get_by_test_id("refresh-diagnostics-web").bounding_box()
+            if refresh_box is None or refresh_box["height"] > 42:
+                raise AssertionError("diagnostics refresh button must remain a single compact row")
+            page.screenshot(path=str(output_dir / f"workbench-{name}-diagnostics.png"), full_page=True)
+            page.get_by_test_id("nav-tasks").click()
+            page.get_by_test_id("task-list").wait_for(state="visible")
+            if name == "mobile":
+                nav_box = page.locator(".app-nav").bounding_box()
+                task_box = page.get_by_test_id("task-list").bounding_box()
+                if nav_box is None or task_box is None or task_box["y"] - (nav_box["y"] + nav_box["height"]) > 220:
+                    raise AssertionError("mobile task view must not leave a stretched blank navigation row")
+            page.screenshot(path=str(output_dir / f"workbench-{name}-tasks.png"), full_page=True)
+            page.get_by_test_id("nav-generate").click()
+            page.locator("#generateView").wait_for(state="visible")
+
+            # 生成设置回归：CLI 模式字段显隐与按传输方式校验（曾误要求 base_url 导致 CLI 无法保存）
+            page.get_by_test_id("generator-settings").locator("summary").click()
+            if page.locator("#ngaBaseUrlField").is_visible():
+                raise AssertionError("CLI transport must hide HTTP-only fields on load")
+            page.get_by_test_id("save-generator-settings").click()
+            if page.locator("#generatorOperationStatus").inner_text() != "请填写模型名。":
+                raise AssertionError("CLI mode must ask for the model name, not base URL")
+            page.locator("#ngaModel").fill("w3/GLM-5.1-WX-Auto")
+            page.get_by_test_id("save-generator-settings").click()
+            page.locator("#generatorOperationStatus").get_by_text("配置已保存").wait_for(timeout=5_000)
+            page.get_by_test_id("nga-transport").select_option("http")
+            if not page.locator("#ngaBaseUrlField").is_visible():
+                raise AssertionError("HTTP transport must show the base URL field")
+            page.get_by_test_id("save-generator-settings").click()
+            if page.locator("#generatorOperationStatus").inner_text() != "请填写服务地址和模型。":
+                raise AssertionError("HTTP mode must require base URL and model")
+            page.get_by_test_id("nga-transport").select_option("cli")
+
             page.get_by_test_id("input-file").set_input_files(str(source))
             page.get_by_test_id("type-word").click()
             page.get_by_test_id("generate-button").click()
@@ -115,6 +183,7 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             page.get_by_test_id("template-file").set_input_files(str(template))
             page.get_by_test_id("generate-button").click()
             page.locator('[data-testid="result-panel"].result--success').wait_for(state="visible", timeout=30_000)
+            page.screenshot(path=str(output_dir / f"workbench-{name}-success.png"), full_page=True)
             artifact_href = page.get_by_test_id("artifact-download").get_attribute("href")
             if not artifact_href or not artifact_href.startswith("/api/download/"):
                 raise AssertionError("artifact download link was not rendered")
@@ -160,11 +229,15 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             if not generator.blocking_started.wait(timeout=5):
                 raise AssertionError("blocking generator did not start")
             page.get_by_test_id("cancel-job").wait_for(state="visible", timeout=5_000)
+            page.screenshot(path=str(output_dir / f"workbench-{name}-running.png"), full_page=True)
             page.get_by_test_id("cancel-job").click()
             page.get_by_test_id("failure-diagnostic").wait_for(state="visible", timeout=5_000)
             if page.get_by_test_id("failure-code").inner_text() != "E009":
                 raise AssertionError("canceled job did not expose E009")
+            if "is-visible" in (page.locator("#toast").get_attribute("class") or ""):
+                raise AssertionError("terminal failure toast must not cover the persistent error diagnostic")
             generator.blocking_release.set()
+            page.screenshot(path=str(output_dir / f"workbench-{name}-failure.png"), full_page=True)
             overflow = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
             screenshot = output_dir / f"workbench-{name}.png"
             page.screenshot(path=str(screenshot), full_page=True)
@@ -194,6 +267,31 @@ def _write_template(path: Path) -> Path:
         _textbox(slide, body, 0.8, 1.8, 11.0, 4.6, 18)
     presentation.save(path)
     return path
+
+
+def _assert_native_theme_tokens(page, theme: str | None) -> None:
+    if theme not in NATIVE_THEME_TOKENS:
+        raise AssertionError(f"workbench did not resolve a supported theme: {theme}")
+    expected = NATIVE_THEME_TOKENS[theme]
+    actual = page.evaluate(
+        """() => {
+          const root = getComputedStyle(document.documentElement);
+          const selected = document.querySelector('.app-nav__button.is-selected');
+          return {
+            accent: root.getPropertyValue('--accent').trim().toLowerCase(),
+            productMark: root.getPropertyValue('--product-mark').trim().toLowerCase(),
+            selectedBackground: selected ? getComputedStyle(selected).backgroundColor : null,
+          };
+        }"""
+    )
+    if actual["accent"] != expected["accent"]:
+        raise AssertionError(f"{theme} theme must use the Fluent accent, got {actual['accent']}")
+    if actual["selectedBackground"] != expected["selected_background"]:
+        raise AssertionError(
+            f"{theme} selected navigation must use the semantic accent surface, got {actual['selectedBackground']}"
+        )
+    if actual["productMark"] != "#c7000b":
+        raise AssertionError("Huawei red must remain limited to the product mark")
 
 
 def _write_ole_template(path: Path) -> Path:

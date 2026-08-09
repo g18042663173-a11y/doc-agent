@@ -86,8 +86,9 @@ def test_graphviz_layout_helpers_reject_invalid_geometry() -> None:
 
 
 class _FakeDigraph:
-    payload: str | None = None
+    payload: str | bytes | None = None
     error: Exception | None = None
+    pipe_kwargs: list[dict] = []
 
     def __init__(self, **_kwargs) -> None:
         pass
@@ -101,7 +102,8 @@ class _FakeDigraph:
     def edge(self, *_args, **_kwargs) -> None:
         pass
 
-    def pipe(self, **_kwargs) -> str:
+    def pipe(self, **kwargs) -> str | bytes:
+        self.pipe_kwargs.append(dict(kwargs))
         if self.error is not None:
             raise self.error
         assert self.payload is not None
@@ -145,6 +147,39 @@ def test_graphviz_layout_reports_graphviz_runtime_failure(monkeypatch: pytest.Mo
             theme,
         )
     _FakeDigraph.error = None
+
+
+def test_graphviz_layout_uses_binary_output_to_avoid_locale_stderr_decoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import graphviz
+
+    from app.rendering.architecture_graphviz import layout_architecture_with_graphviz
+    from app.rendering.theme import load_theme
+
+    _FakeDigraph.error = None
+    _FakeDigraph.pipe_kwargs = []
+    _FakeDigraph.payload = json.dumps(
+        {
+            "bb": "0,0,144,72",
+            "objects": [
+                {"name": "node_0", "pos": "36,36", "width": 0.8, "height": 0.5},
+                {"name": "node_1", "pos": "108,36", "width": 0.8, "height": 0.5},
+            ],
+            "edges": [],
+        }
+    ).encode("utf-8")
+    monkeypatch.setattr(graphviz, "Digraph", _FakeDigraph)
+
+    theme = load_theme("hw_v1")
+    result = layout_architecture_with_graphviz(
+        _architecture_slide(),
+        theme["layouts"]["architecture_diagram"],
+        theme,
+    )
+
+    assert result.node_boxes
+    assert _FakeDigraph.pipe_kwargs[-1]["encoding"] is None
 
 
 def test_graphviz_layout_rejects_incomplete_node_results(monkeypatch: pytest.MonkeyPatch) -> None:

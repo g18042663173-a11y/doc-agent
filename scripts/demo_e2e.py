@@ -42,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-output-chars", type=int, default=6000)
     parser.add_argument("--pages", type=int)
     parser.add_argument("--depth", choices=["概览", "标准", "详细"])
+    parser.add_argument("--theme", default="hw_v1", help="Deck 主题名（hw_v1 / hw-report / hw-proposal / hw-academic）。")
     parser.add_argument("--template", type=Path, help="Optional .pptx template for deck rendering.")
     parser.add_argument("--asset-manifest", type=Path, help="Optional AssetManifest 1.0 for deck image references.")
     return parser
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
 
     generator = generator_from_name(args.generator)
     generator_target = "word_ir" if args.target == "word" else "deck_ir"
-    generation_options = GenerationOptions(pages=args.pages, depth=args.depth)
+    generation_options = GenerationOptions(pages=args.pages, depth=args.depth, theme=args.theme)
     if args.target == "word" and generation_options.enabled:
         build_parser().error("--pages/--depth are only supported for --target deck")
     if args.target == "word" and (args.template is not None or args.asset_manifest is not None):
@@ -139,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         report_obj = check_pptx(
             artifact,
             classification=deck_ir.meta.classification,
+            theme_name=deck_ir.meta.theme,
             template_profile=template_result.profile if template_result is not None else None,
         )
         report, _ = write_reports(report_obj, output_dir)

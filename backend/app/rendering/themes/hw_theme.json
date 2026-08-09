@@ -372,7 +372,7 @@
       "group_label_height_in": 0.28,
       "group_label_margin_in": 0.1,
       "group_label_font_size_pt": 9,
-      "group_border_pt": 2.0,
+      "group_border_pt": 1.0,
       "node_width_in": 1.5,
       "node_height_in": 0.8,
       "node_min_width_in": 0.8,
