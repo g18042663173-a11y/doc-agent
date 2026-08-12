@@ -235,9 +235,14 @@ def _run_office_visual_qa(artifact: Path, output_dir: Path) -> dict[str, Any]:
         "--output-dir",
         str(output_dir),
     ]
-    subprocess.run(command, cwd=ROOT, check=False, capture_output=True, text=True, encoding="utf-8")
+    completed = subprocess.run(command, cwd=ROOT, check=False, capture_output=True, text=True, encoding="utf-8")
     path = output_dir / "visual_qa_report.json"
-    report = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {"status": "failed"}
+    if not path.is_file():
+        return {
+            "status": "failed",
+            "reason": f"visual QA exited with code {completed.returncode} without writing a report",
+        }
+    report = json.loads(path.read_text(encoding="utf-8-sig"))
     export_path = output_dir / "visual_export_report.json"
     export = json.loads(export_path.read_text(encoding="utf-8-sig")) if export_path.is_file() else {"pass": False}
     report["office_export_pass"] = bool(export.get("pass"))

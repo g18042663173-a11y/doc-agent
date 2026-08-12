@@ -94,9 +94,18 @@ def main(argv: list[str] | None = None) -> int:
         "-OutputDir",
         str(output_dir),
     ]
-    subprocess.run(command, check=False, encoding="utf-8", errors="replace")
     export_path = output_dir / "visual_export_report.json"
-    export = json.loads(export_path.read_text(encoding="utf-8-sig")) if export_path.is_file() else {"pass": False}
+    # A stale report from a previous run must not masquerade as this run's result
+    # when the export script dies before writing it.
+    export_path.unlink(missing_ok=True)
+    completed = subprocess.run(command, check=False, encoding="utf-8", errors="replace")
+    if not export_path.is_file():
+        export = {
+            "pass": False,
+            "reason": f"office export script exited with code {completed.returncode} without writing a report",
+        }
+    else:
+        export = json.loads(export_path.read_text(encoding="utf-8-sig"))
     contact_sheet = None
     visual_diff = None
     if args.kind == "deck" and export.get("pass"):
