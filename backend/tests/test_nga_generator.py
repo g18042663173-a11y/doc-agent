@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import threading
 import json
 from pathlib import Path
 import time
@@ -464,6 +465,47 @@ def test_stop_cli_process_kills_whole_tree_on_windows(monkeypatch: pytest.Monkey
 
     assert tree_kill_args == [["taskkill", "/T", "/F", "/PID", "4242"]]
     assert process.killed is False
+
+
+def test_nga_cli_transport_cancel_event_kills_process_and_raises_generator_canceled() -> None:
+    from threading import Event
+
+    from app.generators.interface import GeneratorCanceled
+
+    class LongRunningProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO()
+            self.stderr = BytesIO()
+            self.returncode: int | None = None
+            self.killed = False
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def kill(self) -> None:
+            self.killed = True
+            self.returncode = -9
+
+        def wait(self, timeout: float | None = None) -> int:
+            _ = timeout
+            return self.returncode or 0
+
+    process = LongRunningProcess()
+    cancel_event = Event()
+    threading.Timer(0.2, cancel_event.set).start()
+
+    def fake_popen(command, **kwargs):
+        return process
+
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_popen_fn=fake_popen,
+    )
+
+    with pytest.raises(GeneratorCanceled):
+        generator.generate("the prompt", target="word_ir", cancel_event=cancel_event)
+
+    assert process.killed is True
 
 
 def test_nga_cli_transport_ignores_large_stderr_logs_and_succeeds() -> None:

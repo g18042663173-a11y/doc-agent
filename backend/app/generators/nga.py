@@ -17,6 +17,8 @@ from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.generators.interface import GeneratorCanceled
+
 
 GeneratorTarget = Literal["word_ir", "deck_ir", "analysis"]
 ResponseFormat = Literal["json_object", "none"]
@@ -204,7 +206,13 @@ class NgaGenerator:
             f"credential_configured={bool(self._token)})"
         )
 
-    def generate(self, prompt: str, *, target: GeneratorTarget) -> str:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        target: GeneratorTarget,
+        cancel_event: Event | None = None,
+    ) -> str:
         if self.config is None:
             raise NgaGeneratorError(
                 "E010",
@@ -219,26 +227,52 @@ class NgaGenerator:
             )
 
         for attempt in range(self.config.max_retries + 1):
+            if cancel_event is not None and cancel_event.is_set():
+                raise GeneratorCanceled("NGA generator canceled")
             try:
                 if self.transport == "cli":
-                    return self._send_cli(prompt)
-                return self._send_http(prompt, target=target)
+                    return self._send_cli(prompt, cancel_event=cancel_event)
+                return self._send_http(prompt, target=target, cancel_event=cancel_event)
             except NgaGeneratorError as exc:
                 if not exc.retryable or attempt >= self.config.max_retries:
                     raise
                 self._sleep(min(0.25 * (2**attempt), 2.0))
         raise AssertionError("NGA retry loop did not return or raise")
 
-    def _send_http(self, prompt: str, *, target: GeneratorTarget) -> str:
+    def _send_http(self, prompt: str, *, target: GeneratorTarget, cancel_event: Event | None = None) -> str:
         assert isinstance(self.config, NgaHttpConfig)
         request = self._request(prompt, target=target)
+        if cancel_event is None:
+            raw = self._http_call(request)
+        else:
+            raw = self._http_call_cancellable(request, cancel_event)
+            if raw is None:
+                raise GeneratorCanceled("NGA HTTP request canceled")
+
+        if len(raw) > MAX_RESPONSE_BYTES:
+            raise NgaGeneratorError(
+                "E014",
+                "NGA response exceeded the allowed size.",
+                retryable=False,
+            )
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise NgaGeneratorError(
+                "E014",
+                "NGA returned unreadable JSON.",
+                retryable=False,
+            ) from None
+        return _extract_content(payload)
+
+    def _http_call(self, request):
         try:
             with self._urlopen(
                 request,
                 timeout=self.config.timeout_seconds,
                 context=self._ssl_context,
             ) as response:
-                raw = response.read(MAX_RESPONSE_BYTES + 1)
+                return response.read(MAX_RESPONSE_BYTES + 1)
         except HTTPError as exc:
             raise _http_error(exc.code) from None
         except (TimeoutError, socket.timeout):
@@ -261,23 +295,28 @@ class NgaGenerator:
                 retryable=False,
             ) from None
 
-        if len(raw) > MAX_RESPONSE_BYTES:
-            raise NgaGeneratorError(
-                "E014",
-                "NGA response exceeded the allowed size.",
-                retryable=False,
-            )
-        try:
-            payload = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            raise NgaGeneratorError(
-                "E014",
-                "NGA returned unreadable JSON.",
-                retryable=False,
-            ) from None
-        return _extract_content(payload)
+    def _http_call_cancellable(self, request, cancel_event: Event) -> bytes | None:
+        """Run the blocking HTTP call on a worker thread so cancellation can
+        return promptly; the abandoned worker dies at its own timeout."""
+        box: dict[str, Any] = {}
 
-    def _send_cli(self, prompt: str) -> str:
+        def runner() -> None:
+            try:
+                box["raw"] = self._http_call(request)
+            except BaseException as exc:  # noqa: BLE001 - forwarded below
+                box["error"] = exc
+
+        worker = Thread(target=runner, daemon=True, name="nga-http-call")
+        worker.start()
+        while worker.is_alive():
+            if cancel_event.is_set():
+                return None
+            worker.join(timeout=0.25)
+        if "error" in box:
+            raise box["error"]
+        return box.get("raw")
+
+    def _send_cli(self, prompt: str, *, cancel_event: Event | None = None) -> str:
         """Invoke the already-authenticated local NGA CLI and parse its NDJSON stream.
 
         The CLI owns authentication (OAuth login, token storage, refresh), so no
@@ -313,7 +352,10 @@ class NgaGenerator:
                     command,
                     timeout=self.config.timeout_seconds,
                     popen_fn=self._subprocess_popen,
+                    cancel_event=cancel_event,
                 )
+        except GeneratorCanceled:
+            raise
         except FileNotFoundError as exc:
             if getattr(exc, "winerror", None) == _WINERROR_FILENAME_TOO_LONG:
                 raise _prompt_exceeds_command_line_limit() from exc
@@ -416,6 +458,7 @@ def _run_cli_limited(
     *,
     timeout: int,
     popen_fn: Callable[..., Any],
+    cancel_event: Event | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a local CLI without buffering unbounded stdout or stderr in memory."""
 
@@ -463,7 +506,12 @@ def _run_cli_limited(
 
     deadline = time.monotonic() + timeout
     timed_out = False
+    canceled = False
     while process.poll() is None:
+        if cancel_event is not None and cancel_event.is_set():
+            _stop_cli_process(process)
+            canceled = True
+            break
         if output_exceeded.is_set() or read_errors:
             _stop_cli_process(process)
             break
@@ -482,6 +530,8 @@ def _run_cli_limited(
     for reader in readers:
         reader.join(timeout=5)
 
+    if canceled:
+        raise GeneratorCanceled("NGA CLI process canceled")
     if timed_out:
         raise subprocess.TimeoutExpired(command, timeout)
     if output_exceeded.is_set():

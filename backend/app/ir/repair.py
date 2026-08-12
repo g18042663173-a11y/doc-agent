@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
 
 from app.ir.errors import ValidationItem, ValidationResult
 from app.ir.shell import validate_deck_ir_text, validate_word_ir_text
@@ -10,7 +10,7 @@ from app.ir.shell import validate_deck_ir_text, validate_word_ir_text
 class RepairGenerator(Protocol):
     name: str
 
-    def generate(self, prompt: str, *, target: str) -> str:
+    def generate(self, prompt: str, *, target: str, cancel_event: Any | None = None) -> str:
         """Return raw IR text. Shell extraction and validation stay outside generators."""
 
 
@@ -26,14 +26,19 @@ def repair_generated_text(
     validator: Callable[[str], ValidationResult[T]],
     max_retries: int = 2,
     original_prompt: str | None = None,
+    cancel_event: Any | None = None,
 ) -> ValidationResult[T]:
     current = raw
     result = validator(current)
     retries = 0
     while result.errors and retries < max_retries:
+        if cancel_event is not None and cancel_event.is_set():
+            break
+        generate_kwargs = {} if cancel_event is None else {"cancel_event": cancel_event}
         current = generator.generate(
             _repair_prompt(current, result.errors, original_prompt=original_prompt),
             target=target,
+            **generate_kwargs,
         )
         retries += 1
         result = validator(current)
@@ -48,6 +53,7 @@ def repair_ir_text(
     max_retries: int = 2,
     expected_pages: int | None = None,
     original_prompt: str | None = None,
+    cancel_event: Any | None = None,
 ) -> ValidationResult:
     return repair_generated_text(
         raw,
@@ -56,6 +62,7 @@ def repair_ir_text(
         validator=lambda current: _validate_with_page_target(current, target, expected_pages),
         max_retries=max_retries,
         original_prompt=original_prompt,
+        cancel_event=cancel_event,
     )
 
 

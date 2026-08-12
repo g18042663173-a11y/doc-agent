@@ -16,7 +16,13 @@ VISUAL_PLAN_MARKER = "[VisualPlan 1.0]"
 class StubGenerator:
     name = "stub"
 
-    def generate(self, prompt: str, *, target: Literal["word_ir", "deck_ir", "analysis"]) -> str:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        target: Literal["word_ir", "deck_ir", "analysis"],
+        cancel_event: Any | None = None,
+    ) -> str:
         if target == "analysis":
             from app.generation.depth import OUTLINE_MARKER, stub_outline_payload
 

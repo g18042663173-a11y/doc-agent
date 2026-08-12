@@ -257,7 +257,8 @@ def test_detailed_generation_repairs_truncated_outline_and_wrong_chunk_page_coun
             self.outline_repaired = False
             self.chunk_repaired = False
 
-        def generate(self, prompt: str, *, target: str) -> str:
+        def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+            _ = cancel_event
             # The repair prompt now embeds the original prompt, so distinguish
             # rounds by the repair header instead of marker presence.
             is_repair = "上一轮输出未通过" in prompt

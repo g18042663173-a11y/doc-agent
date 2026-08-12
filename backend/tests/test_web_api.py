@@ -451,24 +451,24 @@ class FailingGenerator:
     def __init__(self, detail: str = "test generator failure") -> None:
         self.detail = detail
 
-    def generate(self, prompt: str, *, target: str) -> str:
-        _ = prompt, target
+    def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+        _ = prompt, target, cancel_event
         raise RuntimeError(self.detail)
 
 
 class TimeoutGenerator:
     name = "timeout"
 
-    def generate(self, prompt: str, *, target: str) -> str:
-        _ = prompt, target
+    def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+        _ = prompt, target, cancel_event
         raise TimeoutError("upstream timeout")
 
 
 class InvalidGenerator:
     name = "invalid"
 
-    def generate(self, prompt: str, *, target: str) -> str:
-        _ = prompt, target
+    def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+        _ = prompt, target, cancel_event
         return "raw_model_secret=do-not-leak"
 
 
@@ -478,11 +478,11 @@ class FailOnceGenerator:
     def __init__(self) -> None:
         self.calls = 0
 
-    def generate(self, prompt: str, *, target: str) -> str:
+    def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
         self.calls += 1
         if self.calls == 1:
             raise RuntimeError("first call fails")
-        return StubGenerator().generate(prompt, target=target)
+        return StubGenerator().generate(prompt, target=target, cancel_event=cancel_event)
 
 
 class SlowGenerator:
@@ -491,9 +491,9 @@ class SlowGenerator:
     def __init__(self, seconds: float) -> None:
         self.seconds = seconds
 
-    def generate(self, prompt: str, *, target: str) -> str:
+    def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
         time.sleep(self.seconds)
-        return StubGenerator().generate(prompt, target=target)
+        return StubGenerator().generate(prompt, target=target, cancel_event=cancel_event)
 
 
 class BlockingGenerator:
@@ -503,10 +503,10 @@ class BlockingGenerator:
         self.started = Event()
         self.release = Event()
 
-    def generate(self, prompt: str, *, target: str) -> str:
+    def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
         self.started.set()
         self.release.wait(timeout=5)
-        return StubGenerator().generate(prompt, target=target)
+        return StubGenerator().generate(prompt, target=target, cancel_event=cancel_event)
 
 
 def test_timeout_has_retryable_diagnostic_and_failure_report(tmp_path: Path) -> None:
@@ -812,6 +812,54 @@ def test_worker_survives_failure_report_write_error_and_keeps_processing_queue(
     assert client.get("/api/health").get_json()["runner"]["worker_alive"] is True
 
 
+def test_job_cancel_sets_generator_cancel_event_and_returns_promptly(tmp_path: Path) -> None:
+    from app.generators.interface import GeneratorCanceled
+
+    class CancelableSlowGenerator:
+        name = "cancelable-slow"
+
+        def __init__(self) -> None:
+            self.cancel_seen = False
+
+        def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+            _ = prompt, target
+            for _ in range(300):
+                if cancel_event is not None and cancel_event.is_set():
+                    self.cancel_seen = True
+                    raise GeneratorCanceled()
+                time.sleep(0.02)
+            return '{"ir_type": "word", "ir_version": "1.0", "meta": {"title": "T"}, "blocks": [{"type": "paragraph", "text": "x"}]}'
+
+    client = create_api_app(work_dir=tmp_path, generator=CancelableSlowGenerator()).test_client()
+    created = client.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO(b"# Cancel"), "cancel.md")},
+        content_type="multipart/form-data",
+    )
+    job_id = created.get_json()["job_id"]
+
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/status/{job_id}").get_json()
+        if status["status"] == "running":
+            break
+        time.sleep(0.02)
+
+    started = time.monotonic()
+    canceled = client.post(f"/api/jobs/{job_id}/cancel")
+    assert canceled.status_code == 200
+    terminal = _wait_for_terminal_status(client, job_id)
+    elapsed = time.monotonic() - started
+
+    assert terminal["status"] == "canceled"
+    assert elapsed < 5
+    generator = client.application.config["API_GENERATOR_MANAGER"].snapshot().generator
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline and not generator.cancel_seen:
+        time.sleep(0.02)
+    assert generator.cancel_seen is True
+
+
 def test_cleanup_expired_sweeps_orphaned_analysis_dirs(tmp_path: Path) -> None:
     from datetime import timedelta
 
@@ -1020,7 +1068,7 @@ def _wait_for_terminal_status(client, job_id: str) -> dict:
         response = client.get(f"/api/status/{job_id}")
         assert response.status_code == 200
         payload = response.get_json()
-        if payload["status"] in {"done", "failed"}:
+        if payload["status"] in {"done", "failed", "canceled"}:
             return payload
         time.sleep(0.02)
     raise AssertionError(f"job {job_id} did not finish: {payload}")

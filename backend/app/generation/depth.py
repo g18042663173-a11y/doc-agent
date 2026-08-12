@@ -4,6 +4,7 @@ import copy
 from dataclasses import dataclass, field
 import json
 import re
+from threading import Event
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -144,6 +145,7 @@ def generate_deck(
     max_output_chars: int = 6000,
     visual_plan: VisualPlan | None = None,
     asset_manifest: AssetManifest | None = None,
+    cancel_event: Event | None = None,
 ) -> DeckGenerationAttempt:
     if not options.enabled:
         raise ValueError("generate_deck depth orchestration requires explicit options")
@@ -156,6 +158,7 @@ def generate_deck(
             max_output_chars=max_output_chars,
             visual_plan=visual_plan,
             asset_manifest=asset_manifest,
+            cancel_event=cancel_event,
         )
         _apply_theme_override(attempt, options.theme)
         return attempt
@@ -167,6 +170,7 @@ def generate_deck(
         max_output_chars=max_output_chars,
         visual_plan=visual_plan,
         asset_manifest=asset_manifest,
+        cancel_event=cancel_event,
     )
     _apply_theme_override(attempt, options.theme)
     return attempt
@@ -427,6 +431,7 @@ def _generate_single(
     max_output_chars: int,
     visual_plan: VisualPlan | None,
     asset_manifest: AssetManifest | None,
+    cancel_event: Event | None = None,
 ) -> DeckGenerationAttempt:
     prompt = build_prompt(
         kind="deck",
@@ -439,7 +444,7 @@ def _generate_single(
         visual_plan=visual_plan,
         asset_manifest=asset_manifest,
     )
-    raw = generator.generate(prompt, target="deck_ir")
+    raw = generator.generate(prompt, target="deck_ir", **({} if cancel_event is None else {"cancel_event": cancel_event}))
     initial = _validate_deck_page_target(raw, options.target_pages)
     repair_events = _repair_event("deck", initial)
     validation = repair_ir_text(
@@ -448,6 +453,7 @@ def _generate_single(
         generator=generator,
         expected_pages=options.target_pages,
         original_prompt=prompt,
+        **({} if cancel_event is None else {"cancel_event": cancel_event}),
     )
     return DeckGenerationAttempt(
         validation=validation,
@@ -470,6 +476,7 @@ def _generate_segmented(
     max_output_chars: int,
     visual_plan: VisualPlan | None,
     asset_manifest: AssetManifest | None,
+    cancel_event: Event | None = None,
 ) -> DeckGenerationAttempt:
     prompts: dict[str, str] = {}
     repair_events: list[dict[str, Any]] = []
@@ -477,7 +484,7 @@ def _generate_segmented(
         document, options, max_context_chars=max_context_chars, visual_plan=visual_plan
     )
     prompts["outline.txt"] = outline_prompt
-    outline_raw = generator.generate(outline_prompt, target="analysis")
+    outline_raw = generator.generate(outline_prompt, target="analysis", **({} if cancel_event is None else {"cancel_event": cancel_event}))
     initial_outline = validate_outline_text(outline_raw, expected_pages=options.target_pages)
     repair_events.extend(_repair_event("outline", initial_outline))
     outline_result = repair_generated_text(
@@ -486,6 +493,7 @@ def _generate_segmented(
         generator=generator,
         validator=lambda current: validate_outline_text(current, expected_pages=options.target_pages),
         original_prompt=outline_prompt,
+        **({} if cancel_event is None else {"cancel_event": cancel_event}),
     )
     if not outline_result.ok or outline_result.value is None:
         return DeckGenerationAttempt(
@@ -516,7 +524,7 @@ def _generate_segmented(
             asset_manifest=asset_manifest,
         )
         prompts[f"chunk-{chunk_index:02d}.txt"] = prompt
-        raw = generator.generate(prompt, target="deck_ir")
+        raw = generator.generate(prompt, target="deck_ir", **({} if cancel_event is None else {"cancel_event": cancel_event}))
         last_raw = raw
         initial_chunk = _validate_deck_page_target(raw, len(pages))
         repair_events.extend(_repair_event(f"chunk-{chunk_index:02d}", initial_chunk))
@@ -526,6 +534,7 @@ def _generate_segmented(
             generator=generator,
             expected_pages=len(pages),
             original_prompt=prompt,
+            cancel_event=cancel_event,
         )
         if not chunk_result.ok or chunk_result.value is None:
             return DeckGenerationAttempt(

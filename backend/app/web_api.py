@@ -27,7 +27,7 @@ from app.cli.parse import parse_file
 from app.diagnostics import build_runtime_diagnostics
 from app.generation.analysis import build_analysis_prompt, measure_document, validate_analysis_text
 from app.generation.depth import GenerationOptions, generate_deck
-from app.generators.interface import IRTextGenerator
+from app.generators.interface import GeneratorCanceled, IRTextGenerator
 from app.generators.manager import GeneratorManager
 from app.generators.nga import (
     NgaCliConfig,
@@ -319,6 +319,7 @@ class QueuedJob:
     input_path: Path
     generator: IRTextGenerator
     generator_revision: int
+    cancel_event: Event = field(default_factory=Event)
 
 
 class JobRunner:
@@ -389,6 +390,7 @@ class JobRunner:
                             input_path=item.input_path,
                             generator=item.generator,
                             jobs=self.jobs,
+                            cancel_event=item.cancel_event,
                         )
                     finally:
                         try:
@@ -404,6 +406,10 @@ class JobRunner:
                 while not finished.wait(timeout=0.1):
                     current = self.jobs.get(item.job_id)
                     if current is None or current.status == "canceled":
+                        # Signal the running generator so CLI subprocesses are
+                        # killed and HTTP calls return promptly instead of
+                        # running to their full timeout.
+                        item.cancel_event.set()
                         break
                     if time.monotonic() >= deadline:
                         _fail_job(
@@ -1381,19 +1387,35 @@ def _preflight_generator_environment(manager: GeneratorManager, *, target: str) 
         )
 
 
-def _run_job(*, job_id: str, input_path: Path, generator: IRTextGenerator, jobs: JobStore) -> None:
+def _run_job(
+    *,
+    job_id: str,
+    input_path: Path,
+    generator: IRTextGenerator,
+    jobs: JobStore,
+    cancel_event: Event | None = None,
+) -> None:
     job = jobs.get(job_id)
     if job is None:
         return
     try:
-        _execute_job(job, input_path, generator, jobs)
+        _execute_job(job, input_path, generator, jobs, cancel_event=cancel_event)
     except JobAborted:
+        return
+    except GeneratorCanceled:
         return
     except Exception as exc:
         _handle_job_failure(job, jobs, exc)
 
 
-def _execute_job(job: ApiJob, input_path: Path, generator: IRTextGenerator, jobs: JobStore) -> None:
+def _execute_job(
+    job: ApiJob,
+    input_path: Path,
+    generator: IRTextGenerator,
+    jobs: JobStore,
+    *,
+    cancel_event: Event | None = None,
+) -> None:
     if not jobs.update(job.job_id, status="running", stage="parsing", progress_percent=10):
         return
     document = parse_file(input_path)
@@ -1413,7 +1435,9 @@ def _execute_job(job: ApiJob, input_path: Path, generator: IRTextGenerator, jobs
 
     if not jobs.update(job.job_id, stage="generating", progress_percent=40):
         return
-    artifact, report_payload, manifest = _generate_artifact(job, document, generator, jobs)
+    artifact, report_payload, manifest = _generate_artifact(
+        job, document, generator, jobs, cancel_event=cancel_event
+    )
     _cleanup_sensitive_job_files(job, keep_artifact=True)
     jobs.update(
         job.job_id,
@@ -1736,9 +1760,11 @@ def _generate_artifact(
     document: DocumentIR,
     generator: IRTextGenerator,
     jobs: JobStore,
+    *,
+    cancel_event: Event | None = None,
 ) -> tuple[Path, dict[str, Any], dict[str, Any] | None]:
     try:
-        return _generate_artifact_with(generator, job, document, jobs)
+        return _generate_artifact_with(generator, job, document, jobs, cancel_event=cancel_event)
     except NgaGeneratorError as exc:
         if not (job.generator_mode == "auto" and job.generator_name == "nga"):
             raise
@@ -1755,6 +1781,7 @@ def _generate_artifact(
             document,
             jobs,
             fallback_reason=exc.code,
+            cancel_event=cancel_event,
         )
         manifest = _record_fallback_manifest(job, exc.code, manifest)
         return artifact, report_payload, manifest
@@ -1782,8 +1809,9 @@ def _generate_artifact_with(
     jobs: JobStore,
     *,
     fallback_reason: str | None = None,
+    cancel_event: Event | None = None,
 ) -> tuple[Path, dict[str, Any], dict[str, Any] | None]:
-    context = _prepare_artifact_context(job, document, generator, jobs)
+    context = _prepare_artifact_context(job, document, generator, jobs, cancel_event=cancel_event)
     if job.target == "deck" and job.depth is not None:
         return _generate_depth_deck_artifact(context)
     return _generate_single_artifact(context)
@@ -1799,6 +1827,7 @@ class _ArtifactContext:
     asset_manifest: Any | None
     visual_plan: Any | None
     visual_assets: dict[str, Path]
+    cancel_event: Event | None = None
 
 
 def _prepare_artifact_context(
@@ -1806,6 +1835,8 @@ def _prepare_artifact_context(
     document: DocumentIR,
     generator: IRTextGenerator,
     jobs: JobStore,
+    *,
+    cancel_event: Event | None = None,
 ) -> _ArtifactContext:
     asset_registry: AssetRegistry | None = None
     asset_manifest = None
@@ -1832,6 +1863,7 @@ def _prepare_artifact_context(
         asset_manifest=asset_manifest,
         visual_plan=visual_plan,
         visual_assets=visual_assets,
+        cancel_event=cancel_event,
     )
 
 
@@ -1845,6 +1877,7 @@ def _generate_depth_deck_artifact(
         options=GenerationOptions(depth=job.depth, theme=job.theme),
         visual_plan=context.visual_plan,
         asset_manifest=context.asset_manifest,
+        cancel_event=context.cancel_event,
     )
     _ensure_job_active(job, context.jobs)
     _write_deck_attempt(job.work_dir, attempt)
@@ -1889,7 +1922,9 @@ def _generate_single_artifact(
     )
     (job.work_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     generator_target = "word_ir" if job.target == "word" else "deck_ir"
-    raw = context.generator.generate(prompt, target=generator_target)
+    raw = context.generator.generate(
+        prompt, target=generator_target, **({} if context.cancel_event is None else {"cancel_event": context.cancel_event})
+    )
     _ensure_job_active(job, context.jobs)
     (job.work_dir / "raw_ir.txt").write_text(raw.strip() + "\n", encoding="utf-8")
     validation = repair_ir_text(
@@ -1897,6 +1932,7 @@ def _generate_single_artifact(
         target=generator_target,
         generator=context.generator,
         original_prompt=prompt,
+        **({} if context.cancel_event is None else {"cancel_event": context.cancel_event}),
     )
     _ensure_job_active(job, context.jobs)
     if not validation.ok or validation.value is None:

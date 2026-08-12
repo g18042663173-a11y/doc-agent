@@ -21,7 +21,8 @@ class FailingNgaGenerator:
     calls: int = 0
     name: str = "nga"
 
-    def generate(self, prompt: str, *, target: str) -> str:
+    def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+        _ = cancel_event
         self.calls += 1
         if prompt.startswith("NGA_CONNECTION_TEST"):
             return '{"ok":true}'

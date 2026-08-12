@@ -79,7 +79,8 @@ class CodexGenerator:
         if self.transport not in TRANSPORTS:
             raise CodexConfigurationError("CODEX_GENERATOR_TRANSPORT must be http or cli.")
 
-    def generate(self, prompt: str, *, target: GeneratorTarget) -> str:
+    def generate(self, prompt: str, *, target: GeneratorTarget, cancel_event: Any | None = None) -> str:
+        _ = cancel_event
         if self.transport == "cli":
             return self._generate_cli(prompt)
         return self._generate_http(prompt, target=target)
