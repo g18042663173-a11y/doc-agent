@@ -72,7 +72,7 @@ TARGETS = {
         "model": WordIR,
     },
     "deck": {
-        "label": "DeckIR v2.0",
+        "label": "DeckIR v2.1",
         "description": "华为风格 PPTX 演示文稿",
         "model": DeckIR,
     },
@@ -166,7 +166,7 @@ def _contract_guide(kind: Kind) -> str:
         )
     return (
         "顶层只能有 ir_type、ir_version、meta、slides。"
-        "ir_type 固定为 deck，ir_version 固定为 2.0，meta.title 必填且非空，slides 至少 1 页。\n"
+        "ir_type 固定为 deck，ir_version 固定为 2.1，meta.title 必填且非空，slides 至少 1 页。\n"
         "slides[].layout 只能是 cover、agenda、section、title_bullets、two_column、table、cards、chart、"
         "architecture_diagram、process_flow、timeline、image、image_text、image_grid、infographic、conclusion、composite；"
         "每种 layout 只填写 Schema 为它定义的字段。\n"

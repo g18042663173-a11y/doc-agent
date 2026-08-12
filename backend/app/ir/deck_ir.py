@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal, Union
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.ir.common import ContractModel, ListItem, non_empty
+from app.ir.word_ir import WORD_CLASSIFICATIONS
 
 
 class DeckMeta(ContractModel):
@@ -20,6 +21,15 @@ class DeckMeta(ContractModel):
     theme: str = "hw_v1"
 
     _title_not_blank = field_validator("title")(non_empty)
+
+    @field_validator("classification")
+    @classmethod
+    def classification_is_allowed(cls, value: str) -> str:
+        value = non_empty(value)
+        if value not in WORD_CLASSIFICATIONS:
+            allowed = "、".join(sorted(WORD_CLASSIFICATIONS))
+            raise ValueError(f"classification must be one of: {allowed}")
+        return value
 
 
 class CoverSlide(ContractModel):
@@ -1015,11 +1025,11 @@ DeckSlide = Annotated[
 ]
 
 
-def migrate_deck_payload(value: Any, *, target_version: str = "2.0") -> tuple[Any, str | None]:
+def migrate_deck_payload(value: Any, *, target_version: str = "2.1") -> tuple[Any, str | None]:
     if (
         not isinstance(value, dict)
-        or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7", "1.8", "1.9"}
-        or target_version != "2.0"
+        or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0"}
+        or target_version != "2.1"
     ):
         return value, None
     source_version = value["ir_version"]
@@ -1037,13 +1047,13 @@ def migrate_deck_payload(value: Any, *, target_version: str = "2.0") -> tuple[An
                     if not isinstance(region, dict) or "components" in region or "component" not in region:
                         continue
                     region["components"] = [region.pop("component")]
-    migrated["ir_version"] = "2.0"
+    migrated["ir_version"] = target_version
     return migrated, source_version
 
 
 class DeckIR(ContractModel):
     ir_type: Literal["deck"]
-    ir_version: Literal["2.0"]
+    ir_version: Literal["2.1"]
     meta: DeckMeta
     slides: list[DeckSlide] = Field(min_length=1, max_length=30)
 

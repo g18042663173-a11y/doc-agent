@@ -765,7 +765,7 @@ def validate_deck_ir(
             _warning(
                 "D004",
                 "ir_version",
-                f"DeckIR {migrated_from} 已在内存中兼容迁移到 2.0，并按 2.0 契约重新校验。",
+                f"DeckIR {migrated_from} 已在内存中兼容迁移到 2.1，并按 2.1 契约重新校验。",
                 f"重新生成或序列化为 2.0 可消除该兼容提示；原始 {migrated_from} 文件不会被覆写。",
             )
         )

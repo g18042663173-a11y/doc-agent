@@ -253,14 +253,14 @@ def test_validate_deck_ir_migrates_legacy_versions_without_mutating_input(source
     direct = DeckIR.model_validate(payload)
 
     assert result.ok and result.value is not None
-    assert result.value.ir_version == "2.0"
-    assert direct.ir_version == "2.0"
+    assert result.value.ir_version == "2.1"
+    assert direct.ir_version == "2.1"
     assert payload == original
     assert any(
         item.code == "D004"
         and item.loc == "ir_version"
         and source_version in item.message
-        and "2.0" in item.message
+        and "2.1" in item.message
         for item in result.warnings
     )
 
@@ -351,10 +351,10 @@ def test_validate_deck_ir_migrates_v17_single_composite_component_without_mutati
     result = validate_deck_ir(payload)
 
     assert result.ok and result.value is not None
-    assert result.value.ir_version == "2.0"
+    assert result.value.ir_version == "2.1"
     assert [len(region.components) for region in result.value.slides[0].regions] == [1, 1]
     assert payload == original
-    assert any(item.code == "D004" and "1.7" in item.message and "2.0" in item.message for item in result.warnings)
+    assert any(item.code == "D004" and "1.7" in item.message and "2.1" in item.message for item in result.warnings)
 
 
 def test_validate_deck_ir_accepts_three_stacked_components_and_rejects_fourth() -> None:
@@ -1034,7 +1034,7 @@ def test_validate_deck_ir_strict_mode_collects_nested_unknown_fields_in_image_an
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "2.0",
+            "ir_version": "2.1",
             "meta": {"title": "图文页", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -1078,7 +1078,7 @@ def test_validate_deck_ir_rejects_combo_thresholds_referencing_secondary_axis() 
     result = validate_deck_ir(
         {
             "ir_type": "deck",
-            "ir_version": "2.0",
+            "ir_version": "2.1",
             "meta": {"title": "次轴阈值", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {

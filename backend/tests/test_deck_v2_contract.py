@@ -10,18 +10,18 @@ from app.ir.validation import validate_deck_ir
 def _deck(slide: dict) -> dict:
     return {
         "ir_type": "deck",
-        "ir_version": "2.0",
+        "ir_version": "2.1",
         "meta": {"title": "视觉契约"},
         "slides": [slide],
     }
 
 
-def test_deck_ir_19_is_migrated_in_memory_to_20() -> None:
+def test_deck_ir_19_is_migrated_in_memory_to_21() -> None:
     payload = _deck({"layout": "image", "title": "占位", "placeholder": "稍后补图"})
     payload["ir_version"] = "1.9"
     result = validate_deck_ir(payload)
     assert result.ok
-    assert result.value is not None and result.value.ir_version == "2.0"
+    assert result.value is not None and result.value.ir_version == "2.1"
     assert result.warnings == []
 
 

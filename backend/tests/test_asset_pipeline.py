@@ -212,7 +212,7 @@ def test_render_cli_accepts_asset_manifest_for_deck(tmp_path: Path) -> None:
         json.dumps(
             {
                 "ir_type": "deck",
-                "ir_version": "2.0",
+                "ir_version": "2.1",
                 "meta": {"title": "CLI 图片", "classification": "公开"},
                 "slides": [{"layout": "image", "title": "CLI 图片", "image_ref": manifest.assets[0].asset_id}],
             },
@@ -236,7 +236,7 @@ def test_render_cli_preserves_asset_error_code_for_missing_reference(
         json.dumps(
             {
                 "ir_type": "deck",
-                "ir_version": "2.0",
+                "ir_version": "2.1",
                 "meta": {"title": "缺失图片", "classification": "公开"},
                 "slides": [{"layout": "image", "title": "缺失图片", "image_ref": "asset-missing"}],
             },

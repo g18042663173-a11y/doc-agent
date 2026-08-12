@@ -58,7 +58,7 @@ def test_visual_selection_audit_records_selected_and_rejected_recommendations() 
     plan = build_visual_plan(_document("系统架构包含模块、接口和数据关系。"))
     deck = DeckIR.model_validate(
         {
-            "ir_type": "deck", "ir_version": "2.0", "meta": {"title": "结果"},
+            "ir_type": "deck", "ir_version": "2.1", "meta": {"title": "结果"},
             "slides": [{"layout": "title_bullets", "title": "结果", "bullets": [{"text": "保留文字说明"}]}],
         }
     )

@@ -28,7 +28,7 @@ def test_render_v2_images_infographics_scatter_and_combo_as_native_objects(tmp_p
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "2.0",
+            "ir_version": "2.1",
             "meta": {"title": "视觉能力", "classification": "公开"},
             "slides": [
                 {"layout": "image_text", "title": "图片与结论并列", "image": image, "text": "现场证据支撑结论"},
@@ -109,7 +109,7 @@ def test_visual_lint_reports_low_resolution_collision_and_broken_combo(tmp_path:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "2.0",
+            "ir_version": "2.1",
             "meta": {"title": "视觉 lint", "classification": "公开"},
             "slides": [
                 {"layout": "image", "title": "低分辨率", "image_ref": ref, "alt": "低分辨率测试"},

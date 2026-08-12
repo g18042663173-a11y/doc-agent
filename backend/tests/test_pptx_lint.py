@@ -604,7 +604,7 @@ def test_check_pptx_reports_chart_series_color_outside_accent_palette(tmp_path: 
 
 
 def test_check_pptx_measures_merged_cells_across_span_for_overflow(tmp_path: Path) -> None:
-    from app.lint.pptx_lint import _merged_cell_dimensions, check_pptx
+    from app.lint.pptx_lint import check_pptx
 
     def build(with_merge: bool, text: str, row_height_in: float) -> Path:
         path = tmp_path / f"merged-{with_merge}-{len(text)}.pptx"

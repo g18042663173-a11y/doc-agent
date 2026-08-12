@@ -827,7 +827,7 @@ def test_render_table_cell_tcpr_children_follow_ooxml_order(tmp_path: Path) -> N
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "2.0",
+            "ir_version": "2.1",
             "meta": {"title": "表格顺序", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -861,7 +861,7 @@ def test_render_combo_chart_draws_threshold_lines_on_primary_axis(tmp_path: Path
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "2.0",
+            "ir_version": "2.1",
             "meta": {"title": "组合图阈值", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {
@@ -900,7 +900,7 @@ def test_render_deck_ir_vertical_chart_threshold_labels_do_not_overlap(tmp_path:
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "2.0",
+            "ir_version": "2.1",
             "meta": {"title": "多阈值图", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
             "slides": [
                 {

@@ -49,7 +49,7 @@ def test_health_and_version_expose_release_compatibility_without_paths(tmp_path:
         "service": "huawei-document-generator",
         "app_version": APP_VERSION,
         "api_version": "1.0",
-        "deck_ir_version": "2.0",
+        "deck_ir_version": "2.1",
         "failure_envelope_version": "1.0",
         "job_state_version": "1.0",
     }

@@ -61,7 +61,7 @@ def test_template_renderer_preserves_image_relationships_and_redraws_native_char
     assert "TEMPLATE FILLER" not in all_text
     assert "交付方案" in all_text
     assert all(
-        "INTERNAL" in "\n".join(shape.text for shape in slide.shapes if hasattr(shape, "text"))
+        "HUAWEI CONFIDENTIAL" in "\n".join(shape.text for shape in slide.shapes if hasattr(shape, "text"))
         for slide in rendered.slides
     )
     assert any(
@@ -81,8 +81,8 @@ def test_template_replacement_audit_records_image_hash_fit_crop_and_focus(tmp_pa
     deck = DeckIR.model_validate(
         {
             "ir_type": "deck",
-            "ir_version": "2.0",
-            "meta": {"title": "图片审计", "classification": "INTERNAL"},
+            "ir_version": "2.1",
+            "meta": {"title": "图片审计", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
                     "layout": "image",
@@ -128,14 +128,14 @@ def test_template_aware_lint_ignores_profiled_decorations_but_not_generated_cont
         {
             "ir_type": "deck",
             "ir_version": "1.9",
-            "meta": {"title": "装饰忽略", "classification": "INTERNAL"},
+            "meta": {"title": "装饰忽略", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "cover", "title": "装饰忽略", "subtitle": "正文仍在安全边距内"}],
         }
     )
     result = render_deck_ir_with_template(deck, template, tmp_path / "decorated.pptx")
     report = check_pptx(
         result.artifact_path,
-        classification="INTERNAL",
+        classification="HUAWEI CONFIDENTIAL",
         template_profile=result.profile,
     )
 
@@ -221,7 +221,7 @@ def test_template_renderer_records_w201_and_redraws_when_replacement_overflows(t
         {
             "ir_type": "deck",
             "ir_version": "1.9",
-            "meta": {"title": "容量回退", "classification": "INTERNAL"},
+            "meta": {"title": "容量回退", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
                     "layout": "title_bullets",
@@ -262,7 +262,7 @@ def test_missing_template_shape_font_is_replaced_and_recorded_as_w202(tmp_path: 
         {
             "ir_type": "deck",
             "ir_version": "1.9",
-            "meta": {"title": "字体替代", "classification": "INTERNAL"},
+            "meta": {"title": "字体替代", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {
                     "layout": "title_bullets",
@@ -399,7 +399,7 @@ def test_template_transition_and_timing_are_not_copied_to_output(tmp_path: Path)
         {
             "ir_type": "deck",
             "ir_version": "1.9",
-            "meta": {"title": "无动画输出", "classification": "INTERNAL"},
+            "meta": {"title": "无动画输出", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "cover", "title": "无动画输出", "subtitle": "模板原型只复制安全形状"}],
         }
     )
@@ -461,7 +461,7 @@ def test_stripped_tag_relationship_does_not_leave_invalid_empty_tags_element(tmp
         {
             "ir_type": "deck",
             "ir_version": "1.9",
-            "meta": {"title": "安全标签清理", "classification": "INTERNAL"},
+            "meta": {"title": "安全标签清理", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [{"layout": "cover", "title": "安全标签清理", "subtitle": "不复制模板 tags 关系"}],
         }
     )
@@ -504,7 +504,7 @@ def _deck() -> DeckIR:
         {
             "ir_type": "deck",
             "ir_version": "1.9",
-            "meta": {"title": "交付方案", "classification": "INTERNAL"},
+            "meta": {"title": "交付方案", "classification": "HUAWEI CONFIDENTIAL"},
             "slides": [
                 {"layout": "cover", "title": "交付方案", "subtitle": "模板驱动生成"},
                 {
