@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     private string? _templatePath;
     private readonly ObservableCollection<string> _assetPaths = [];
     private JobInfo? _currentJob;
+    private long _pollGeneration;
     private bool _serviceReady;
     private bool _generatorBlocked;
     private bool _busy;
@@ -500,19 +501,37 @@ public partial class MainWindow : Window
 
     private async Task PollCurrentJobAsync(string jobId, CancellationToken cancellationToken)
     {
+        // A newer poll (a new submission or the startup recovery of a running
+        // job) supersedes this loop: stale loops must not touch _currentJob,
+        // the progress panel, or _busy after a newer job starts.
+        var pollGeneration = Interlocked.Increment(ref _pollGeneration);
         var consecutiveFailures = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                var job = await _api.GetJobAsync(jobId, cancellationToken);
+                using var pollTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                pollTimeout.CancelAfter(TimeSpan.FromSeconds(15));
+                var job = await _api.GetJobAsync(jobId, pollTimeout.Token);
+                if (Interlocked.Read(ref _pollGeneration) != pollGeneration)
+                {
+                    return;
+                }
                 _currentJob = job;
                 ShowJob(job);
                 consecutiveFailures = 0;
                 if (job.Status is "done" or "failed" or "canceled")
                 {
                     SetBusy(false);
-                    await RefreshJobsAsync();
+                    try
+                    {
+                        await RefreshJobsAsync();
+                    }
+                    catch (Exception)
+                    {
+                        // A failed refresh must not re-enter the poll loop;
+                        // the job list refreshes on the next trigger.
+                    }
                     return;
                 }
                 await Task.Delay(700, cancellationToken);
@@ -520,6 +539,15 @@ public partial class MainWindow : Window
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 return;
+            }
+            catch (OperationCanceledException)
+            {
+                // Per-request poll timeout (15s): the backend may be hung, but
+                // the loop must stay responsive and keep retrying with backoff.
+                consecutiveFailures++;
+                ProgressTitleText.Text = "连接中断，正在恢复任务状态";
+                SetServiceState(false, "连接中断，正在重试");
+                await Task.Delay(Math.Min(5000, 700 * (1 << Math.Min(consecutiveFailures, 3))), cancellationToken);
             }
             catch (HttpRequestException)
             {
@@ -864,20 +892,26 @@ public partial class MainWindow : Window
     private async Task<GeneratorSettingsResponse> SaveNgaDraftAsync()
     {
         var config = ReadNgaControls();
+        var token = CredentialManager.ReadNgaToken();
+        if (string.IsNullOrWhiteSpace(token) && !string.IsNullOrWhiteSpace(NgaTokenPasswordBox.Password))
+        {
+            token = NgaTokenPasswordBox.Password;
+        }
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new InvalidDataException("请先输入 NGA Token。");
+        }
+        // Validate on the backend first: a rejected configuration (E010) must
+        // not leave a persisted credential or settings that block startup.
+        var response = await _api.ConfigureGeneratorAsync("nga", config, token, false, _settings.GeneratorMode, _lifetime.Token);
         if (!string.IsNullOrWhiteSpace(NgaTokenPasswordBox.Password))
         {
             CredentialManager.WriteNgaToken(NgaTokenPasswordBox.Password);
             NgaTokenPasswordBox.Clear();
         }
-        var token = CredentialManager.ReadNgaToken();
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            throw new InvalidDataException("请先输入 NGA Token。");
-        }
         _settings.Nga = config;
         await _settingsStore.SaveAsync(_settings);
         _ngaDraftTested = false;
-        var response = await _api.ConfigureGeneratorAsync("nga", config, token, false, _settings.GeneratorMode, _lifetime.Token);
         NgaCredentialStateText.Text = "Token 已保存在 Windows 凭据管理器";
         NgaOperationStatusText.Text = "配置已保存，启用前需要测试连接。";
         return response;
