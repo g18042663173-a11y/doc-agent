@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-08-12 系统化排障会话(22 项修复,分支 codex/audit-2.1.0)
+- 从审计报告按 P0/P1/P2 逐项"证据链→最小修复→回归测试→commit",每项独立提交:
+  解析层 #30(stderr 不计 10MB 上限) #37(codex 畸形 choices) P-N3/#11(pptx 回退
+  标题不再重复进正文+空占位符回退) P-N4(空 sheet 无 dimension) P-N5(损坏 inline
+  shape) P-N13(负 outlineLvl) P-N6(xlsx 句柄泄漏);web_api #31(413 JSON 封套)
+  #34(analysis-* 清扫) #36(word lint 资产) #41(graphviz 缓存);模板 R-N1/R-N2/R-N12;
+  IR G-N5(repair 内嵌原始提示) IR-N6/IR-N7;生成器 G-N7(codex max_tokens);
+  diagram R-N5(mermaid 标签含箭头);scripts S-N3(断点续传 .part) S-N5(视觉 QA
+  旧报告) S-N8(PS null) S-N12(StopIteration)
+- 同步样例期望 facts 到 P-N3 修复后行为(项目汇报.pptx body_count 各减 1)+ hash manifest
+- 回归: 691 passed / 15 skipped(基线 656 → +35 个回归测试);ruff 全绿;
+  verify.py C0 通过(parsers 94.50 / ir 94.23 / lint 94.34 / overall 89.19)
+- 未修(记录原因): #2 API 鉴权、#28/#29 线程与超时、R-N3 combo 阈值、IR-N3 deck
+  密级枚举 —— 均属产品决策/契约变更,挂 QUESTIONS.md;R-N7/R-N8 OOXML 子元素顺序
+  —— 目标环境 PowerPoint 容忍,无可观察故障;C# 项无 .NET SDK 无法验证
+- 仓库既有问题(非本次引入): .git/refs/codex 损坏 refs 致 commit 时 geometric-repack 告警
+
+
 ## 2026-08-12 第二轮代码审计 + Track A 修复(8/8 已提交)
 - 产出 `代码审查报告_2026-08-12_第二轮.md`:8 个并行 subagent 全仓静态审查 + 主会话
   独立复现关键结论;前轮 63 项复核(47 REAL / 3 PARTIAL / 2 FALSE / 机制修正 4 项)+
