@@ -315,6 +315,8 @@ class JobRunner:
         self._slots = BoundedSemaphore(queue_capacity + 1)
         self._worker = Thread(target=self._loop, daemon=True, name="web-api-worker")
         self._worker.start()
+        self._supervisor = Thread(target=self._supervise, daemon=True, name="web-api-supervisor")
+        self._supervisor.start()
 
     def reserve(self) -> bool:
         return self._slots.acquire(blocking=False)
@@ -337,6 +339,19 @@ class JobRunner:
             "timeout_seconds": self.timeout_seconds,
         }
 
+    def _supervise(self) -> None:
+        """Restart the worker thread if it ever dies so the queue never stalls."""
+        while True:
+            time.sleep(5)
+            if not self._worker.is_alive():
+                print(
+                    "web-api: worker thread died; restarting it",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                self._worker = Thread(target=self._loop, daemon=True, name="web-api-worker")
+                self._worker.start()
+
     def _loop(self) -> None:
         while True:
             item = self._queue.get()
@@ -355,10 +370,12 @@ class JobRunner:
                             jobs=self.jobs,
                         )
                     finally:
-                        current = self.jobs.get(item.job_id)
-                        if current is not None and current.status in {"failed", "canceled"}:
-                            _cleanup_sensitive_job_files(current)
-                        finished.set()
+                        try:
+                            current = self.jobs.get(item.job_id)
+                            if current is not None and current.status in {"failed", "canceled"}:
+                                _cleanup_sensitive_job_files(current)
+                        finally:
+                            finished.set()
 
                 task = Thread(target=execute, daemon=True, name=f"job-task-{item.job_id}")
                 task.start()
@@ -378,6 +395,34 @@ class JobRunner:
                             suggestion="请减少输入复杂度后重试；若持续失败，请提供支持编号。",
                         )
                         break
+            except Exception as exc:
+                # A persistence/disk failure while marking a job failed must not
+                # kill the only worker: fall back to marking the job failed and
+                # keep consuming the queue. The supervisor restarts the worker
+                # as a last resort if this ever escapes.
+                print(
+                    f"web-api: worker loop error for job {item.job_id}: {exc!r}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                try:
+                    current = self.jobs.get(item.job_id)
+                    if current is not None and current.status not in TERMINAL_JOB_STATUSES:
+                        _fail_job(
+                            current,
+                            self.jobs,
+                            code="E002",
+                            stage="timed_out",
+                            retryable=True,
+                            message="任务超过允许的总执行时间，且失败记录写入失败。",
+                            suggestion="请检查磁盘空间后重试。",
+                        )
+                except Exception as nested:
+                    print(
+                        f"web-api: fallback failure marking job {item.job_id}: {nested!r}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
             finally:
                 self._queue.task_done()
                 self._slots.release()

@@ -695,6 +695,31 @@ def test_job_timeout_is_terminal_and_late_generator_cannot_overwrite_state(tmp_p
     assert not (job_dir / "raw_ir.txt").exists()
 
 
+def test_worker_survives_failure_report_write_error_and_keeps_processing_queue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _broken_failure_report(job, error):
+        raise OSError("simulated disk failure")
+
+    monkeypatch.setattr(web_api, "_write_failure_report", _broken_failure_report)
+    client = create_api_app(
+        work_dir=tmp_path,
+        generator=SlowGenerator(0.25),
+        job_timeout_seconds=0.05,
+        rate_limit_per_minute=100,
+    ).test_client()
+
+    _submit_word_job(client, "first")
+    time.sleep(0.3)
+
+    assert client.get("/api/health").get_json()["runner"]["worker_alive"] is True
+
+    second = _submit_word_job(client, "second")
+    completed = _wait_for_terminal_status(client, second.get_json()["job_id"])
+    assert completed["status"] == "done"
+    assert client.get("/api/health").get_json()["runner"]["worker_alive"] is True
+
+
 def test_idempotency_key_returns_original_job_without_duplicate_directory(tmp_path: Path) -> None:
     client = create_api_app(work_dir=tmp_path).test_client()
     headers = {"Idempotency-Key": "deck-request-0001"}
