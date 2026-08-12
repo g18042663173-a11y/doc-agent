@@ -78,12 +78,23 @@ def _slide_title(
     title_shape = getattr(slide.shapes, "title", None)
     if title_shape is not None and getattr(title_shape, "has_text_frame", False):
         text = title_shape.text.strip()
-        return limiter.limit(text, loc=f"pptx slide {slide_index} title") if text and limiter is not None else text or None
-    for shape_index, shape in enumerate(shapes if shapes is not None else _iter_shapes(slide.shapes, []), start=1):
-        if getattr(shape, "has_text_frame", False):
-            text = shape.text.strip()
-            if text:
-                return limiter.limit(text, loc=f"pptx slide {slide_index} fallback title shape {shape_index}") if limiter is not None else text
+        if text:
+            return limiter.limit(text, loc=f"pptx slide {slide_index} title") if limiter is not None else text
+    fallback = _fallback_title_shape(slide, shapes)
+    if fallback is None:
+        return None
+    text = fallback.text.strip()
+    candidates = shapes if shapes is not None else list(_iter_shapes(slide.shapes, []))
+    shape_index = next((index for index, candidate in enumerate(candidates, start=1) if candidate is fallback), 0)
+    loc = f"pptx slide {slide_index} fallback title shape {shape_index}"
+    return limiter.limit(text, loc=loc) if limiter is not None else text
+
+
+def _fallback_title_shape(slide, shapes: list | None):
+    candidates = shapes if shapes is not None else list(_iter_shapes(slide.shapes, []))
+    for shape in candidates:
+        if getattr(shape, "has_text_frame", False) and shape.text.strip():
+            return shape
     return None
 
 
@@ -95,9 +106,12 @@ def _slide_bodies(
     slide_index: int = 1,
 ) -> list[str]:
     title_shape = getattr(slide.shapes, "title", None)
+    fallback_shape = None
+    if title_shape is None or not getattr(title_shape, "has_text_frame", False) or not title_shape.text.strip():
+        fallback_shape = _fallback_title_shape(slide, shapes)
     bodies: list[str] = []
     for shape_index, shape in enumerate(shapes if shapes is not None else _iter_shapes(slide.shapes, []), start=1):
-        if shape is title_shape:
+        if shape is title_shape or shape is fallback_shape:
             continue
         if getattr(shape, "has_table", False):
             continue

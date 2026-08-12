@@ -46,6 +46,38 @@ def test_parse_pptx_extracts_titles_bodies_tables_and_notes(tmp_path: Path) -> N
     assert slide_summary.notes == "演讲备注"
 
 
+def test_parse_pptx_fallback_title_is_not_duplicated_into_bodies_and_empty_placeholder_falls_back(
+    tmp_path: Path,
+) -> None:
+    from app.parsers.pptx_parser import parse_pptx
+
+    path = tmp_path / "fallback-title.pptx"
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    title_box = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(8), Inches(0.6))
+    title_box.text = "真实标题"
+    body_box = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(1))
+    body_box.text = "正文要点"
+    prs.save(path)
+
+    summary = parse_pptx(path).content.slides[0]
+    assert summary.title == "真实标题"
+    assert summary.bodies == ["正文要点"]
+
+    empty_placeholder = tmp_path / "empty-placeholder.pptx"
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    placeholder = slide.placeholders[0]
+    placeholder.text_frame.text = "   "
+    fallback = slide.shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(0.6))
+    fallback.text = "回退标题"
+    prs.save(empty_placeholder)
+
+    summary = parse_pptx(empty_placeholder).content.slides[0]
+    assert summary.title == "回退标题"
+    assert "回退标题" not in summary.bodies
+
+
 def test_parse_pptx_records_transition_warning(tmp_path: Path) -> None:
     from app.parsers.pptx_parser import parse_pptx
 
@@ -106,6 +138,7 @@ def test_parse_pptx_truncates_long_body_table_cell_and_notes(tmp_path: Path) -> 
     prs = Presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1)).text_frame.text = "文" * 2100
+    slide.shapes.add_textbox(Inches(1), Inches(2), Inches(5), Inches(1)).text_frame.text = "体" * 2100
     table = slide.shapes.add_table(2, 2, Inches(1), Inches(3), Inches(5), Inches(1)).table
     table.cell(0, 0).text = "字段"
     table.cell(0, 1).text = "说明"
@@ -117,11 +150,13 @@ def test_parse_pptx_truncates_long_body_table_cell_and_notes(tmp_path: Path) -> 
     ir = parse_pptx(path)
     summary = ir.content.slides[0]
 
+    assert len(summary.title or "") == 2000
     assert len(summary.bodies[0]) == 2000
     assert len(summary.tables[0]["rows"][0][1]) == 2000
     assert len(summary.notes or "") == 2000
-    assert any("shape 1 paragraph 1" in warning for warning in ir.warnings)
-    assert any("table 2 row 1 column 2" in warning for warning in ir.warnings)
+    assert any("fallback title shape 1" in warning for warning in ir.warnings)
+    assert any("shape 2 paragraph 1" in warning for warning in ir.warnings)
+    assert any("table 3 row 1 column 2" in warning for warning in ir.warnings)
     assert any("slide 1 notes" in warning for warning in ir.warnings)
 
 
@@ -151,7 +186,8 @@ def test_slide_bodies_recurses_group_shapes() -> None:
 
     grouped_text = _FakeShape(text="组合内正文")
     group = _FakeShape(children=[grouped_text], shape_type="GROUP")
-    slide = _FakeSlide([group])
+    title = _FakeShape(text="页标题")
+    slide = _FakeSlide(_FakeShapes([group], title=title))
 
     assert _slide_bodies(slide) == ["组合内正文"]
 
@@ -179,6 +215,15 @@ def test_iter_shapes_warns_when_group_iterator_raises() -> None:
 class _FakeSlide:
     def __init__(self, shapes):
         self.shapes = shapes
+
+
+class _FakeShapes:
+    def __init__(self, shapes, title=None):
+        self.shapes = shapes
+        self.title = title
+
+    def __iter__(self):
+        return iter(self.shapes)
 
 
 class _FakeShape:
