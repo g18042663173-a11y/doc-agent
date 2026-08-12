@@ -101,7 +101,7 @@ def test_readme_declares_the_unique_official_entrypoints() -> None:
 def test_human_review_doc_describes_current_manual_gates() -> None:
     review = (ROOT / "docs" / "HUMAN_REVIEW.md").read_text(encoding="utf-8")
 
-    assert "DeckIR 2.0" in review
+    assert "DeckIR 2.1" in review
     assert "AssetManifest 1.0" in review
     assert "Windows Credential Manager" in review
     assert "manual_pending" in review
