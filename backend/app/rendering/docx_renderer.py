@@ -303,6 +303,16 @@ def _shade_paragraph(paragraph, *, fill: str) -> None:
     paragraph_properties.append(shading)
 
 
+def _insert_before_shading(container, element) -> None:
+    """CT_PPr/CT_TcPr require pBdr/tcBorders before shd; python-pptx appends
+    shading, so new border containers must be inserted in front of it."""
+    shading = container.find(qn("w:shd"))
+    if shading is not None:
+        shading.addprevious(element)
+    else:
+        container.append(element)
+
+
 def _render_list(document: Document, block: BulletListBlock | NumberedListBlock, *, numbered: bool) -> None:
     for item in block.items:
         if numbered:
@@ -391,7 +401,7 @@ def _set_cell_borders(cell, theme: dict, *, width_pt: float | None = None, color
     borders = tc_properties.find(qn("w:tcBorders"))
     if borders is None:
         borders = OxmlElement("w:tcBorders")
-        tc_properties.append(borders)
+        _insert_before_shading(tc_properties, borders)
     for edge in ("top", "left", "bottom", "right"):
         border = borders.find(qn(f"w:{edge}"))
         if border is None:
@@ -454,7 +464,7 @@ def _set_paragraph_left_border(paragraph, color: str, *, width_pt: float) -> Non
     borders = paragraph_properties.find(qn("w:pBdr"))
     if borders is None:
         borders = OxmlElement("w:pBdr")
-        paragraph_properties.append(borders)
+        _insert_before_shading(paragraph_properties, borders)
     left = borders.find(qn("w:left"))
     if left is None:
         left = OxmlElement("w:left")
@@ -470,7 +480,7 @@ def _set_paragraph_box_border(paragraph, color: str, *, width_pt: float) -> None
     borders = paragraph_properties.find(qn("w:pBdr"))
     if borders is None:
         borders = OxmlElement("w:pBdr")
-        paragraph_properties.append(borders)
+        _insert_before_shading(paragraph_properties, borders)
     for edge in ("top", "left", "bottom", "right"):
         border = borders.find(qn(f"w:{edge}"))
         if border is None:

@@ -14,6 +14,39 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 
+def test_render_word_ir_emits_pbdr_before_shd_and_tcborders_before_shd(tmp_path: Path) -> None:
+    from docx.oxml.ns import qn
+    from lxml import etree
+
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "顺序测试", "classification": "内部公开"},
+            "blocks": [
+                {"type": "code_block", "language": "c", "code": "int main(void) { return 0; }"},
+                {"type": "table", "header": ["方案", "可靠性"], "rows": [["方案A", "高"]]},
+            ],
+        }
+    )
+    path = tmp_path / "order.docx"
+    render_word_ir(ir, path)
+
+    with zipfile.ZipFile(path) as package:
+        root = etree.fromstring(package.read("word/document.xml"))
+
+    ppr = root.find(".//" + qn("w:pPr"))
+    ppr_tags = [child.tag for child in ppr]
+    assert ppr_tags.index(qn("w:pBdr")) < ppr_tags.index(qn("w:shd")), ppr_tags
+
+    tcpr = root.find(".//" + qn("w:tcPr"))
+    tcpr_tags = [child.tag for child in tcpr]
+    assert tcpr_tags.index(qn("w:tcBorders")) < tcpr_tags.index(qn("w:shd")), tcpr_tags
+
+
 def test_render_word_ir_creates_editable_docx_with_core_blocks(tmp_path: Path) -> None:
     from app.ir.word_ir import WordIR
     from app.rendering.docx_renderer import render_word_ir

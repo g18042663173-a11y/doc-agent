@@ -535,11 +535,18 @@ def _set_cell_border(cell, theme: dict) -> None:
     border_width = str(int(Pt(theme["strokes"]["table_border_pt"])))
     color = theme["colors"]["border"].lstrip("#")
     tc_pr = cell._tc.get_or_add_tcPr()
+    # CT_TableCellProperties requires lnL/lnR/lnT/lnB before the fill element;
+    # python-pptx appends solidFill, so new border elements must be inserted
+    # in front of it (or appended when no fill exists).
+    fill = tc_pr.find(qn("a:solidFill"))
     for edge in ("lnL", "lnR", "lnT", "lnB"):
         line = tc_pr.find(qn(f"a:{edge}"))
         if line is None:
             line = OxmlElement(f"a:{edge}")
-            tc_pr.append(line)
+            if fill is not None:
+                fill.addprevious(line)
+            else:
+                tc_pr.append(line)
         line.set("w", border_width)
         for child in list(line):
             line.remove(child)

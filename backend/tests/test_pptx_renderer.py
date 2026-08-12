@@ -819,6 +819,41 @@ def test_render_deck_ir_performance_chart_matches_source_spec(tmp_path: Path) ->
     assert threshold_line.line.width == Pt(0.75)
 
 
+def test_render_table_cell_tcpr_children_follow_ooxml_order(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+    from pptx.oxml.ns import qn
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.0",
+            "meta": {"title": "表格顺序", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "比较表",
+                    "table": {
+                        "header": ["方案", "可靠性"],
+                        "rows": [["方案A", "高"]],
+                    },
+                }
+            ],
+        }
+    )
+    output = render_deck_ir(deck, tmp_path / "tcpr-order.pptx")
+    prs = Presentation(str(output))
+    table = next(shape.table for shape in prs.slides[0].shapes if getattr(shape, "has_table", False))
+
+    cell = table.cell(0, 0)
+    tc_pr = cell._tc.get_or_add_tcPr()
+    tags = [child.tag for child in tc_pr]
+    border_indexes = [tags.index(qn(f"a:{edge}")) for edge in ("lnL", "lnR", "lnT", "lnB")]
+    fill_index = tags.index(qn("a:solidFill"))
+    assert border_indexes == sorted(border_indexes)
+    assert max(border_indexes) < fill_index, f"ln* must precede fill: {tags}"
+
+
 def test_render_deck_ir_vertical_chart_threshold_labels_do_not_overlap(tmp_path: Path) -> None:
     from app.ir.deck_ir import DeckIR
     from app.rendering.pptx_renderer import render_deck_ir
