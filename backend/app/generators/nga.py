@@ -436,13 +436,16 @@ def _run_cli_limited(
         try:
             while chunk := stream.read(_CLI_STREAM_CHUNK_BYTES):
                 observed += len(chunk)
-                if capture and retained <= MAX_NDJSON_BYTES:
-                    remaining = MAX_NDJSON_BYTES + 1 - retained
-                    if remaining > 0:
-                        retained += min(len(chunk), remaining)
-                        stdout_chunks.append(chunk[:remaining])
-                if observed > MAX_NDJSON_BYTES:
-                    output_exceeded.set()
+                if capture:
+                    if retained <= MAX_NDJSON_BYTES:
+                        remaining = MAX_NDJSON_BYTES + 1 - retained
+                        if remaining > 0:
+                            retained += min(len(chunk), remaining)
+                            stdout_chunks.append(chunk[:remaining])
+                    # Only the captured NDJSON stream counts toward the output
+                    # cap; chatty stderr logs must not fail a healthy run.
+                    if observed > MAX_NDJSON_BYTES:
+                        output_exceeded.set()
         except BaseException as exc:  # The caller maps all local CLI failures to sanitized codes.
             read_errors.append(exc)
         finally:

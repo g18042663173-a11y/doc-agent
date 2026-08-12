@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 import json
 from pathlib import Path
+import time
 from urllib.error import HTTPError, URLError
 
 import pytest
@@ -463,6 +464,40 @@ def test_stop_cli_process_kills_whole_tree_on_windows(monkeypatch: pytest.Monkey
 
     assert tree_kill_args == [["taskkill", "/T", "/F", "/PID", "4242"]]
     assert process.killed is False
+
+
+def test_nga_cli_transport_ignores_large_stderr_logs_and_succeeds() -> None:
+    class ChattyStderrProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO(b'{"type":"text","part":{"text":"ok"}}')
+            self.stderr = BytesIO(b"x" * (MAX_NDJSON_BYTES + 1))
+            self.returncode = 0
+            self._exit_at = time.monotonic() + 0.4
+
+        def poll(self) -> int | None:
+            if time.monotonic() < self._exit_at:
+                return None
+            return 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+        def wait(self, timeout: float | None = None) -> int:
+            _ = timeout
+            return self.returncode
+
+    process = ChattyStderrProcess()
+
+    def fake_popen(command, **kwargs):
+        assert kwargs["stderr"] is not None
+        return process
+
+    generator = NgaGenerator(
+        config=_cli_config(),
+        subprocess_popen_fn=fake_popen,
+    )
+
+    assert generator.generate("the prompt", target="word_ir") == "ok"
 
 
 def test_nga_cli_transport_stops_a_stream_that_exceeds_the_output_cap() -> None:
