@@ -130,18 +130,29 @@ def _resolve_python_archive(explicit: Path | None, descriptor: dict[str, Any]) -
 
 
 def _download_resumable(url: str, output: Path, expected_bytes: int) -> None:
+    # Download to a .part file and atomically rename only after completion:
+    # a corrupt cache file must never be mistaken for a resumable download.
+    part = output.with_suffix(output.suffix + ".part")
     for _attempt in range(8):
-        current = output.stat().st_size if output.exists() else 0
+        current = part.stat().st_size if part.exists() else 0
         if current == expected_bytes:
-            return
+            break
         headers = {"User-Agent": f"DocumentWorkbenchPackager/{VERSION}"}
         if current:
             headers["Range"] = f"bytes={current}-"
         request = Request(url, headers=headers)
-        with urlopen(request, timeout=60) as response, output.open("ab" if current else "wb") as stream:
-            shutil.copyfileobj(response, stream, length=1024 * 1024)
-    if output.stat().st_size != expected_bytes:
+        with urlopen(request, timeout=60) as response:
+            if current and response.status == 200:
+                # The server ignored the Range header and returned the whole
+                # body; restart the file instead of appending a duplicate copy.
+                part.unlink(missing_ok=True)
+                current = 0
+            with part.open("ab" if current else "wb") as stream:
+                shutil.copyfileobj(response, stream, length=1024 * 1024)
+    if part.stat().st_size != expected_bytes:
+        part.unlink(missing_ok=True)
         raise SystemExit("Python embeddable runtime download did not complete")
+    part.replace(output)
 
 
 def _verify_graphviz(root: Path, descriptor: dict[str, Any]) -> None:
