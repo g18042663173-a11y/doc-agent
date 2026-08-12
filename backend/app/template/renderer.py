@@ -59,6 +59,18 @@ def render_deck_ir_with_template(
     plan = plan or build_template_plan(deck, profile)
     if plan.template_sha256 != profile.source.sha256:
         raise TemplateInputError("E003", "template_plan.template_sha256", "模板计划与 Profile 来源不一致。")
+    if len(plan.slides) != len(deck.slides):
+        raise TemplateInputError(
+            "E003",
+            "template_plan.slides",
+            f"模板计划 {len(plan.slides)} 页与 Deck {len(deck.slides)} 页不一致。",
+        )
+    if plan.deck_ir_version != deck.ir_version:
+        raise TemplateInputError(
+            "E003",
+            "template_plan.deck_ir_version",
+            f"模板计划面向 DeckIR {plan.deck_ir_version}，当前 Deck 为 {deck.ir_version}。",
+        )
     profile_path = write_template_profile(profile, audit_dir / "template_profile.json")
     structure = extract_ppt_template_structure(template_path)
     structure_json_path = write_ppt_template_structure(structure, audit_dir / "template_structure.json")
@@ -67,6 +79,13 @@ def render_deck_ir_with_template(
     original_slides = list(presentation.slides)
     original_slide_ids = list(presentation.slides._sldIdLst)
     theme = build_template_render_theme(deck.meta.theme, profile)
+    for slide_plan in plan.slides:
+        if (slide_plan.prototype_index or 1) > len(original_slides):
+            raise TemplateInputError(
+                "E003",
+                "template_plan.slides[].prototype_index",
+                f"模板计划引用原型页 {slide_plan.prototype_index}，模板只有 {len(original_slides)} 页。",
+            )
 
     for index, (slide_ir, slide_plan) in enumerate(zip(deck.slides, plan.slides), start=1):
         source_slide = original_slides[(slide_plan.prototype_index or 1) - 1]

@@ -180,6 +180,38 @@ def test_package_validator_reports_xml_relationship_references_without_matching_
     assert any("XML 引用了不存在的关系" in error for error in report["errors"])
 
 
+def test_template_renderer_rejects_plan_deck_length_mismatch_and_bad_prototype_index(tmp_path: Path) -> None:
+    from app.template.package import TemplateInputError
+
+    template = _template(tmp_path)
+    deck = _deck()
+    profile = extract_template_profile(template)
+    plan = build_template_plan(deck, profile)
+
+    short_plan = plan.model_copy(deep=True)
+    short_plan.slides = short_plan.slides[:1]
+    with pytest.raises(TemplateInputError, match="页与 Deck .* 页不一致"):
+        render_deck_ir_with_template(
+            deck,
+            template,
+            tmp_path / "mismatch.pptx",
+            profile=profile,
+            plan=short_plan,
+        )
+
+    out_of_range = plan.model_copy(deep=True)
+    for slide_plan in out_of_range.slides:
+        slide_plan.prototype_index = 999
+    with pytest.raises(TemplateInputError, match="原型页"):
+        render_deck_ir_with_template(
+            deck,
+            template,
+            tmp_path / "bad-index.pptx",
+            profile=profile,
+            plan=out_of_range,
+        )
+
+
 def test_template_renderer_records_w201_and_redraws_when_replacement_overflows(tmp_path: Path) -> None:
     template = _template(tmp_path)
     presentation = Presentation(template)
