@@ -794,6 +794,50 @@ def test_graphviz_diagnostics_are_cached_within_ttl(monkeypatch: pytest.MonkeyPa
     assert calls["version"] == 1
 
 
+def test_browser_mode_rejects_cross_origin_state_changing_requests(tmp_path: Path) -> None:
+    browser = create_api_app(work_dir=tmp_path).test_client()
+    headers = {"Origin": "https://evil.example"}
+
+    rejected = browser.post(
+        "/api/generate",
+        headers=headers,
+        data={"type": "word", "input_file": (BytesIO(b"# X"), "x.md")},
+        content_type="multipart/form-data",
+    )
+    assert rejected.status_code == 403
+    assert rejected.get_json()["error"]["code"] == "E001"
+    assert not list(tmp_path.glob("job-*"))
+
+    accepted_loopback = browser.post(
+        "/api/generate",
+        headers={"Origin": "http://127.0.0.1:5056"},
+        data={"type": "word", "input_file": (BytesIO(b"# X"), "x.md")},
+        content_type="multipart/form-data",
+    )
+    assert accepted_loopback.status_code == 202
+
+    accepted_no_origin = browser.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO(b"# Y"), "y.md")},
+        content_type="multipart/form-data",
+    )
+    assert accepted_no_origin.status_code == 202
+
+    read_ok = browser.get("/api/version", headers=headers)
+    assert read_ok.status_code == 200
+
+    desktop_ok = create_api_app(
+        work_dir=tmp_path / "protected", session_token="desktop-session-secret"
+    ).test_client()
+    desktop_rejected = desktop_ok.post(
+        "/api/generate",
+        headers={"Origin": "https://evil.example", "X-Workbench-Session": "desktop-session-secret"},
+        data={"type": "word", "input_file": (BytesIO(b"# Z"), "z.md")},
+        content_type="multipart/form-data",
+    )
+    assert desktop_rejected.status_code == 202
+
+
 def test_idempotency_key_returns_original_job_without_duplicate_directory(tmp_path: Path) -> None:
     client = create_api_app(work_dir=tmp_path).test_client()
     headers = {"Idempotency-Key": "deck-request-0001"}

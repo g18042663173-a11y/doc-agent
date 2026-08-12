@@ -14,6 +14,7 @@ import sys
 from threading import BoundedSemaphore, Event, Lock, Thread
 import time
 from typing import Any, Literal
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from flask import Flask, jsonify, request, send_file
@@ -485,6 +486,48 @@ def _require_desktop_session(session_token: str | None):
     )
 
 
+_BROWSER_ORIGIN_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _require_browser_origin(session_token: str | None):
+    """Reject cross-origin state-changing requests in browser (tokenless) mode.
+
+    A malicious web page can POST multipart forms to the loopback API without
+    a CORS preflight; browsers attach an Origin header to such requests, so
+    rejecting non-loopback origins closes the drive-by CSRF hole. Local native
+    clients (curl, desktop) do not send Origin and stay unaffected; desktop
+    mode is already protected by the session token.
+    """
+    if session_token is not None:
+        return None
+    if request.method not in {"POST", "PUT", "DELETE", "PATCH"}:
+        return None
+    if not request.path.startswith("/api/"):
+        return None
+    origin = request.headers.get("Origin")
+    if origin is None:
+        return None
+    try:
+        parsed = urlsplit(origin)
+    except ValueError:
+        return _reject_cross_origin()
+    if parsed.scheme in {"http", "https"} and parsed.hostname in _BROWSER_ORIGIN_HOSTS:
+        return None
+    return _reject_cross_origin()
+
+
+def _reject_cross_origin():
+    return _error_response(
+        "E001",
+        "跨源请求被拒绝。",
+        status=403,
+        stage="request_validation",
+        loc="Origin",
+        suggestion="请在本地工作台页面内操作。",
+        retryable=False,
+    )
+
+
 def _health_response(root: Path, runner: JobRunner, manager: GeneratorManager, jobs: JobStore):
     try:
         free_bytes = shutil.disk_usage(root).free
@@ -895,6 +938,10 @@ def _cancel_job_response(jobs: JobStore, job_id: str):
 def _register_session_guard(app: Flask, session_token: str | None) -> None:
     @app.before_request
     def require_desktop_session():
+        if request.path.startswith("/api/"):
+            origin_error = _require_browser_origin(session_token)
+            if origin_error is not None:
+                return origin_error
         return _require_desktop_session(session_token)
 
 
