@@ -20,6 +20,19 @@ from app.diagram.mermaid_diagram import (
 DOT_AVAILABLE = shutil.which("dot") is not None
 
 
+def test_parse_flowchart_allows_arrow_tokens_inside_node_labels() -> None:
+    flowchart = parse_mermaid_flowchart(
+        "flowchart LR\n"
+        "A[输入 --> 处理]\n"
+        "B[结果]\n"
+        "A --> B\n"
+    )
+
+    node_a = next(node for node in flowchart.nodes if node.identifier == "A")
+    assert node_a.label == "输入 --> 处理"
+    assert [edge.kind for edge in flowchart.edges] == ["arrow"]
+
+
 def test_parse_flowchart_keeps_nodes_edges_labels_and_direction() -> None:
     flowchart = parse_mermaid_flowchart(
         """flowchart LR

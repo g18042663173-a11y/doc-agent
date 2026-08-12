@@ -167,10 +167,13 @@ def parse_mermaid_flowchart(mermaid_text: str) -> MermaidFlowchart:
     for line_number, text in lines[1:]:
         if text.lower().startswith(_UNSUPPORTED_PREFIXES):
             raise MermaidDiagramError(f"line {line_number}: unsupported Mermaid instruction: {text}")
-        if _EDGE_RE.search(text):
-            _parse_edge_line(text, line_number, nodes, edges)
-        else:
+        # Prefer a whole-line node match: node labels may legally contain arrow
+        # tokens (A[输入 --> 处理]), which must not reroute the line to edge
+        # parsing.
+        if _NODE_RE.fullmatch(text):
             _upsert_node(nodes, _parse_node(text, line_number))
+        else:
+            _parse_edge_line(text, line_number, nodes, edges)
 
     if not nodes:
         raise MermaidDiagramError("Mermaid flowchart has no nodes")
