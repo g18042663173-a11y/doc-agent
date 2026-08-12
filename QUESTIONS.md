@@ -2,6 +2,16 @@
 
 > 分步执行清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`（Windows 验收与人工交付清单）。
 
+## 2026-08-12 Track A 修复后的新增人工待办
+
+- TODO: 本机无 .NET SDK,`BackendProcessHost.cs` 管道排空改动(A8,commit c24eb1c)
+  未编译验证;需在 Windows 真机 `dotnet build desktop/DocumentWorkbench.sln`(或
+  Release 发布脚本)确认 0 错误,并跑 `DocumentWorkbench.Tests`。
+- TODO: Track B 与 Track C(见 `代码审查报告_2026-08-12_第二轮.md` 第十章):
+  B 批含 #18 表索引、#21 阈值取错、G-N1 CLI 进程树、#28 线程不终止、#29 无超时、
+  C# 轮询三兄弟等;C 批需产品决策:NGA CLI 传输是否改 stdin 传 prompt(与第 7 项
+  合并)、任务严格串行是否接受、codex 默认模型值、repair 提示是否带 marker。
+
 ## 人工待办
 
 1. 真实业务语料:需要提供脱敏后的真实 docx / xlsx / pptx 各至少 3 个,放入 `samples/input/real/`,用于解析与模板生成回归。

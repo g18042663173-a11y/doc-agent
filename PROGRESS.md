@@ -1,5 +1,32 @@
 # Progress
 
+## 2026-08-12 第二轮代码审计 + Track A 修复(8/8 已提交)
+- 产出 `代码审查报告_2026-08-12_第二轮.md`:8 个并行 subagent 全仓静态审查 + 主会话
+  独立复现关键结论;前轮 63 项复核(47 REAL / 3 PARTIAL / 2 FALSE / 机制修正 4 项)+
+  约 55 项新增发现(2 CRITICAL / 9 HIGH / ~30 MEDIUM / ~45 LOW)。
+- Track A 八项修复已提交(分支 `codex/audit-2.1.0`),每项"先测试后实现":
+  - A1 `web_api._nga_config_from_payload` HTTP 分支白名单构造 → NGA HTTP 配置在
+    桌面端可保存(此前恒 E010);回归测试带 transport/cli_path 字段
+  - A2 `stub._json_after_marker` 按 marker 位置选 find/rfind + 键校验 → 用户文档
+    回显 marker 文本不再劫持解析(静默丢内容/崩溃)
+  - A3 `JobRunner._loop` try/except + supervisor 线程 → 失败报告写盘失败不再杀死
+    唯一 worker;回归测试模拟 OSError
+  - A4 md 表格 12 列 cap + W103(此前 13 列合法表格杀死整个文件 E001)
+  - A5 TableBlock/DeckTable col_widths 改 `isfinite` 校验(NaN/Infinity 不再直达
+    渲染器)
+  - A6 `office_visual_export.ps1` 写无 BOM UTF-8(PS5.1 -Encoding utf8 恒写 BOM,
+    目标机视觉 QA 门禁必崩)+ Python 读端 utf-8-sig 双保险
+  - A7 打包前置 wheelhouse↔`requirements-win312.lock` 逐 wheel 哈希校验 +
+    `MIGRATION_PACKAGE_MANIFEST.json` 补齐 colorama/waitress 两 wheel(27→29)
+  - A8 `BackendProcessHost` 子进程 stdout/stderr 持续排空(消除管道死锁);
+    **本机无 .NET SDK,C# 编译/测试留 Windows 真机人工验证**
+- 回归:`.venv` pytest **663 passed / 15 skipped**(新增 7 个回归测试);ruff 全绿;
+  `scripts/verify.py` 通过(C0: parsers 93.53 / ir 94.01 / lint 94.30 / overall 89.00)。
+- 未动:Track B(数据正确性/资源/并发)、Track C(产品决策,见 QUESTIONS.md)。
+- 已知仓库问题(非本次引入):`.git/refs/codex/...` 损坏 checkpoint refs 导致每次
+  commit 时 `geometric-repack` 失败告警(commit 本身成功),后续处理时清理。
+
+
 ## 2026-08-08 2.1.0 审计、原生化与发布候选
 
 - 候选分支：`codex/audit-2.1.0`；保留既有实验工作树和全部 `backup-*` 恢复分支，未修改
