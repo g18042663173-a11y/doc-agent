@@ -119,6 +119,24 @@ def test_parse_docx_detects_heading_from_outline_level_without_heading_style(tmp
     assert ir.content.outline[0].text == "XML 大纲标题"
 
 
+def test_parse_docx_clamps_negative_outline_level_to_heading_1(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "negative-outline.docx"
+    doc = Document()
+    paragraph = doc.add_paragraph("负值大纲")
+    ppr = paragraph._p.get_or_add_pPr()
+    outline = OxmlElement("w:outlineLvl")
+    outline.set(qn("w:val"), "-1")
+    ppr.append(outline)
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert ir.content.blocks[0].type == "heading"
+    assert ir.content.blocks[0].level == 1
+
+
 def test_parse_docx_records_image_presence_and_dimensions(tmp_path: Path) -> None:
     from app.parsers.docx_parser import parse_docx
 

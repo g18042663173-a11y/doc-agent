@@ -134,7 +134,9 @@ def _heading_level(paragraph: Paragraph) -> int | None:
     if value is None:
         return None
     try:
-        return int(value) + 1
+        # Some writers emit out-of-spec negative outline levels (e.g. -1);
+        # clamp to the valid heading range instead of crashing the parse.
+        return max(1, int(value) + 1)
     except ValueError:
         return None
 
