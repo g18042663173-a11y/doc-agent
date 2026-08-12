@@ -92,6 +92,61 @@ def test_desktop_diagnostics_and_job_list_are_sanitized(tmp_path: Path) -> None:
     assert "input" not in json.dumps(listed, ensure_ascii=False).lower()
 
 
+def test_analyze_hard_timeout_frees_request_and_keeps_workspace_for_sweep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class SlowAnalyzeGenerator:
+        name = "slow-analyze"
+
+        def generate(self, prompt: str, *, target: str) -> str:
+            _ = prompt, target
+            time.sleep(30)
+            return '{"analysis_version": "1.0"}'
+
+    monkeypatch.setattr(web_api, "ANALYZE_HARD_TIMEOUT_SECONDS", 0.05)
+    client = create_api_app(work_dir=tmp_path, generator=SlowAnalyzeGenerator()).test_client()
+
+    started = time.monotonic()
+    response = client.post(
+        "/api/analyze",
+        data={"input_file": (BytesIO(b"# Weekly"), "weekly.md")},
+        content_type="multipart/form-data",
+    )
+    elapsed = time.monotonic() - started
+
+    assert response.status_code == 504
+    assert response.get_json()["error"]["code"] == "E012"
+    assert elapsed < 5
+    assert len(list(tmp_path.glob("analysis-*"))) == 1  # left for the orphan sweep
+
+
+def test_generator_connection_test_hard_timeout_returns_e012(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.web_api as web_api_module
+
+    class SlowTestManager:
+        def snapshot(self) -> dict:
+            return {"active": {"name": "nga"}}
+
+        def test_draft(self):
+            time.sleep(30)
+
+        def activate(self):
+            return {"active": {"name": "nga"}}
+
+    monkeypatch.setattr(web_api_module, "GENERATOR_TEST_TIMEOUT_SECONDS", 0.05)
+    client = create_api_app(work_dir=tmp_path, generator_manager=SlowTestManager()).test_client()  # type: ignore[arg-type]
+
+    started = time.monotonic()
+    response = client.post("/api/settings/generator/test")
+    elapsed = time.monotonic() - started
+
+    assert response.status_code == 504
+    assert response.get_json()["error"]["code"] == "E012"
+    assert elapsed < 5
+
+
 def test_analyze_failure_is_sanitized_and_cleans_workspace(tmp_path: Path) -> None:
     client = create_api_app(
         work_dir=tmp_path,

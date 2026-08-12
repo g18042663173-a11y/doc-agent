@@ -13,7 +13,7 @@ import shutil
 import sys
 from threading import BoundedSemaphore, Event, Lock, Thread
 import time
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -700,10 +700,54 @@ def _nga_config_from_payload(config_payload: dict[str, Any]) -> NgaHttpConfig | 
     return NgaHttpConfig.model_validate(http_fields)
 
 
+ANALYZE_HARD_TIMEOUT_SECONDS = 90.0
+GENERATOR_TEST_TIMEOUT_SECONDS = 60.0
+
+
+def _run_with_timeout(fn: Callable[[], Any], *, timeout: float, label: str) -> Any:
+    """Run fn in a daemon thread with a server-side cap.
+
+    The generator keeps its own (possibly much longer) timeout; this only frees
+    the waitress worker thread so slow analyze/test calls cannot starve the
+    API. Returns the fn result, or None if the cap expired (fn keeps running
+    in the background and the orphan workspace is swept later).
+    """
+    box: dict[str, Any] = {}
+
+    def runner() -> None:
+        try:
+            box["result"] = fn()
+        except Exception as exc:
+            box["error"] = exc
+
+    worker = Thread(target=runner, daemon=True, name=f"{label}-worker")
+    worker.start()
+    worker.join(timeout=timeout)
+    if worker.is_alive():
+        return None
+    if "error" in box:
+        raise box["error"]
+    return box.get("result")
+
+
 def _test_generator_settings(app: Flask, manager: GeneratorManager):
     try:
         _enforce_rate_limit(app)
-        return jsonify({"connection": manager.test_draft(), **manager.status()})
+        connection = _run_with_timeout(
+            manager.test_draft,
+            timeout=GENERATOR_TEST_TIMEOUT_SECONDS,
+            label="generator-test",
+        )
+        if connection is None:
+            return _error_response(
+                "E012",
+                "生成器连接测试响应超时。",
+                status=504,
+                stage="testing_generator",
+                retryable=True,
+                suggestion="请检查地址、网络与凭据后重试。",
+            )
+        return jsonify({"connection": connection, **manager.status()})
     except NgaGeneratorError as exc:
         return _generator_error_response(exc, stage="testing_generator")
 
@@ -718,6 +762,7 @@ def _activate_generator_settings(app: Flask, manager: GeneratorManager):
 
 def _analyze_request(app: Flask, root: Path, manager: GeneratorManager):
     analysis_dir: Path | None = None
+    keep_analysis_dir = False
     try:
         _enforce_rate_limit(app)
         _ensure_disk_capacity(root)
@@ -727,25 +772,39 @@ def _analyze_request(app: Flask, root: Path, manager: GeneratorManager):
         metrics = measure_document(document)
         generator_snapshot = manager.snapshot()
         prompt = build_analysis_prompt(document, metrics)
-        raw = generator_snapshot.generator.generate(prompt, target="analysis")
-        result = repair_generated_text(
-            raw,
-            target="analysis",
-            generator=generator_snapshot.generator,
-            validator=lambda current: validate_analysis_text(
-                current,
-                expected_metrics=metrics,
-                expected_filename=document.source.filename,
-            ),
-            original_prompt=prompt,
-        )
+
+        def _generate_and_validate():
+            raw = generator_snapshot.generator.generate(prompt, target="analysis")
+            return repair_generated_text(
+                raw,
+                target="analysis",
+                generator=generator_snapshot.generator,
+                validator=lambda current: validate_analysis_text(
+                    current,
+                    expected_metrics=metrics,
+                    expected_filename=document.source.filename,
+                ),
+                original_prompt=prompt,
+            )
+
+        result = _run_with_timeout(_generate_and_validate, timeout=ANALYZE_HARD_TIMEOUT_SECONDS, label="analysis")
+        if result is None:
+            keep_analysis_dir = True
+            return _error_response(
+                "E012",
+                "分析服务响应超时。",
+                status=504,
+                stage="analyzing",
+                retryable=True,
+                suggestion="请稍后重试；若持续超时，请检查生成器配置。",
+            )
         if not result.ok or result.value is None:
             return _validation_error(result)
         return jsonify(result.value.model_dump(mode="json"))
     except Exception as exc:
         return _analysis_error_response(exc)
     finally:
-        if analysis_dir is not None:
+        if analysis_dir is not None and not keep_analysis_dir:
             shutil.rmtree(analysis_dir, ignore_errors=True)
 
 
