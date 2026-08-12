@@ -14,10 +14,7 @@ public sealed class BackendProcessHost : IDisposable
     private const int MaxStderrChars = 16 * 1024;
     private readonly Process _process;
     private readonly string _statePath;
-    private readonly StringBuilder _stderrBuffer = new();
     private bool _disposed;
-    private Task? _stdoutDrain;
-    private Task? _stderrDrain;
 
     private BackendProcessHost(Process process, Uri baseAddress, string sessionToken, string appData, string statePath)
     {
@@ -86,7 +83,8 @@ public sealed class BackendProcessHost : IDisposable
         // Drain both pipes continuously: Windows pipe buffers (4-64 KB) fill and
         // block the child if stdout/stderr are never consumed, which would stall
         // startup and hang long-running jobs on traceback floods.
-        StartStreamDrains(process);
+        var stderrBuffer = new StringBuilder();
+        var stderrDrain = StartStreamDrains(process, stderrBuffer);
 
         try
         {
@@ -96,11 +94,15 @@ public sealed class BackendProcessHost : IDisposable
                 cancellationToken.ThrowIfCancellationRequested();
                 if (process.HasExited)
                 {
-                    if (_stderrDrain is not null)
+                    if (stderrDrain is not null)
                     {
-                        await Task.WhenAny(_stderrDrain, Task.Delay(500));
+                        await Task.WhenAny(stderrDrain, Task.Delay(500));
                     }
-                    var error = CapturedStderr();
+                    string error;
+                    lock (stderrBuffer)
+                    {
+                        error = stderrBuffer.ToString();
+                    }
                     throw new InvalidOperationException(SanitizeStartupError(error, process.ExitCode));
                 }
                 var state = TryReadState(statePath);
@@ -129,13 +131,13 @@ public sealed class BackendProcessHost : IDisposable
         }
     }
 
-    private void StartStreamDrains(Process process)
+    private static Task StartStreamDrains(Process process, StringBuilder stderrBuffer)
     {
-        _stdoutDrain = DrainStreamAsync(process.StandardOutput, capture: false);
-        _stderrDrain = DrainStreamAsync(process.StandardError, capture: true);
+        _ = DrainStreamAsync(process.StandardOutput, capture: false, stderrBuffer);
+        return DrainStreamAsync(process.StandardError, capture: true, stderrBuffer);
     }
 
-    private async Task DrainStreamAsync(StreamReader reader, bool capture)
+    private static async Task DrainStreamAsync(StreamReader reader, bool capture, StringBuilder stderrBuffer)
     {
         try
         {
@@ -148,7 +150,14 @@ public sealed class BackendProcessHost : IDisposable
                 }
                 if (capture)
                 {
-                    AppendStderr(line);
+                    lock (stderrBuffer)
+                    {
+                        if (stderrBuffer.Length > MaxStderrChars)
+                        {
+                            stderrBuffer.Remove(0, stderrBuffer.Length - MaxStderrChars / 2);
+                        }
+                        stderrBuffer.AppendLine(line);
+                    }
                 }
             }
         }
@@ -157,26 +166,6 @@ public sealed class BackendProcessHost : IDisposable
         }
         catch (IOException)
         {
-        }
-    }
-
-    private void AppendStderr(string line)
-    {
-        lock (_stderrBuffer)
-        {
-            if (_stderrBuffer.Length > MaxStderrChars)
-            {
-                _stderrBuffer.Remove(0, _stderrBuffer.Length - MaxStderrChars / 2);
-            }
-            _stderrBuffer.AppendLine(line);
-        }
-    }
-
-    private string CapturedStderr()
-    {
-        lock (_stderrBuffer)
-        {
-            return _stderrBuffer.ToString();
         }
     }
 
