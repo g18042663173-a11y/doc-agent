@@ -421,6 +421,8 @@ class ChartSpec(ContractModel):
         target = _chart_threshold_target_series(self.series)
         if target is None:
             raise ValueError("threshold side_conclusion requires exactly one emphasized series")
+        if self.kind == "combo" and target.axis != "primary":
+            raise ValueError("combo chart side_conclusion thresholds must reference the primary axis series")
         threshold = _chart_threshold_value(self.side_conclusion, self.thresholds)
         if threshold is None:
             return

@@ -1072,6 +1072,39 @@ def test_validate_deck_ir_strict_mode_collects_nested_unknown_fields_in_image_an
     assert any(".infographic.stages[0].discription" in loc for loc in unknown_locations)
 
 
+def test_validate_deck_ir_rejects_combo_thresholds_referencing_secondary_axis() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.0",
+            "meta": {"title": "次轴阈值", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "chart",
+                    "title": "组合图",
+                    "chart": {
+                        "kind": "combo",
+                        "categories": ["一月", "二月", "三月"],
+                        "series": [
+                            {"name": "收入", "values": [13, 14, 15], "chart_type": "bar", "axis": "primary", "unit": "万元"},
+                            {"name": "利润率", "values": [0.2, 0.22, 0.25], "chart_type": "line", "axis": "secondary", "unit": "%", "emphasis": True},
+                        ],
+                        "thresholds": [{"value": 0.22, "label": "利润率目标"}],
+                        "side_conclusion": "利润率连续三个月高于0.22。",
+                        "show_data_labels": False,
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "D004"
+    assert "primary axis" in result.errors[0].message
+
+
 def test_validate_deck_ir_maps_invalid_chart_threshold_to_d004() -> None:
     from app.ir.validation import validate_deck_ir
 

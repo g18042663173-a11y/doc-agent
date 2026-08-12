@@ -854,6 +854,45 @@ def test_render_table_cell_tcpr_children_follow_ooxml_order(tmp_path: Path) -> N
     assert max(border_indexes) < fill_index, f"ln* must precede fill: {tags}"
 
 
+def test_render_combo_chart_draws_threshold_lines_on_primary_axis(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.0",
+            "meta": {"title": "组合图阈值", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "chart",
+                    "title": "收入增长且利润率改善",
+                    "chart": {
+                        "kind": "combo",
+                        "categories": ["一月", "二月", "三月"],
+                        "series": [
+                            {"name": "收入", "values": [13, 14, 15], "chart_type": "bar", "axis": "primary", "unit": "万元", "emphasis": True},
+                            {"name": "利润率", "values": [0.2, 0.22, 0.25], "chart_type": "line", "axis": "secondary", "unit": "%"},
+                        ],
+                        "thresholds": [{"value": 12, "label": "收入目标 12 万元"}],
+                        "side_conclusion": "收入连续三个月高于12。",
+                        "show_data_labels": False,
+                    },
+                }
+            ],
+        }
+    )
+    output = render_deck_ir(deck, tmp_path / "combo-threshold.pptx")
+    prs = Presentation(str(output))
+    slide = prs.slides[0]
+
+    threshold_lines = [shape for shape in slide.shapes if shape.name.startswith("HW_THRESHOLD_LINE")]
+    threshold_labels = [shape for shape in slide.shapes if shape.name.startswith("HW_THRESHOLD_LABEL")]
+    assert len(threshold_lines) == 1
+    assert len(threshold_labels) == 1
+    assert "收入目标" in threshold_labels[0].text_frame.paragraphs[0].text
+
+
 def test_render_deck_ir_vertical_chart_threshold_labels_do_not_overlap(tmp_path: Path) -> None:
     from app.ir.deck_ir import DeckIR
     from app.rendering.pptx_renderer import render_deck_ir

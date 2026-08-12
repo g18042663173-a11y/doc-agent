@@ -931,6 +931,19 @@ def _render_combo_chart(slide, chart_ir: ChartSpec, chart_layout: dict, theme: d
     axis_position = secondary_chart.value_axis._element.find(qn("c:axPos"))
     if axis_position is not None:
         axis_position.set("val", "r")
+    # Thresholds are validated to reference the primary-axis series; draw the
+    # lines on the primary (bar) value-axis scale instead of dropping them.
+    if chart_ir.thresholds:
+        primary_axis = shapes[0].chart.value_axis
+        if primary_axis.minimum_scale is not None and primary_axis.maximum_scale is not None:
+            _add_threshold_lines(
+                slide,
+                chart_ir,
+                chart_layout,
+                shapes[0],
+                theme,
+                value_range=(float(primary_axis.minimum_scale), float(primary_axis.maximum_scale)),
+            )
     _add_combo_legend(slide, chart_ir, chart_layout, theme)
 
 
@@ -1078,10 +1091,21 @@ def _format_chart_text_frame(text_frame, theme: dict, *, size: float, color_key:
             _format_run(run, theme, size=size, color_key=color_key)
 
 
-def _add_threshold_lines(slide, chart_ir: ChartSpec, chart_layout: dict, chart_shape, theme: dict) -> None:
+def _add_threshold_lines(
+    slide,
+    chart_ir: ChartSpec,
+    chart_layout: dict,
+    chart_shape,
+    theme: dict,
+    *,
+    value_range: tuple[float, float] | None = None,
+) -> None:
     if chart_ir.kind == "pie" or not chart_ir.thresholds:
         return
-    minimum, maximum = _chart_value_range(chart_ir)
+    if value_range is None:
+        minimum, maximum = _chart_value_range(chart_ir)
+    else:
+        minimum, maximum = value_range
     if maximum <= minimum:
         return
     threshold_layout = theme["layouts"]["chart"]["threshold"]
