@@ -25,12 +25,16 @@ def repair_generated_text(
     generator: RepairGenerator,
     validator: Callable[[str], ValidationResult[T]],
     max_retries: int = 2,
+    original_prompt: str | None = None,
 ) -> ValidationResult[T]:
     current = raw
     result = validator(current)
     retries = 0
     while result.errors and retries < max_retries:
-        current = generator.generate(_repair_prompt(current, result.errors), target=target)
+        current = generator.generate(
+            _repair_prompt(current, result.errors, original_prompt=original_prompt),
+            target=target,
+        )
         retries += 1
         result = validator(current)
     return result
@@ -43,6 +47,7 @@ def repair_ir_text(
     generator: RepairGenerator,
     max_retries: int = 2,
     expected_pages: int | None = None,
+    original_prompt: str | None = None,
 ) -> ValidationResult:
     return repair_generated_text(
         raw,
@@ -50,6 +55,7 @@ def repair_ir_text(
         generator=generator,
         validator=lambda current: _validate_with_page_target(current, target, expected_pages),
         max_retries=max_retries,
+        original_prompt=original_prompt,
     )
 
 
@@ -84,15 +90,26 @@ def _validate_with_page_target(raw: str, target: Target, expected_pages: int | N
     )
 
 
-def _repair_prompt(raw: str, errors: list[ValidationItem]) -> str:
+def _repair_prompt(
+    raw: str,
+    errors: list[ValidationItem],
+    *,
+    original_prompt: str | None = None,
+) -> str:
     error_lines = "\n".join(f"- {item.code} at {item.loc or '<root>'}: {item.message}" for item in errors[:8])
     preview = raw[:5000]
     preview_notice = "\n[原文已截到前 5000 字,请重建完整而更短的 IR。]" if len(raw) > len(preview) else ""
-    return (
+    parts = [
         "上一轮输出未通过 IR Schema 校验。\n"
         "只修正这些问题。只输出一个完整 JSON 对象，不要使用 Markdown 代码围栏，不要输出解释或第二个 JSON。\n"
         "若错误提示 truncated JSON object，请从头重建更短但完整的 IR，不要续写残片或猜补缺失事实。\n"
         "若错误提示 multiple JSON objects found，只保留一个符合目标 Schema 的对象。不要新增 Schema 之外的字段。\n"
-        f"错误清单:\n{error_lines}\n"
-        f"待修正原文:\n{preview}{preview_notice}"
-    )
+        f"错误清单:\n{error_lines}",
+    ]
+    if original_prompt is not None:
+        # Deterministic generators (stub) recover their context from the marker
+        # sections of the original prompt; it must precede the raw preview so
+        # the tool's own marker stays the first occurrence.
+        parts.append("[原始生成提示]\n" + original_prompt)
+    parts.append(f"待修正原文:\n{preview}{preview_notice}")
+    return "\n".join(parts)

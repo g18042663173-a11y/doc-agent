@@ -447,6 +447,7 @@ def _generate_single(
         target="deck_ir",
         generator=generator,
         expected_pages=options.target_pages,
+        original_prompt=prompt,
     )
     return DeckGenerationAttempt(
         validation=validation,
@@ -484,6 +485,7 @@ def _generate_segmented(
         target="analysis",
         generator=generator,
         validator=lambda current: validate_outline_text(current, expected_pages=options.target_pages),
+        original_prompt=outline_prompt,
     )
     if not outline_result.ok or outline_result.value is None:
         return DeckGenerationAttempt(
@@ -523,6 +525,7 @@ def _generate_segmented(
             target="deck_ir",
             generator=generator,
             expected_pages=len(pages),
+            original_prompt=prompt,
         )
         if not chunk_result.ok or chunk_result.value is None:
             return DeckGenerationAttempt(

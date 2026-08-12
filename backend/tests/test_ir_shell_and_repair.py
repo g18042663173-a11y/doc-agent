@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -217,6 +218,72 @@ def test_repair_loop_retries_all_model_unknown_field_cases(
     assert expected_code in generator.prompts[0]
     assert expected_loc in generator.prompts[0]
     assert "未知字段" in generator.prompts[0] or "未知节点 type" in generator.prompts[0]
+
+
+def test_stub_repair_rebuilds_deck_from_original_prompt_when_first_output_fails_page_target() -> None:
+    from app.generators.stub import StubGenerator
+    from app.ir.repair import repair_ir_text
+
+    document_payload = {
+        "ir_type": "document",
+        "ir_version": "1.2",
+        "source": {"filename": "评审.md", "format": "md", "size_kb": 1.0, "parsed_at": "2026-01-01T00:00:00Z"},
+        "stats": {"headings": 1, "paragraphs": 1, "tables": 0, "images": 0},
+        "warnings": [],
+        "content": {
+            "outline": [{"level": 1, "text": "技术评审"}],
+            "blocks": [{"type": "heading", "level": 1, "text": "技术评审"}],
+        },
+    }
+    original_prompt = (
+        "[任务] 生成 Deck。\n"
+        "必须恰好生成 4 页。\n"
+        "[输入 DocumentIR]\n"
+        + json.dumps(document_payload, ensure_ascii=False)
+        + "\n[输出纪律]\n"
+    )
+
+    class BrokenStubFirst:
+        name = "broken-stub-first"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, prompt: str, *, target: str) -> str:
+            self.calls += 1
+            if self.calls == 1:
+                return '{"ir_type":"deck","ir_version":"2.0","meta":{"title":"坏输出"},"slides":[{"layout":"cover","title":"坏输出"}]}'
+            return StubGenerator().generate(prompt, target=target)
+
+    generator = BrokenStubFirst()
+    result = repair_ir_text(
+        '{"ir_type":"deck","ir_version":"2.0","meta":{"title":"坏输出"},"slides":[{"layout":"cover","title":"坏输出"}]}',
+        target="deck_ir",
+        generator=generator,
+        max_retries=2,
+        expected_pages=4,
+        original_prompt=original_prompt,
+    )
+
+    assert generator.calls == 2
+    assert result.ok and result.value is not None
+    assert len(result.value.slides) == 4
+    assert result.value.meta.title == "技术评审"
+
+
+def test_repair_loop_without_original_prompt_keeps_previous_behavior() -> None:
+    from app.ir.repair import repair_ir_text
+
+    generator = RepairingGenerator()
+    result = repair_ir_text(
+        '{"ir_type":"word","ir_version":"1.0","meta":{},"blocks":[]}',
+        target="word_ir",
+        generator=generator,
+        max_retries=1,
+    )
+
+    assert result.ok
+    assert "[原始生成提示]" not in generator.prompts[0]
 
 
 def test_repair_loop_rebuilds_truncated_output_with_compact_bare_json_prompt() -> None:

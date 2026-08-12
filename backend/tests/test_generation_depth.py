@@ -258,8 +258,14 @@ def test_detailed_generation_repairs_truncated_outline_and_wrong_chunk_page_coun
             self.chunk_repaired = False
 
         def generate(self, prompt: str, *, target: str) -> str:
+            # The repair prompt now embeds the original prompt, so distinguish
+            # rounds by the repair header instead of marker presence.
+            is_repair = "上一轮输出未通过" in prompt
             if target == "analysis" and OUTLINE_MARKER in prompt:
                 self.planning = _json_after_marker(prompt, OUTLINE_MARKER)
+                if is_repair:
+                    self.outline_repaired = True
+                    return json.dumps(stub_outline_payload(self.planning or {}), ensure_ascii=False)
                 return '{"title":"截断大纲","pages":['
             if target == "analysis":
                 self.outline_repaired = True
@@ -268,6 +274,7 @@ def test_detailed_generation_repairs_truncated_outline_and_wrong_chunk_page_coun
                 self.pending_chunk = _json_after_marker(prompt, CHUNK_MARKER)
                 payload = stub_chunk_payload(self.pending_chunk or {})
                 if not self.chunk_repaired:
+                    self.chunk_repaired = True
                     payload["slides"] = payload["slides"][:-1]
                     return json.dumps(payload, ensure_ascii=False)
                 return json.dumps(payload, ensure_ascii=False)

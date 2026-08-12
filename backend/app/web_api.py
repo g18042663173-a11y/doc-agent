@@ -663,7 +663,8 @@ def _analyze_request(app: Flask, root: Path, manager: GeneratorManager):
         document = parse_file(input_path)
         metrics = measure_document(document)
         generator_snapshot = manager.snapshot()
-        raw = generator_snapshot.generator.generate(build_analysis_prompt(document, metrics), target="analysis")
+        prompt = build_analysis_prompt(document, metrics)
+        raw = generator_snapshot.generator.generate(prompt, target="analysis")
         result = repair_generated_text(
             raw,
             target="analysis",
@@ -673,6 +674,7 @@ def _analyze_request(app: Flask, root: Path, manager: GeneratorManager):
                 expected_metrics=metrics,
                 expected_filename=document.source.filename,
             ),
+            original_prompt=prompt,
         )
         if not result.ok or result.value is None:
             return _validation_error(result)
@@ -1764,7 +1766,12 @@ def _generate_single_artifact(
     raw = context.generator.generate(prompt, target=generator_target)
     _ensure_job_active(job, context.jobs)
     (job.work_dir / "raw_ir.txt").write_text(raw.strip() + "\n", encoding="utf-8")
-    validation = repair_ir_text(raw, target=generator_target, generator=context.generator)
+    validation = repair_ir_text(
+        raw,
+        target=generator_target,
+        generator=context.generator,
+        original_prompt=prompt,
+    )
     _ensure_job_active(job, context.jobs)
     if not validation.ok or validation.value is None:
         raise ApiValidationError(_validation_items(validation))
