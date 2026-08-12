@@ -11,9 +11,13 @@ namespace DocumentWorkbench;
 
 public sealed class BackendProcessHost : IDisposable
 {
+    private const int MaxStderrChars = 16 * 1024;
     private readonly Process _process;
     private readonly string _statePath;
+    private readonly StringBuilder _stderrBuffer = new();
     private bool _disposed;
+    private Task? _stdoutDrain;
+    private Task? _stderrDrain;
 
     private BackendProcessHost(Process process, Uri baseAddress, string sessionToken, string appData, string statePath)
     {
@@ -79,6 +83,10 @@ public sealed class BackendProcessHost : IDisposable
             File.Delete(bootstrapPath);
             throw new InvalidOperationException("无法启动内置 Python 服务。");
         }
+        // Drain both pipes continuously: Windows pipe buffers (4-64 KB) fill and
+        // block the child if stdout/stderr are never consumed, which would stall
+        // startup and hang long-running jobs on traceback floods.
+        StartStreamDrains(process);
 
         try
         {
@@ -88,7 +96,11 @@ public sealed class BackendProcessHost : IDisposable
                 cancellationToken.ThrowIfCancellationRequested();
                 if (process.HasExited)
                 {
-                    var error = await process.StandardError.ReadToEndAsync(cancellationToken);
+                    if (_stderrDrain is not null)
+                    {
+                        await Task.WhenAny(_stderrDrain, Task.Delay(500));
+                    }
+                    var error = CapturedStderr();
                     throw new InvalidOperationException(SanitizeStartupError(error, process.ExitCode));
                 }
                 var state = TryReadState(statePath);
@@ -114,6 +126,57 @@ public sealed class BackendProcessHost : IDisposable
             TryDelete(statePath);
             process.Dispose();
             throw;
+        }
+    }
+
+    private void StartStreamDrains(Process process)
+    {
+        _stdoutDrain = DrainStreamAsync(process.StandardOutput, capture: false);
+        _stderrDrain = DrainStreamAsync(process.StandardError, capture: true);
+    }
+
+    private async Task DrainStreamAsync(StreamReader reader, bool capture)
+    {
+        try
+        {
+            while (true)
+            {
+                var line = await reader.ReadLineAsync().ConfigureAwait(false);
+                if (line is null)
+                {
+                    return;
+                }
+                if (capture)
+                {
+                    AppendStderr(line);
+                }
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    private void AppendStderr(string line)
+    {
+        lock (_stderrBuffer)
+        {
+            if (_stderrBuffer.Length > MaxStderrChars)
+            {
+                _stderrBuffer.Remove(0, _stderrBuffer.Length - MaxStderrChars / 2);
+            }
+            _stderrBuffer.AppendLine(line);
+        }
+    }
+
+    private string CapturedStderr()
+    {
+        lock (_stderrBuffer)
+        {
+            return _stderrBuffer.ToString();
         }
     }
 
