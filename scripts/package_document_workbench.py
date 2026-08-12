@@ -242,6 +242,10 @@ def _copy_backend(stage: Path) -> None:
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
     )
     shutil.copy2(ROOT / "VERSION", stage / "app" / "VERSION")
+    # build_prompt few-shot fixtures resolve as parents[3]/samples/ir relative
+    # to backend/app/prompting/builder.py; without them every packaged
+    # generation fails with FileNotFoundError.
+    shutil.copytree(ROOT / "samples" / "ir", stage / "app" / "samples" / "ir")
 
 
 def _install_python_runtime(archive: Path, stage: Path) -> None:

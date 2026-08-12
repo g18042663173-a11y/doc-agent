@@ -134,6 +134,19 @@ def test_download_resumable_failure_cleans_part_file(tmp_path: Path, monkeypatch
     assert not output.exists()
 
 
+def test_portable_backend_bundles_few_shot_samples(tmp_path: Path) -> None:
+    package_document_workbench._copy_backend(tmp_path)
+
+    samples = tmp_path / "app" / "samples" / "ir"
+    assert samples.is_dir()
+    assert len(list(samples.glob("*.json"))) > 0
+    # builder.py resolves SAMPLE_DIR via parents[3]; the packaged layout must
+    # match so build_prompt does not fail with FileNotFoundError.
+    from app.prompting.builder import SAMPLE_DIR
+
+    assert SAMPLE_DIR.resolve().name == "ir"
+
+
 def test_wpf_uses_build_version_instead_of_hardcoded_display_versions() -> None:
     project = (ROOT / "desktop" / "DocumentWorkbench" / "DocumentWorkbench.csproj").read_text(encoding="utf-8")
     app_info = (ROOT / "desktop" / "DocumentWorkbench" / "AppInfo.cs").read_text(encoding="utf-8")
