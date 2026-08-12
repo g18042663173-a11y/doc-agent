@@ -819,6 +819,43 @@ def test_render_deck_ir_performance_chart_matches_source_spec(tmp_path: Path) ->
     assert threshold_line.line.width == Pt(0.75)
 
 
+def test_render_deck_ir_vertical_chart_threshold_labels_do_not_overlap(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.0",
+            "meta": {"title": "多阈值图", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "chart",
+                    "title": "性能趋势",
+                    "chart": {
+                        "kind": "bar",
+                        "unit": "ms",
+                        "categories": ["1月", "2月", "3月"],
+                        "series": [{"name": "方案A", "values": [62, 58, 55], "emphasis": True}],
+                        "thresholds": [
+                            {"value": 60, "label": "下限 60ms"},
+                            {"value": 80, "label": "上限 80ms"},
+                        ],
+                    },
+                }
+            ],
+        }
+    )
+    output = render_deck_ir(deck, tmp_path / "multi-threshold.pptx")
+    prs = Presentation(str(output))
+
+    labels = [shape for shape in prs.slides[0].shapes if shape.name.startswith("HW_THRESHOLD_LABEL")]
+    assert len(labels) == 2
+    tops = sorted(label.top / 914400 for label in labels)
+    assert len(set(tops)) == 2, f"两个阈值标签共用同一 y 坐标: {tops}"
+    assert (tops[1] - tops[0]) == pytest.approx(0.222222 + 0.08, abs=0.02)
+
+
 def test_render_deck_ir_threshold_label_expands_short_label_with_series_and_unit(tmp_path: Path) -> None:
     from app.ir.deck_ir import DeckIR
     from app.rendering.pptx_renderer import render_deck_ir

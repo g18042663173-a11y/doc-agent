@@ -110,7 +110,9 @@ def _read_word_xml(path: Path) -> str:
         return "\n".join(
             package.read(name).decode("utf-8")
             for name in package.namelist()
-            if name.startswith("word/") and name.endswith(".xml")
+            if name.startswith("word/")
+            and name.endswith(".xml")
+            and not name.startswith("word/theme/")
         )
 
 
@@ -134,11 +136,12 @@ def _font_items(document: Document, theme: dict) -> list[DocxLintItem]:
             continue
         visible_runs = [run for run in paragraph.runs if run.text.strip()]
         for run in visible_runs or [None]:
-            font_name = _effective_font_name(paragraph, run)
-            if font_name is None:
+            font_names = _effective_font_names(paragraph, run)
+            if not font_names:
                 return [_item("HW-E02", "文本未显式设置可验证字体。", "使用主题字体白名单: 微软雅黑 / Arial。")]
-            if font_name not in whitelist:
-                return [_item("HW-E02", f"字体不在白名单: {font_name}", "使用主题字体白名单: 微软雅黑 / Arial。")]
+            for font_name in font_names:
+                if font_name not in whitelist:
+                    return [_item("HW-E02", f"字体不在白名单: {font_name}", "使用主题字体白名单: 微软雅黑 / Arial。")]
             size = _effective_font_size(paragraph, run)
             if size is None or float(size) not in allowed_sizes:
                 shown = "未设置" if size is None else f"{float(size):g}pt"
@@ -239,7 +242,7 @@ def _code_block_items(document: Document, theme: dict) -> list[DocxLintItem]:
         if paragraph.style.name != "IR Code":
             continue
         visible_runs = [run for run in paragraph.runs if run.text]
-        if any(_effective_font_name(paragraph, run) not in code_fonts for run in visible_runs):
+        if any(not _effective_font_names(paragraph, run) or any(name not in code_fonts for name in _effective_font_names(paragraph, run)) for run in visible_runs):
             return [_item("E004", "code_block 未使用主题等宽字体。", "使用 hw_theme.json 的 word_code_block 与 fonts.code token。")]
         if any(_effective_font_size(paragraph, run) != expected_size for run in visible_runs):
             return [_item("E004", "code_block 字号不符合主题 token。", "使用 word_code_block.font_size_pt。")]
@@ -271,10 +274,25 @@ def _iter_all_paragraphs(document: Document):
                 yield from cell.paragraphs
 
 
-def _effective_font_name(paragraph, run) -> str | None:
-    if run is not None and run.font.name:
-        return run.font.name
-    return paragraph.style.font.name
+def _effective_font_names(paragraph, run) -> list[str]:
+    """latin (w:ascii) + east-asian (w:eastAsia) typefaces, run then style."""
+    names = _rfonts_typefaces(run._r.rPr) if run is not None and run._r.rPr is not None else []
+    if not names:
+        style_rpr = paragraph.style._element.rPr
+        names = _rfonts_typefaces(style_rpr) if style_rpr is not None else []
+    return names
+
+
+def _rfonts_typefaces(rpr) -> list[str]:
+    rfonts = rpr.rFonts
+    if rfonts is None:
+        return []
+    names: list[str] = []
+    for attribute in ("ascii", "eastAsia"):
+        value = rfonts.get(qn(f"w:{attribute}"))
+        if value:
+            names.append(value)
+    return names
 
 
 def _effective_font_size(paragraph, run) -> float | None:

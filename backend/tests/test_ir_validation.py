@@ -756,6 +756,33 @@ def test_validate_deck_ir_does_not_guess_when_table_indexes_are_mixed() -> None:
     assert any(item.code == "D005" and "混用" in item.message for item in result.warnings)
 
 
+def test_validate_deck_ir_does_not_shift_zero_based_conclusion_when_one_span_is_one_based() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "1.7",
+            "meta": {"title": "零起始结论列"},
+            "slides": [
+                {
+                    "layout": "table",
+                    "title": "零起始结论列",
+                    "table": {
+                        "header": ["方案", "指标", "成本", "结论"],
+                        "rows": [["方案A", "高", "中", "推荐"]],
+                        "conclusion_col": 3,
+                        "cell_spans": [{"area": "body", "row": 1, "col": 4, "rowspan": 1, "colspan": 1}],
+                    },
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert any(item.code == "D005" and "混用" in item.message for item in result.warnings)
+
+
 def test_validate_deck_ir_maps_invalid_decision_matrix_span_to_d005() -> None:
     from app.ir.validation import validate_deck_ir
 
@@ -926,6 +953,90 @@ def test_validate_deck_ir_rejects_contradictory_chart_side_conclusion() -> None:
 
     assert result.value is None
     assert result.errors[0].code == "D004"
+
+
+def test_validate_deck_ir_uses_the_threshold_referenced_by_side_conclusion_text() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    def build(values, conclusion):
+        return validate_deck_ir(
+            {
+                "ir_type": "deck",
+                "ir_version": "1.7",
+                "meta": {"title": "多阈值", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+                "slides": [
+                    {
+                        "layout": "chart",
+                        "title": "性能趋势",
+                        "chart": {
+                            "kind": "bar",
+                            "unit": "ms",
+                            "categories": ["1月", "2月", "3月"],
+                            "series": [{"name": "方案A", "values": values, "emphasis": True}],
+                            "thresholds": [
+                                {"value": 60, "label": "下限"},
+                                {"value": 80, "label": "上限"},
+                            ],
+                            "side_conclusion": conclusion,
+                        },
+                    }
+                ],
+            }
+        )
+
+    contradictory = build([70, 72, 71], "方案A连续三个月高于80。")
+    assert contradictory.value is None
+    assert contradictory.errors[0].code == "D004"
+
+    valid = build([82, 85, 81], "方案A连续三个月高于80。")
+    assert valid.ok, valid.errors
+
+    low_threshold_reference = build([70, 72, 71], "方案A连续三个月高于60。")
+    assert low_threshold_reference.ok, low_threshold_reference.errors
+
+
+def test_validate_deck_ir_strict_mode_collects_nested_unknown_fields_in_image_and_infographic_layouts() -> None:
+    from app.ir.validation import validate_deck_ir
+
+    result = validate_deck_ir(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.0",
+            "meta": {"title": "图文页", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+            "slides": [
+                {
+                    "layout": "image_text",
+                    "title": "图文页",
+                    "image": {"image_ref": "a.png", "focul_x": 0.9},
+                    "text": "说明",
+                },
+                {
+                    "layout": "image_grid",
+                    "title": "多图页",
+                    "images": [{"image_ref": "a.png", "focul_y": 0.2}, {"image_ref": "b.png", "unkown_ref": "x"}],
+                },
+                {
+                    "layout": "infographic",
+                    "title": "漏斗",
+                    "infographic": {
+                        "kind": "funnel",
+                        "stages": [
+                            {"label": "认知", "discription": "拼写错误"},
+                            {"label": "考虑", "description": "正常"},
+                            {"label": "行动", "description": "正常"},
+                        ],
+                    },
+                },
+            ],
+        },
+        reject_unknown_fields=True,
+    )
+
+    assert result.value is None
+    unknown_locations = {error.loc for error in result.errors if error.code == "D004"}
+    assert any(loc.endswith(".image.focul_x") for loc in unknown_locations)
+    assert any(".images[1].unkown_ref" in loc for loc in unknown_locations)
+    assert any(".infographic.stages[0].discription" in loc for loc in unknown_locations)
 
 
 def test_validate_deck_ir_maps_invalid_chart_threshold_to_d004() -> None:

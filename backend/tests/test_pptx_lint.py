@@ -156,6 +156,30 @@ def test_check_pptx_reports_missing_footer_and_bad_font(tmp_path: Path) -> None:
     assert "HW-E02" in codes
 
 
+def test_check_pptx_reports_east_asian_font_not_in_whitelist(tmp_path: Path) -> None:
+    from app.lint.pptx_lint import check_pptx
+
+    path = tmp_path / "ea-font.pptx"
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    shape = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    run = shape.text_frame.paragraphs[0].add_run()
+    run.text = "中文字体检查"
+    from pptx.oxml.ns import qn
+
+    rpr = run._r.get_or_add_rPr()
+    ea = rpr.find(qn("a:ea"))
+    if ea is None:
+        ea = rpr.makeelement(qn("a:ea"), {})
+        rpr.append(ea)
+    ea.set("typeface", "宋体")
+    prs.save(path)
+
+    codes = _codes(check_pptx(path, classification="HUAWEI CONFIDENTIAL"))
+
+    assert "HW-E02" in codes
+
+
 def test_check_pptx_requires_classification_in_footer_area(tmp_path: Path) -> None:
     from app.lint.pptx_lint import check_pptx
 

@@ -37,17 +37,24 @@ from app.ir.deck_ir import (
     ConclusionSlide,
     CoverSlide,
     ColumnContent,
+    CycleInfographic,
     DeckTable,
     DeckTableCell,
     DeckIR,
     DiagramPosition,
     DiagramSize,
+    FunnelInfographic,
+    ImageAssetSpec,
     ImageGridSlide,
     ImageSlide,
     ImageTextSlide,
     InfographicSlide,
+    InfographicStage,
+    MatrixInfographic,
     ProcessFlowSlide,
     ProcessStep,
+    QuadrantInfographic,
+    QuadrantItem,
     SectionSlide,
     TableSlide,
     TableCellSpan,
@@ -351,7 +358,41 @@ def _collect_deck_component_unknowns(component: Mapping[str, Any], prefix: str) 
                                     f"{region_prefix}.components[{component_index}]",
                                 )
                             )
+    elif layout == "image_text":
+        image = component.get("image")
+        if isinstance(image, Mapping):
+            warnings.extend(_unknown_fields(image, _model_input_fields(ImageAssetSpec), f"{prefix}.image"))
+    elif layout == "image_grid":
+        images = component.get("images")
+        if isinstance(images, list):
+            for index, image in enumerate(images):
+                if isinstance(image, Mapping):
+                    warnings.extend(_unknown_fields(image, _model_input_fields(ImageAssetSpec), f"{prefix}.images[{index}]"))
+    elif layout == "infographic":
+        infographic = component.get("infographic")
+        if isinstance(infographic, Mapping):
+            infographic_prefix = f"{prefix}.infographic"
+            kind = str(infographic.get("kind"))
+            infographic_model = INFOGRAPHIC_MODELS.get(kind)
+            if infographic_model is not None:
+                warnings.extend(_unknown_fields(infographic, _model_input_fields(infographic_model), infographic_prefix))
+            for field_name, item_model in (("stages", InfographicStage), ("items", QuadrantItem)):
+                items = infographic.get(field_name)
+                if isinstance(items, list):
+                    for index, item in enumerate(items):
+                        if isinstance(item, Mapping):
+                            warnings.extend(
+                                _unknown_fields(item, _model_input_fields(item_model), f"{infographic_prefix}.{field_name}[{index}]")
+                            )
     return warnings
+
+
+INFOGRAPHIC_MODELS: dict[str, Type[BaseModel]] = {
+    "funnel": FunnelInfographic,
+    "quadrant": QuadrantInfographic,
+    "cycle": CycleInfographic,
+    "matrix": MatrixInfographic,
+}
 
 
 def _collect_deck_unknowns(data: Mapping[str, Any]) -> list[ValidationItem]:
@@ -577,11 +618,11 @@ def _normalize_deck_data(data: Mapping[str, Any]) -> tuple[dict[str, Any], list[
         rows = table.get("rows")
         if not isinstance(header, list) or not header or not isinstance(rows, list):
             continue
-        evidence, indexes = _one_based_table_index_evidence(table, len(header), len(rows))
-        if not evidence:
+        evidence_count, index_count = _one_based_table_index_evidence(table, len(header), len(rows))
+        if index_count == 0 or evidence_count == 0:
             continue
         loc = f"slides[{slide_index}].table"
-        if indexes and all(index >= 1 for index in indexes):
+        if evidence_count == index_count:
             _shift_table_indexes_to_zero_based(table)
             warnings.append(
                 _warning(
@@ -603,15 +644,24 @@ def _normalize_deck_data(data: Mapping[str, Any]) -> tuple[dict[str, Any], list[
     return normalized, warnings
 
 
-def _one_based_table_index_evidence(table: Mapping[str, Any], column_count: int, row_count: int) -> tuple[bool, list[int]]:
-    indexes: list[int] = []
-    evidence = False
+def _one_based_table_index_evidence(
+    table: Mapping[str, Any], column_count: int, row_count: int
+) -> tuple[int, int]:
+    """Return (entries_proven_one_based, total_index_entries).
+
+    An entry is proven one-based only when it would overflow the table bounds
+    under a zero-based interpretation (index + span > limit). Conversion must
+    require every entry to be proven individually; a single edge-touching span
+    must never shift a valid zero-based sibling column.
+    """
+    evidence_count = 0
+    index_count = 0
 
     def inspect(index: Any, span: Any, limit: int) -> None:
-        nonlocal evidence
+        nonlocal evidence_count, index_count
         if not isinstance(index, int) or isinstance(index, bool):
             return
-        indexes.append(index)
+        index_count += 1
         if (
             isinstance(span, int)
             and not isinstance(span, bool)
@@ -619,7 +669,7 @@ def _one_based_table_index_evidence(table: Mapping[str, Any], column_count: int,
             and index + span > limit
             and index - 1 + span <= limit
         ):
-            evidence = True
+            evidence_count += 1
 
     inspect(table.get("conclusion_col"), 1, column_count)
     for group in table.get("column_groups", []):
@@ -634,7 +684,7 @@ def _one_based_table_index_evidence(table: Mapping[str, Any], column_count: int,
         inspect(span.get("col"), span.get("colspan", 1), column_count)
         area_rows = 1 if span.get("area", "body") == "header" else row_count
         inspect(span.get("row"), span.get("rowspan", 1), area_rows)
-    return evidence, indexes
+    return evidence_count, index_count
 
 
 def _shift_table_indexes_to_zero_based(table: dict[str, Any]) -> None:

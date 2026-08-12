@@ -440,6 +440,31 @@ def test_nga_cli_transport_empty_output_fails_e014() -> None:
     assert captured.value.code == "E014"
 
 
+def test_stop_cli_process_kills_whole_tree_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.generators import nga as nga_module
+
+    class FakeProcess:
+        pid = 4242
+        killed = False
+
+        def kill(self) -> None:
+            self.killed = True
+
+    process = FakeProcess()
+    tree_kill_args: list[list[str]] = []
+
+    def fake_taskkill(command: list[str], **kwargs) -> None:
+        tree_kill_args.append(command)
+
+    monkeypatch.setattr(nga_module.os, "name", "nt")
+    monkeypatch.setattr(nga_module.subprocess, "run", fake_taskkill)
+
+    nga_module._stop_cli_process(process)
+
+    assert tree_kill_args == [["taskkill", "/T", "/F", "/PID", "4242"]]
+    assert process.killed is False
+
+
 def test_nga_cli_transport_stops_a_stream_that_exceeds_the_output_cap() -> None:
     class BurstingProcess:
         def __init__(self) -> None:

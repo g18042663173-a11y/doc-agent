@@ -5,6 +5,7 @@ from pathlib import Path
 import zipfile
 
 from docx import Document
+from docx.oxml.ns import qn
 from docx.shared import Pt
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +38,22 @@ def test_check_docx_reports_empty_document(tmp_path: Path) -> None:
     assert report.items[0].code == "E006"
 
 
+def test_check_docx_reports_east_asian_font_not_in_whitelist(tmp_path: Path) -> None:
+    from app.lint.docx_lint import check_docx
+
+    path = tmp_path / "ea-font.docx"
+    document = Document()
+    paragraph = document.add_paragraph("中文字体检查")
+    run = paragraph.runs[0]
+    run.font.name = "Arial"
+    run._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+    document.save(path)
+
+    report = check_docx(path)
+
+    assert any(item.code == "HW-E02" and "宋体" in item.message for item in report.items)
+
+
 def test_check_docx_reports_missing_classification_footer(tmp_path: Path) -> None:
     from app.lint.docx_lint import check_docx
 
@@ -49,6 +66,36 @@ def test_check_docx_reports_missing_classification_footer(tmp_path: Path) -> Non
 
     assert report.summary["pass"] is False
     assert "E002" in [item.code for item in report.items]
+
+
+def test_check_docx_reports_missing_theme_red_when_content_colors_are_tampered(tmp_path: Path) -> None:
+    from app.ir.word_ir import WordIR
+    from app.lint.docx_lint import check_docx
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.2",
+            "meta": {"title": "主题红检查", "classification": "内部公开"},
+            "blocks": [{"type": "heading", "level": 1, "text": "第一章"}],
+        }
+    )
+    path = tmp_path / "tampered.docx"
+    render_word_ir(ir, path)
+
+    with zipfile.ZipFile(path) as package:
+        parts = {name: package.read(name) for name in package.namelist()}
+    for name in ("word/styles.xml", "word/stylesWithEffects.xml", "word/document.xml"):
+        if name in parts:
+            parts[name] = parts[name].replace(b"C7000B", b"0000FF")
+    with zipfile.ZipFile(path, "w") as package:
+        for name, data in parts.items():
+            package.writestr(name, data)
+
+    report = check_docx(path)
+
+    assert any(item.code == "E004" and "未使用主题红" in item.message for item in report.items)
 
 
 def test_check_docx_accepts_theme_compliant_renderer_output(tmp_path: Path) -> None:

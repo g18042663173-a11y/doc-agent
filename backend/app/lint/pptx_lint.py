@@ -10,6 +10,7 @@ from typing import Any
 from pptx import Presentation
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE
+from pptx.oxml.ns import qn
 
 from app.rendering.theme import load_theme
 from app.template.contracts import TemplateProfile
@@ -149,14 +150,32 @@ def _font_items(slide, slide_index: int, theme: dict, expected_classification: s
         if _is_footer_shape(shape, theme, expected_classification):
             continue
         minimum = _minimum_font_size_for_shape(shape, theme)
-        if run.font.name and run.font.name not in whitelist:
-            items.append(_item("HW-E02", "Error", slide_index, f"{context}字体不在白名单: {run.font.name}", "改用主题字体白名单。"))
+        for font_name in _run_font_names(run):
+            if font_name not in whitelist:
+                items.append(_item("HW-E02", "Error", slide_index, f"{context}字体不在白名单: {font_name}", "改用主题字体白名单。"))
         if run.font.size and run.font.size.pt < minimum:
             items.append(_item("HW-W01", "Warning", slide_index, f"{context}字号 {run.font.size.pt:.1f}pt 小于下限。", f"提高到主题最小字号 {minimum:g}pt 以上。"))
         color = _font_color(run.font)
         if color is not None and color.upper() not in palette:
             items.append(_item("HW-W02", "Warning", slide_index, f"{context}颜色 {color} 不在主题色板。", "改用 hw_theme.json 色板。"))
     return items
+
+
+def _run_font_names(run) -> list[str]:
+    """Return the latin and east-asian typeface names explicitly set on the run.
+
+    `run.font.name` only maps to `a:latin`; Chinese documents are usually set
+    through `a:ea`, which used to escape the whitelist entirely.
+    """
+    names: list[str] = []
+    rpr = run._r.find(qn("a:rPr"))
+    if rpr is not None:
+        for tag in ("latin", "ea"):
+            node = rpr.find(qn(f"a:{tag}"))
+            typeface = node.get("typeface") if node is not None else None
+            if typeface:
+                names.append(typeface)
+    return names
 
 
 def _minimum_font_size_for_shape(shape, theme: dict) -> float:

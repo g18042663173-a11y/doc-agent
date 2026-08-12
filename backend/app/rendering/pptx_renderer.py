@@ -1118,9 +1118,14 @@ def _add_threshold_lines(slide, chart_ir: ChartSpec, chart_layout: dict, chart_s
                 right + threshold_layout["label_gap_in"],
                 theme["slide"]["width_in"] - threshold_layout["label_width_in"] - theme["slide"]["margin_right_in"],
             )
+            # Vertical charts share one label column: stack each threshold label
+            # above its predecessor so multiple labels do not overlap.
+            stacked_top = label_top - (index - 1) * (
+                threshold_layout["label_height_in"] + threshold_layout["label_gap_in"]
+            )
             label = {
                 "left_in": threshold_layout.get("label_left_in", fallback_left),
-                "top_in": label_top,
+                "top_in": max(0.0, stacked_top),
                 "width_in": threshold_layout["label_width_in"],
                 "height_in": threshold_layout["label_height_in"],
             }

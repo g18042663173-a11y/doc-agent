@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import signal
 import socket
 import ssl
 import subprocess
@@ -423,6 +424,7 @@ def _run_cli_limited(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        start_new_session=True,
     )
     stdout_chunks: list[bytes] = []
     output_exceeded = Event()
@@ -492,6 +494,33 @@ def _run_cli_limited(
 
 
 def _stop_cli_process(process: Any) -> None:
+    """Terminate the CLI process and, where possible, its whole process tree.
+
+    Killing only the direct child leaves grandchildren (node/rust-backed
+    launchers) alive: they hold the inherited pipe ends open, so the drain
+    threads block forever and every retry spawns another orphan.
+    """
+    pid = getattr(process, "pid", None)
+    if os.name == "nt" and isinstance(pid, int):
+        try:
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=10,
+                encoding="utf-8",
+                errors="replace",
+            )
+            return
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    elif isinstance(pid, int):
+        try:
+            os.killpg(pid, signal.SIGKILL)
+            return
+        except (OSError, ProcessLookupError):
+            pass
     try:
         process.kill()
     except (OSError, ProcessLookupError):

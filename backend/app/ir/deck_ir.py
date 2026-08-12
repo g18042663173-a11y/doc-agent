@@ -421,13 +421,33 @@ class ChartSpec(ContractModel):
         target = _chart_threshold_target_series(self.series)
         if target is None:
             raise ValueError("threshold side_conclusion requires exactly one emphasized series")
-        threshold = self.thresholds[0].value
+        threshold = _chart_threshold_value(self.side_conclusion, self.thresholds)
+        if threshold is None:
+            return
         count = _continuous_month_count(self.side_conclusion)
-        if count is not None and not _has_consecutive_run(target.values, count, lambda value: predicate(value, threshold)):
+        if count is not None and not _has_consecutive_run(target.values, count, lambda value: predicate(value, threshold.value)):
             raise ValueError("side_conclusion contradicts chart threshold values")
         start_index = _category_start_index(self.side_conclusion, self.categories)
-        if start_index is not None and not all(predicate(value, threshold) for value in target.values[start_index:]):
+        if start_index is not None and not all(predicate(value, threshold.value) for value in target.values[start_index:]):
             raise ValueError("side_conclusion contradicts chart threshold values")
+
+
+def _chart_threshold_value(text: str, thresholds: list["ChartThreshold"]) -> "ChartThreshold | None":
+    """Select the threshold referenced by the side_conclusion text.
+
+    The text usually echoes the threshold number (e.g. "连续三个月高于80").
+    With several thresholds the first one is no longer the right reference;
+    when the text carries no unambiguous numeric reference the check is skipped.
+    """
+    if len(thresholds) == 1:
+        return thresholds[0]
+    numbers = re.findall(r"\d+(?:\.\d+)?", text)
+    for number in reversed(numbers):
+        target = float(number)
+        for threshold in thresholds:
+            if threshold.value == target:
+                return threshold
+    return None
 
 
 class ChartSlide(ContractModel):
