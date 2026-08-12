@@ -11,7 +11,7 @@ if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
 }
 
 $Version = & $Python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-if ($Version.Trim() -ne "3.12") {
+if ($null -eq $Version -or $Version.Trim() -ne "3.12") {
     throw "Expected Python 3.12 in .venv, found $Version. Recreate it with .\bootstrap_windows.ps1."
 }
 

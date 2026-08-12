@@ -68,8 +68,10 @@ def main(argv: list[str] | None = None) -> int:
 
 def _wheel_record(path: Path) -> dict[str, str | int]:
     with zipfile.ZipFile(path) as package:
-        metadata_name = next(name for name in package.namelist() if name.endswith(".dist-info/METADATA"))
-        metadata = Parser().parsestr(package.read(metadata_name).decode("utf-8", errors="replace"))
+        metadata_names = [name for name in package.namelist() if name.endswith(".dist-info/METADATA")]
+        if not metadata_names:
+            raise SystemExit(f"wheel is missing its .dist-info/METADATA part: {path.name}")
+        metadata = Parser().parsestr(package.read(metadata_names[0]).decode("utf-8", errors="replace"))
     return {
         "name": metadata["Name"],
         "version": metadata["Version"],
