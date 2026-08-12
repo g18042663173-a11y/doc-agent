@@ -1782,6 +1782,10 @@ def _generate_single_artifact(
         context.jobs.update(job.job_id, stage="linting", progress_percent=90)
         report = check_docx(artifact, classification=validation.value.meta.classification)
         write_docx_reports(report, job.work_dir)
+        context.jobs.update(
+            job.job_id,
+            assets={"lint": job.work_dir / "report.json"},
+        )
     else:
         selection_path = _write_visual_selection(job, context.visual_plan, validation.value)
         context.visual_assets["visual-selection-audit"] = selection_path

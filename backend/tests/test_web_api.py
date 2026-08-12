@@ -234,6 +234,23 @@ def test_generate_records_failed_background_job(tmp_path: Path) -> None:
     assert client.get(f"/api/download/{failed['job_id']}/lint").status_code == 409
 
 
+def test_word_job_exposes_lint_report_as_downloadable_asset(tmp_path: Path) -> None:
+    client = create_api_app(work_dir=tmp_path).test_client()
+
+    created = client.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO("# Word 报告\n\n- 完成\n- 待办\n".encode("utf-8")), "word.md")},
+        content_type="multipart/form-data",
+    )
+    completed = _wait_for_terminal_status(client, created.get_json()["job_id"])
+
+    assert completed["status"] == "done"
+    assert "lint" in completed["assets"]
+    report = client.get(completed["assets"]["lint"]["download_url"])
+    assert report.status_code == 200
+    assert report.get_json()["summary"]["pass"] is not None
+
+
 def test_generate_deck_with_template_exposes_audit_assets(tmp_path: Path) -> None:
     client = create_api_app(work_dir=tmp_path / "jobs").test_client()
     template = _template_bytes(tmp_path)
