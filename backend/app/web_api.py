@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from queue import Full, Queue
 import re
+import secrets
 import shutil
 import sys
 from threading import BoundedSemaphore, Event, Lock, Thread
@@ -1001,12 +1002,21 @@ def _cancel_job_response(jobs: JobStore, job_id: str):
 
 
 def _register_session_guard(app: Flask, session_token: str | None) -> None:
+    if session_token is not None:
+        @app.get("/api/session-token")
+        def session_token_endpoint():
+            # Same-origin bootstrap for the browser frontend: a cross-origin
+            # page cannot read the response, so it cannot adopt the token.
+            return jsonify({"session_token": session_token})
+
     @app.before_request
     def require_desktop_session():
-        if request.path.startswith("/api/"):
+        if request.path.startswith("/api/") and request.path != "/api/session-token":
             origin_error = _require_browser_origin(session_token)
             if origin_error is not None:
                 return origin_error
+        if request.path == "/api/session-token":
+            return None
         return _require_desktop_session(session_token)
 
 
@@ -2207,10 +2217,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5056)
     parser.add_argument("--work-dir", type=Path, default=Path("output") / "web_api")
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        help="开发模式:不启用会话令牌校验(仅限本机调试)。",
+    )
     args = parser.parse_args(argv)
     if args.host != "127.0.0.1":
         parser.error("production workbench must bind to 127.0.0.1")
-    app = create_api_app(work_dir=args.work_dir)
+    # Browser mode now requires a session token like desktop mode; the frontend
+    # adopts it from /api/session-token (same-origin only).
+    session_token = None if args.no_auth else secrets.token_hex(32)
+    app = create_api_app(work_dir=args.work_dir, session_token=session_token)
     from waitress import serve
 
     serve(app, host=args.host, port=args.port, threads=4, clear_untrusted_proxy_headers=True)

@@ -898,6 +898,25 @@
   <script>
     (() => {
       const storageKey = "huawei-workbench-last-job-v1";
+      let sessionToken = null;
+      const sessionFetch = async (input, init = {}) => {
+        if (sessionToken === null) {
+          try {
+            const tokenResponse = await fetch("/api/session-token", { cache: "no-store" });
+            if (tokenResponse.ok) {
+              const payload = await tokenResponse.json();
+              sessionToken = payload.session_token || null;
+            }
+          } catch {
+            sessionToken = null;
+          }
+        }
+        const headers = new Headers(init.headers || {});
+        if (sessionToken !== null && !headers.has("X-Workbench-Session")) {
+          headers.set("X-Workbench-Session", sessionToken);
+        }
+        return fetch(input, { ...init, headers });
+      };
       const state = { file: null, template: null, assets: [], type: "deck", depth: "标准", jobId: null, idempotencyKey: null, timer: null, elapsedTimer: null, startedAt: null, busy: false, jobRunning: false, pollFailures: 0, connected: false, compatible: false };
       const stageText = { queued: "任务已创建，等待执行", parsing: "正在解析源文件", normalizing_assets: "正在校验图片资产", planning_visuals: "正在规划视觉表达", generating: "正在生成结构化内容", profiling_template: "正在分析模板母版与页面原型", planning_template: "正在规划页面与模板映射", rendering: "正在渲染可编辑文档", validating_package: "正在检查 PPTX 包关系", linting: "正在执行合规检查", done: "交付件已准备完成", validation_failed: "内容草稿未通过校验", failed: "任务执行失败", canceled: "任务已取消", timed_out: "任务执行超时", interrupted: "服务重启导致任务中断", rate_limited: "请求频率受限" };
       const stageOrder = ["parsing", "generating", "rendering", "linting"];
@@ -944,7 +963,7 @@
 
       const loadServiceVersion = async () => {
         try {
-          const response = await fetch("/api/version", { cache: "no-store" });
+          const response = await sessionFetch("/api/version", { cache: "no-store" });
           const version = await readJson(response);
           if (version.api_version !== "1.0" || version.deck_ir_version !== "2.0") {
             setConnection("incompatible", `版本不兼容 · 后端 ${version.app_version || "未知"}`);
@@ -1007,7 +1026,7 @@
 
       const loadGeneratorSettings = async () => {
         try {
-          const response = await fetch("/api/settings/generator", { cache: "no-store" });
+          const response = await sessionFetch("/api/settings/generator", { cache: "no-store" });
           const settings = await readJson(response);
           el("generatorStateText").textContent = generatorStatusText(settings);
           renderGeneratorStatusCard(settings);
@@ -1104,7 +1123,7 @@
             setGeneratorStatus(invalid, true);
             return;
           }
-          const response = await fetch("/api/settings/generator", {
+          const response = await sessionFetch("/api/settings/generator", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -1127,13 +1146,13 @@
             setGeneratorStatus(invalid, true);
             return;
           }
-          const saved = await fetch("/api/settings/generator", {
+          const saved = await sessionFetch("/api/settings/generator", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
           await readJson(saved);
-          const tested = await fetch("/api/settings/generator/test", { method: "POST" });
+          const tested = await sessionFetch("/api/settings/generator/test", { method: "POST" });
           const result = await readJson(tested);
           setGeneratorStatus(result.connection?.ok ? `连接成功（${result.connection.latency_ms ?? "?"}ms）。` : "连接测试未通过。", !result.connection?.ok);
         } catch (error) {
@@ -1143,7 +1162,7 @@
 
       el("activateGenerator").addEventListener("click", async () => {
         try {
-          const response = await fetch("/api/settings/generator/activate", { method: "POST" });
+          const response = await sessionFetch("/api/settings/generator/activate", { method: "POST" });
           const settings = await readJson(response);
           el("generatorStateText").textContent = generatorStatusText(settings);
           renderGeneratorStatusCard(settings);
@@ -1156,13 +1175,13 @@
 
       el("switchToStub").addEventListener("click", async () => {
         try {
-          const saved = await fetch("/api/settings/generator", {
+          const saved = await sessionFetch("/api/settings/generator", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ generator: "stub", mode: el("generatorMode").value === "strict" ? "strict" : "auto" }),
           });
           await readJson(saved);
-          const activated = await fetch("/api/settings/generator/activate", { method: "POST" });
+          const activated = await sessionFetch("/api/settings/generator/activate", { method: "POST" });
           const settings = await readJson(activated);
           el("generatorStateText").textContent = generatorStatusText(settings);
           renderGeneratorStatusCard(settings);
@@ -1279,7 +1298,7 @@
         if (!state.file || state.busy) return;
         setBusy(true); el("analyzeButton").textContent = "分析中...";
         try {
-          const response = await fetch("/api/analyze", { method: "POST", body: formDataForFile() });
+          const response = await sessionFetch("/api/analyze", { method: "POST", body: formDataForFile() });
           const data = await readJson(response);
           renderAnalysis(data); showToast("资料分析已完成");
         } catch (error) { showToast(error.message || "分析失败", true); }
@@ -1312,7 +1331,7 @@
         hideResult(); state.jobRunning = true; state.idempotencyKey = state.idempotencyKey || newIdempotencyKey(); setBusy(true); startProgress();
         try {
           const data = formDataForFile(); data.append("type", state.type); if (state.type === "deck") { data.append("depth", state.depth); data.append("theme", el("themeSelect").value); if (state.template) data.append("template_file", state.template); state.assets.forEach((file) => data.append("asset_files", file)); }
-          const response = await fetch("/api/generate", { method: "POST", headers: { "Idempotency-Key": state.idempotencyKey }, body: data });
+          const response = await sessionFetch("/api/generate", { method: "POST", headers: { "Idempotency-Key": state.idempotencyKey }, body: data });
           const job = await readJson(response);
           state.jobId = job.job_id; persistJob(job.status); setBusy(true); renderProgress(job); pollJob();
         } catch (error) { state.jobRunning = false; state.idempotencyKey = null; finishFailure(error.payload || { error: { message: error.message || "无法创建生成任务" } }); }
@@ -1333,7 +1352,7 @@
       const pollJob = async () => {
         window.clearTimeout(state.timer);
         try {
-          const response = await fetch(`/api/status/${encodeURIComponent(state.jobId)}`); const job = await readJson(response); renderProgress(job);
+          const response = await sessionFetch(`/api/status/${encodeURIComponent(state.jobId)}`); const job = await readJson(response); renderProgress(job);
           state.pollFailures = 0; persistJob(job.status); setConnection("connected", el("serviceStateText").textContent.startsWith("本地服务 v") ? el("serviceStateText").textContent : "本地服务已连接");
           if (job.status === "done") return finishSuccess(job);
           if (job.status === "failed" || job.status === "canceled") return finishFailure(job);
@@ -1385,7 +1404,7 @@
         if (!state.jobRunning || !state.jobId) return;
         el("cancelButton").disabled = true;
         try {
-          const response = await fetch(`/api/jobs/${encodeURIComponent(state.jobId)}/cancel`, { method: "POST" });
+          const response = await sessionFetch(`/api/jobs/${encodeURIComponent(state.jobId)}/cancel`, { method: "POST" });
           const job = await readJson(response);
           finishFailure(job);
         } catch (error) {
@@ -1439,7 +1458,7 @@
         state.jobId = saved.jobId; state.idempotencyKey = saved.idempotencyKey || null; state.startedAt = Number(saved.startedAt || Date.now()); state.jobRunning = !["done", "failed", "canceled"].includes(saved.status);
         if (state.jobRunning) { setBusy(true); startProgress(state.startedAt); }
         try {
-          const response = await fetch(`/api/status/${encodeURIComponent(state.jobId)}`); const job = await readJson(response); renderProgress(job);
+          const response = await sessionFetch(`/api/status/${encodeURIComponent(state.jobId)}`); const job = await readJson(response); renderProgress(job);
           if (job.status === "done") finishSuccess(job);
           else if (job.status === "failed" || job.status === "canceled") finishFailure(job);
           else { state.jobRunning = true; setBusy(true); startProgress(state.startedAt); pollJob(); }
@@ -1496,7 +1515,7 @@
         const list = el("taskList");
         list.replaceChildren();
         try {
-          const response = await fetch("/api/jobs", { cache: "no-store" });
+          const response = await sessionFetch("/api/jobs", { cache: "no-store" });
           const payload = await readJson(response);
           renderTaskList(Array.isArray(payload.jobs) ? payload.jobs : []);
         } catch (error) {
@@ -1522,7 +1541,7 @@
       const loadDiagnostics = async () => {
         const list = el("diagnosticsList"); list.replaceChildren();
         try {
-          const response = await fetch("/api/diagnostics", { cache: "no-store" });
+          const response = await sessionFetch("/api/diagnostics", { cache: "no-store" });
           renderDiagnostics(await readJson(response));
         } catch (error) {
           const row = document.createElement("div"); const term = document.createElement("dt"); const detail = document.createElement("dd");

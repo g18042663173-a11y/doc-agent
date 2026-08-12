@@ -13,8 +13,11 @@ def test_web_api_serves_frontend_from_same_origin(tmp_path: Path) -> None:
     assert response.status_code == 200
     text = response.get_data(as_text=True)
     assert "文档生成工作台" in text
-    assert 'fetch("/api/analyze"' in text
-    assert 'fetch("/api/generate"' in text
+    assert 'sessionFetch("/api/analyze"' in text
+    assert 'sessionFetch("/api/generate"' in text
+    assert 'fetch("/api/session-token"' in text
+    assert "X-Workbench-Session" in text
+    assert 'sessionFetch("/api/version"' in text
     assert "api/status" in text
     assert "job.artifact?.download_url" in text
     assert 'data.append("template_file", state.template)' in text
@@ -43,7 +46,7 @@ def test_web_api_serves_frontend_from_same_origin(tmp_path: Path) -> None:
     assert 'prefers-color-scheme: dark' in text
     assert '--accent: #0078d4;' in text
     assert '--product-mark: #c7000b;' in text
-    assert 'fetch("/api/version"' in text
+    assert 'sessionFetch("/api/version"' in text
     assert 'data-testid="cancel-job"' in text
     assert 'localStorage.setItem(storageKey' in text
     assert 'Idempotency-Key' in text

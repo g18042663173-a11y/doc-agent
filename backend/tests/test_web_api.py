@@ -941,6 +941,39 @@ def test_browser_mode_rejects_cross_origin_state_changing_requests(tmp_path: Pat
     assert desktop_rejected.status_code == 202
 
 
+def test_browser_mode_requires_session_token_adopted_from_bootstrap_endpoint(tmp_path: Path) -> None:
+    client = create_api_app(work_dir=tmp_path, session_token="browser-token-123").test_client()
+
+    bootstrap = client.get("/api/session-token")
+    assert bootstrap.status_code == 200
+    assert bootstrap.get_json()["session_token"] == "browser-token-123"
+
+    rejected = client.get("/api/version")
+    assert rejected.status_code == 401
+    assert rejected.get_json()["error"]["code"] == "E001"
+
+    accepted = client.get("/api/version", headers={"X-Workbench-Session": "browser-token-123"})
+    assert accepted.status_code == 200
+
+    # In token mode the session header is the authentication; a cross-origin
+    # page cannot read the token, so a valid-header request passes (the token
+    # itself is the CSRF defense). Tokenless mode is covered by the Origin check.
+    cross_origin = client.post(
+        "/api/generate",
+        headers={"Origin": "https://evil.example", "X-Workbench-Session": "browser-token-123"},
+        data={"type": "word", "input_file": (BytesIO(b"# X"), "x.md")},
+        content_type="multipart/form-data",
+    )
+    assert cross_origin.status_code == 202
+
+
+def test_browser_mode_no_auth_flag_leaves_api_open(tmp_path: Path) -> None:
+    client = create_api_app(work_dir=tmp_path, session_token=None).test_client()
+
+    assert client.get("/api/session-token").status_code == 404
+    assert client.get("/api/version").status_code == 200
+
+
 def test_idempotency_key_returns_original_job_without_duplicate_directory(tmp_path: Path) -> None:
     client = create_api_app(work_dir=tmp_path).test_client()
     headers = {"Idempotency-Key": "deck-request-0001"}
