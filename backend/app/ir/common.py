@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -90,8 +91,8 @@ class TableBlock(ContractModel):
     @field_validator("col_widths")
     @classmethod
     def col_widths_positive(_cls, value: list[float] | None) -> list[float] | None:
-        if value is not None and any(width <= 0 for width in value):
-            raise ValueError("col_widths must be positive")
+        if value is not None and any(not math.isfinite(width) or width <= 0 for width in value):
+            raise ValueError("col_widths must be finite and positive")
         return value
 
 

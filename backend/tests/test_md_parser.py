@@ -82,6 +82,22 @@ def test_parse_markdown_warns_for_malformed_table_rows(tmp_path: Path) -> None:
     assert any("malformed table rows" in warning for warning in ir.warnings)
 
 
+def test_parse_markdown_caps_wide_table_at_12_columns_with_warning(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    header = " | ".join(f"c{index}" for index in range(1, 14))
+    row = " | ".join(str(index) for index in range(1, 14))
+    path = tmp_path / "wide-table.md"
+    path.write_text(f"| {header} |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| {row} |\n", encoding="utf-8")
+
+    ir = parse_markdown(path)
+
+    table = next(block for block in ir.content.blocks if block.type == "table")
+    assert table.header == [f"c{index}" for index in range(1, 13)]
+    assert table.rows[0] == [str(index) for index in range(1, 13)]
+    assert any("truncated to 12 columns" in warning for warning in ir.warnings)
+
+
 def test_parse_markdown_preserves_fenced_code_block_indentation() -> None:
     from app.parsers.md_parser import parse_markdown
 

@@ -153,8 +153,8 @@ class DeckTable(ContractModel):
     @field_validator("col_widths")
     @classmethod
     def col_widths_positive(_cls, value: list[float] | None) -> list[float] | None:
-        if value is not None and any(width <= 0 for width in value):
-            raise ValueError("col_widths must be positive")
+        if value is not None and any(not math.isfinite(width) or width <= 0 for width in value):
+            raise ValueError("col_widths must be finite and positive")
         return value
 
     @model_validator(mode="after")

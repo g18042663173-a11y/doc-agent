@@ -169,7 +169,12 @@ def _parse_table(
     limiter: TextLimiter,
     start_line: int,
 ) -> tuple[dict, int, bool, int]:
-    header = _split_table_row(lines[0], limiter=limiter, loc=f"markdown table line {start_line}")
+    header = _split_table_row(
+        lines[0],
+        limiter=limiter,
+        loc=f"markdown table line {start_line}",
+        warn_truncation=True,
+    )
     rows: list[list[str]] = []
     consumed = 2
     truncated = False
@@ -191,10 +196,16 @@ def _parse_table(
     return {"type": "table", "header": header, "rows": rows}, consumed, truncated, malformed_rows
 
 
-def _split_table_row(line: str, *, limiter: TextLimiter, loc: str) -> list[str]:
+MAX_TABLE_COLUMNS = 12
+
+
+def _split_table_row(line: str, *, limiter: TextLimiter, loc: str, warn_truncation: bool = False) -> list[str]:
+    cells = line.strip().strip("|").split("|")
+    if warn_truncation and len(cells) > MAX_TABLE_COLUMNS:
+        limiter.warnings.append(f"W103: markdown table {loc} truncated to 12 columns")
     return [
         limiter.limit(cell.strip(), loc=f"{loc} cell {index}")
-        for index, cell in enumerate(line.strip().strip("|").split("|"), start=1)
+        for index, cell in enumerate(cells[:MAX_TABLE_COLUMNS], start=1)
     ]
 
 

@@ -59,6 +59,29 @@ def test_validate_word_ir_maps_table_shape_to_e004() -> None:
     assert result.errors[0].code == "E004"
 
 
+def test_validate_word_ir_rejects_non_finite_col_widths() -> None:
+    from app.ir.validation import validate_word_ir
+
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "NaN 表宽"},
+            "blocks": [
+                {
+                    "type": "table",
+                    "header": ["风险", "等级"],
+                    "rows": [["漂移", "中"]],
+                    "col_widths": [1.0, float("nan")],
+                }
+            ],
+        }
+    )
+
+    assert result.value is None
+    assert result.errors[0].code == "E004"
+
+
 def test_validate_word_ir_ignores_unknown_fields_and_warns() -> None:
     from app.ir.validation import validate_word_ir
 
@@ -766,6 +789,8 @@ def test_validate_deck_ir_maps_invalid_decision_matrix_span_to_d005() -> None:
         {"rows": [[{"items": [""]}, "高", "中"]]},
         {"col_widths": [1.5, -1.0, 2.0]},
         {"col_widths": [1.5, 2.0]},
+        {"col_widths": [1.5, float("nan"), 2.0]},
+        {"col_widths": [1.5, float("inf"), 2.0]},
         {"conclusion_col": 4},
         {"column_groups": [{"label": "越界", "start_col": 3, "span": 2}]},
         {
