@@ -93,6 +93,25 @@ def test_generator_settings_can_clear_credential_and_switch_back_to_stub(tmp_pat
     assert activated.get_json()["active"]["name"] == "stub"
 
 
+def test_desktop_payload_with_transport_and_cli_path_fields_can_save_http_config(tmp_path) -> None:
+    manager = _manager()
+    client = create_api_app(work_dir=tmp_path, generator_manager=manager).test_client()
+
+    payload = {
+        **_nga_payload(),
+        "config": {
+            **_nga_payload()["config"],
+            "transport": "http",
+            "cli_path": "nga",
+        },
+    }
+    configured = client.put("/api/settings/generator", json=payload)
+    assert configured.status_code == 200
+    assert configured.get_json()["draft"]["config"]["base_url"] == "https://nga.example.internal/v1"
+    assert "cli_path" not in configured.get_json()["draft"]["config"]
+    assert "top-secret" not in configured.get_data(as_text=True)
+
+
 def test_generator_manager_snapshots_remain_stable_after_later_activation() -> None:
     manager = _manager()
     manager.configure(generator="nga", config=NgaHttpConfig.model_validate(_nga_payload("model-a")["config"]), credential="a")

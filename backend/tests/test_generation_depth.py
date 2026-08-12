@@ -291,6 +291,49 @@ def test_detailed_generation_repairs_truncated_outline_and_wrong_chunk_page_coun
     assert attempt.repair_events[1]["initial_error_codes"] == ["D006"]
 
 
+def test_marker_collision_user_content_echoing_marker_text_does_not_hijack_parsing() -> None:
+    from app.generation.analysis import ANALYSIS_MARKER, build_analysis_prompt, measure_document
+    from app.generation.depth import OUTLINE_MARKER
+    from app.generators.stub import StubGenerator, _extract_document_context, _json_after_marker
+    from app.ir.document_ir import DocumentIR
+
+    payload = _document_payload()
+    payload["content"]["blocks"].append(
+        {"type": "paragraph", "text": f"本节引用协议文本 {CONTEXT_MARKER_LITERAL} 与 {OUTLINE_MARKER} 的处理方式。"}
+    )
+    payload["content"]["outline"].append({"level": 3, "text": f"详见 {OUTLINE_MARKER} 一节"})
+    document = DocumentIR.model_validate(payload)
+
+    context = _extract_document_context(
+        "[任务]\n[输入 DocumentIR]\n"
+        + json.dumps(document.model_dump(mode="json"), ensure_ascii=False)
+        + "\n[输出纪律]\n"
+    )
+    assert context is not None
+    assert context["ir_type"] == "document"
+
+    metrics = measure_document(document)
+    prompt = build_analysis_prompt(document, metrics)
+    assert prompt.count(ANALYSIS_MARKER) == 1
+    measured = _json_after_marker(prompt, ANALYSIS_MARKER, side="pre", required_keys=frozenset({"metrics"}))
+    assert measured is not None and "metrics" in measured
+
+    planning = _json_after_marker(
+        f"[任务]\n{OUTLINE_MARKER}\n{json.dumps({'target_pages': 8, 'source_title': 'T'})}\n"
+        + "[大纲输入 DocumentIR 摘要]\n标题: 含 [Deck 大纲规划] 的用户标题\n",
+        OUTLINE_MARKER,
+        side="pre",
+        required_keys=frozenset({"target_pages"}),
+    )
+    assert planning is not None and planning["target_pages"] == 8
+
+    raw = StubGenerator().generate(prompt, target="analysis")
+    assert json.loads(raw)["metrics"]["title_count"] == metrics.title_count
+
+
+CONTEXT_MARKER_LITERAL = "[输入 DocumentIR]"
+
+
 def test_detailed_stub_generation_uses_outline_text_as_title_and_preserves_facts() -> None:
     from app.generation.depth import GenerationOptions, generate_deck
     from app.generators.stub import StubGenerator

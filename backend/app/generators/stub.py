@@ -20,12 +20,15 @@ class StubGenerator:
         if target == "analysis":
             from app.generation.depth import OUTLINE_MARKER, stub_outline_payload
 
-            planning = _json_after_marker(prompt, OUTLINE_MARKER)
+            planning = _json_after_marker(prompt, OUTLINE_MARKER, side="pre", required_keys=frozenset({"target_pages"}))
             if planning is not None:
                 return json.dumps(stub_outline_payload(planning), ensure_ascii=False, indent=2)
-            measured = _json_after_marker(prompt, ANALYSIS_MARKER)
+            measured = _json_after_marker(prompt, ANALYSIS_MARKER, side="pre", required_keys=frozenset({"metrics"}))
             if measured is None:
-                raise ValueError("analysis prompt is missing measured parser data")
+                raise ValueError(
+                    "analysis prompt is missing measured parser data "
+                    "(no `[分析实测数据]` marker with a metrics payload found)"
+                )
             return json.dumps(stub_analysis_payload(measured), ensure_ascii=False, indent=2)
         context = _extract_document_context(prompt)
         if target == "word_ir":
@@ -33,12 +36,12 @@ class StubGenerator:
         elif target == "deck_ir":
             from app.generation.depth import CHUNK_MARKER, fit_stub_deck_pages, stub_chunk_payload
 
-            chunk = _json_after_marker(prompt, CHUNK_MARKER)
+            chunk = _json_after_marker(prompt, CHUNK_MARKER, side="post")
             if chunk is not None:
                 payload = stub_chunk_payload(chunk)
             else:
                 payload = _deck_payload(context)
-                visual_plan = _json_after_marker(prompt, VISUAL_PLAN_MARKER)
+                visual_plan = _json_after_marker(prompt, VISUAL_PLAN_MARKER, side="post")
                 _apply_visual_plan_to_deck_payload(payload, visual_plan)
                 page_match = re.search(r"必须恰好生成\s*(\d+)\s*页", prompt)
                 if page_match is not None:
@@ -48,8 +51,19 @@ class StubGenerator:
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def _json_after_marker(prompt: str, marker: str) -> dict[str, Any] | None:
-    marker_index = prompt.rfind(marker)
+def _json_after_marker(
+    prompt: str,
+    marker: str,
+    *,
+    side: Literal["pre", "post"] = "post",
+    required_keys: frozenset[str] = frozenset(),
+) -> dict[str, Any] | None:
+    # Markers injected BEFORE user-controlled content ("pre", e.g. the document
+    # context that follows the marker) must be found with `find`: the tool's
+    # occurrence is always first, so user content echoing the marker text
+    # cannot hijack the parse. Markers appended AFTER all user content ("post",
+    # e.g. chunk ranges) are unique at the tail, where `rfind` is correct.
+    marker_index = prompt.find(marker) if side == "pre" else prompt.rfind(marker)
     if marker_index < 0:
         return None
     remainder = prompt[marker_index + len(marker) :].lstrip()
@@ -57,19 +71,21 @@ def _json_after_marker(prompt: str, marker: str) -> dict[str, Any] | None:
         payload, _ = json.JSONDecoder().raw_decode(remainder)
     except json.JSONDecodeError:
         return None
-    return payload if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        return None
+    if required_keys and not required_keys.issubset(payload):
+        return None
+    return payload
 
 
 def _extract_document_context(prompt: str) -> dict[str, Any] | None:
-    marker_index = prompt.rfind(CONTEXT_MARKER)
-    if marker_index < 0:
-        return None
-    remainder = prompt[marker_index + len(CONTEXT_MARKER) :].lstrip()
-    try:
-        payload, _ = json.JSONDecoder().raw_decode(remainder)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(payload, dict) or payload.get("ir_type") != "document":
+    payload = _json_after_marker(
+        prompt,
+        CONTEXT_MARKER,
+        side="pre",
+        required_keys=frozenset({"ir_type", "source"}),
+    )
+    if payload is None or payload.get("ir_type") != "document":
         return None
     return payload
 

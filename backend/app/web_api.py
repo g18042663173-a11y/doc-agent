@@ -577,7 +577,19 @@ def _nga_config_from_payload(config_payload: dict[str, Any]) -> NgaHttpConfig | 
             "max_retries": config_payload.get("max_retries", 2),
         }
         return NgaCliConfig.model_validate(cli_fields)
-    return NgaHttpConfig.model_validate(config_payload)
+    http_fields = {
+        "config_version": config_payload.get("config_version", "1.0"),
+        "base_url": config_payload.get("base_url"),
+        "endpoint_path": config_payload.get("endpoint_path", "/v1/chat/completions"),
+        "model": config_payload.get("model"),
+        "timeout_seconds": config_payload.get("timeout_seconds", 120),
+        "max_retries": config_payload.get("max_retries", 2),
+        "verify_tls": config_payload.get("verify_tls", True),
+        "ca_bundle_path": config_payload.get("ca_bundle_path"),
+        "response_format": config_payload.get("response_format", "json_object"),
+        "allow_insecure_http": config_payload.get("allow_insecure_http", False),
+    }
+    return NgaHttpConfig.model_validate(http_fields)
 
 
 def _test_generator_settings(app: Flask, manager: GeneratorManager):
