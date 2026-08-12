@@ -652,6 +652,28 @@ def test_merged_cell_dimensions_span_grid_columns(tmp_path: Path) -> None:
     assert width == table.columns[0].width
 
 
+def test_check_pptx_does_not_exempt_body_textbox_that_reaches_footer_band(tmp_path: Path) -> None:
+    from app.lint.pptx_lint import check_pptx
+
+    path = tmp_path / "tall-body-textbox.pptx"
+    prs = _blank_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_required_footer(slide)
+    # A tall body textbox whose bottom lands in the footer band: its 6pt font
+    # must still be reported instead of being exempted as a "footer shape".
+    shape = slide.shapes.add_textbox(Inches(0.6), Inches(4.0), Inches(4.0), Inches(3.1))
+    run = shape.text_frame.paragraphs[0].add_run()
+    run.text = "正文延伸到页脚带的文本框"
+    run.font.name = "微软雅黑"
+    run.font.size = Pt(6)
+    run.font.color.rgb = _rgb("1D1D1A")
+    prs.save(path)
+
+    codes = _codes(check_pptx(path, classification="HUAWEI CONFIDENTIAL"))
+
+    assert "HW-W01" in codes
+
+
 def test_check_pptx_reports_chart_label_font_below_minimum(tmp_path: Path) -> None:
     from app.lint.pptx_lint import check_pptx
 

@@ -1387,7 +1387,11 @@ def _is_footer_area(shape, theme: dict) -> bool:
     top = _inches(shape.top)
     bottom = _inches(shape.top + shape.height)
     footer_top = theme["slide"]["footer_top_in"]
-    return abs(top - footer_top) <= 0.35 or (footer_top <= bottom <= theme["slide"]["height_in"] + 0.05)
+    if abs(top - footer_top) <= 0.35:
+        return True
+    # The shape must START inside the footer band: a tall body textbox whose
+    # bottom merely reaches the band is body content, not a footer.
+    return top >= footer_top - 0.05 and bottom <= theme["slide"]["height_in"] + 0.05
 
 
 def _has_visible_text(shape) -> bool:
