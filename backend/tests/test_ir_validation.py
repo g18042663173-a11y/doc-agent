@@ -783,6 +783,39 @@ def test_validate_deck_ir_does_not_shift_zero_based_conclusion_when_one_span_is_
     assert any(item.code == "D005" and "混用" in item.message for item in result.warnings)
 
 
+def test_validate_word_ir_returns_coded_error_for_non_string_input() -> None:
+    from app.ir.validation import validate_word_ir
+
+    for raw in (123, None, b"bytes", ["list"]):
+        result = validate_word_ir(raw)  # type: ignore[arg-type]
+
+        assert result.value is None
+        assert result.errors[0].code in {"E001", "D001"}
+        assert "收到" in result.errors[0].message
+
+
+def test_validate_word_ir_maps_list_item_level_error_to_e006_not_heading_e005() -> None:
+    from app.ir.validation import validate_word_ir
+
+    result = validate_word_ir(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "列表层级"},
+            "blocks": [
+                {"type": "heading", "level": 5, "text": "越级标题"},
+                {"type": "bullet_list", "items": [{"text": "条目", "level": 3}]},
+            ],
+        }
+    )
+
+    assert result.value is None
+    codes = [item.code for item in result.errors]
+    assert "E005" in codes
+    assert any(code == "E005" and "heading" in item.loc for code, item in zip(codes, result.errors))
+    assert any(item.code == "E006" and "items[0].level" in item.loc for item in result.errors)
+
+
 def test_validate_deck_ir_maps_invalid_decision_matrix_span_to_d005() -> None:
     from app.ir.validation import validate_deck_ir
 

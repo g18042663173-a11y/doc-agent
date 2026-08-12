@@ -111,6 +111,15 @@ DECK_SLIDE_MODELS: dict[str, Type[BaseModel]] = {
 def _parse_raw(raw: str | Mapping[str, Any], json_code: str) -> tuple[dict[str, Any] | None, list[ValidationItem]]:
     if isinstance(raw, Mapping):
         return dict(raw), []
+    if not isinstance(raw, str):
+        return None, [
+            ValidationItem(
+                code=json_code,
+                level="Error",
+                loc="",
+                message=f"IR 必须是字符串或 JSON 对象，收到 {type(raw).__name__}。",
+            )
+        ]
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -539,8 +548,11 @@ def _word_item(error: dict[str, Any]) -> ValidationItem:
         code = "E003"
     elif _is_word_table_error(loc, message):
         code = "E004"
-    elif "level" in loc:
+    elif "level" in loc and "items" not in loc:
         code = "E005"
+    elif "level" in loc:
+        # ListItem level violations must not reuse the heading-level advice (E005).
+        code = "E006"
     elif loc == "blocks" or loc.endswith(".items") or "items" in loc:
         code = "E006"
     elif "image_placeholder" in loc or "image_placeholder" in message:
