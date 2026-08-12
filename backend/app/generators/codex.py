@@ -173,6 +173,7 @@ class CodexGenerator:
                 ],
                 "response_format": {"type": "json_object"},
                 "reasoning_effort": self.reasoning_effort,
+                "max_tokens": self.max_tokens,
                 "store": False,
             }
         return {

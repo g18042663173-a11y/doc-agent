@@ -71,6 +71,32 @@ def test_codex_generator_posts_responses_request_with_json_only_system_prompt(mo
     assert "WordIR" in payload["instructions"]
 
 
+def test_codex_generator_chat_completions_payload_carries_max_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.generators import codex
+
+    requests = []
+
+    def fake_urlopen(request, *, timeout: int):
+        requests.append((request, timeout))
+        return FakeResponse({"choices": [{"message": {"content": _word_ir()}}]})
+
+    monkeypatch.setattr(codex, "urlopen", fake_urlopen)
+    generator = codex.CodexGenerator(
+        api_key="test-key",
+        model="claude-test",
+        timeout_seconds=31,
+        max_tokens=512,
+        api_mode="chat_completions",
+    )
+
+    raw = generator.generate("[完整目标 Schema]\n{}", target="word_ir")
+
+    assert raw == _word_ir()
+    payload = json.loads(requests[0][0].data.decode("utf-8"))
+    assert payload["max_tokens"] == 512
+    assert payload["response_format"] == {"type": "json_object"}
+
+
 def test_codex_generator_adds_deck_content_rules_to_system_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.generators import codex
 
