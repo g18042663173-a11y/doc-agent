@@ -1,5 +1,28 @@
 # Progress
 
+## 2026-08-12 决策批执行(#2 Origin 校验 + #29 护栏 + R-N3/R-N7/R-N8/L-N3~L-N6/IR-N3/C#/refs)
+- 按用户拍板执行:
+  - #2: 浏览器模式加 Origin 校验(非回环 Origin 的写请求 403,堵跨源 CSRF)
+  - #29/#W-N4: analyze 90s / 连接测试 60s 服务端护栏(守护线程,超时 E012 504,
+    超时工作目录留给孤儿清扫)
+  - R-N3: combo 阈值渲染到主轴刻度 + IR 约束次轴引用 D004
+  - R-N7/R-N8: pptx tcPr / docx pPr、tcPr 子元素顺序合规(ln* 先于 fill、
+    pBdr/tcBorders 先于 shd)
+  - L-N3: 合并单元格溢出估计按 gridSpan/rowSpan 真实跨度
+  - L-N5: docx 超链接 run 与文本框段落纳入字体检查
+  - L-N6: 页脚豁免收紧(形状须在页脚带内)
+  - L-N4: 无 autofit 元素的外部文件也执行溢出估计
+  - IR-N3: DeckMeta.classification 与 WORD_CLASSIFICATIONS 对齐,
+    **DeckIR 2.0→2.1 契约仪式**(migrate 1.4-2.0→2.1、TemplatePlan 2.1、
+    /api/version 2.1、schema 快照重导出、全测试 payload/断言/确定性哈希更新)
+  - C# C-N1~C-N5(轮询代际/终态刷新/try 15s 超时/NGA 保存顺序/StageLabels 补全,
+    待真机 dotnet 验证)
+  - 清理 .git/refs/codex 损坏 refs(零 sha1+超长路径),gc/commit 不再报错
+- 回归: 704 passed / 15 skipped;ruff 全绿;verify.py C0 通过
+  (parsers 94.60 / ir 94.20 / lint 94.44 / overall 89.28)
+- 剩余待办: C# 编译验证(.NET SDK)、#28 深度取消机制(cancel_event)排期、
+  browser 模式 token 流程(可选加固)
+
 ## 2026-08-12 系统化排障会话(22 项修复,分支 codex/audit-2.1.0)
 - 从审计报告按 P0/P1/P2 逐项"证据链→最小修复→回归测试→commit",每项独立提交:
   解析层 #30(stderr 不计 10MB 上限) #37(codex 畸形 choices) P-N3/#11(pptx 回退
