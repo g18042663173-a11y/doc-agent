@@ -603,6 +603,55 @@ def test_check_pptx_reports_chart_series_color_outside_accent_palette(tmp_path: 
     assert "HW-W02" in codes
 
 
+def test_check_pptx_measures_merged_cells_across_span_for_overflow(tmp_path: Path) -> None:
+    from app.lint.pptx_lint import _merged_cell_dimensions, check_pptx
+
+    def build(with_merge: bool, text: str, row_height_in: float) -> Path:
+        path = tmp_path / f"merged-{with_merge}-{len(text)}.pptx"
+        prs = _blank_presentation()
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        _add_required_footer(slide)
+        table = slide.shapes.add_table(2, 2, Inches(0.8), Inches(1.5), Inches(3.2), Inches(1.6)).table
+        table.rows[0].height = Inches(row_height_in)
+        if with_merge:
+            table.cell(0, 0).merge(table.cell(0, 1))
+        table.cell(0, 0).text = text
+        for row in table.rows:
+            for cell in row.cells:
+                cell.text_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+                for run in cell.text_frame.paragraphs[0].runs:
+                    run.font.name = "微软雅黑"
+                    run.font.size = Pt(9)
+                    run.font.color.rgb = _rgb("1D1D1A")
+        prs.save(path)
+        return path
+
+    merged = build(with_merge=True, text="横向合并表头" * 22, row_height_in=1.2)
+    merged_codes = _codes(check_pptx(merged, classification="HUAWEI CONFIDENTIAL"))
+    assert "HW-W03" not in merged_codes, merged_codes
+
+    unmerged = build(with_merge=False, text="横向合并表头" * 22, row_height_in=1.2)
+    unmerged_codes = _codes(check_pptx(unmerged, classification="HUAWEI CONFIDENTIAL"))
+    assert "HW-W03" in unmerged_codes, unmerged_codes
+
+
+def test_merged_cell_dimensions_span_grid_columns(tmp_path: Path) -> None:
+    from app.lint.pptx_lint import _merged_cell_dimensions
+
+    prs = _blank_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    table = slide.shapes.add_table(2, 3, Inches(0.8), Inches(1.5), Inches(4.8), Inches(1.2)).table
+    table.cell(0, 0).merge(table.cell(0, 1))
+
+    merged_tc = table.cell(0, 0)._tc
+    width, _height = _merged_cell_dimensions(table, 0, 0, merged_tc)
+    assert width == table.columns[0].width + table.columns[1].width
+
+    plain_tc = table.cell(1, 0)._tc
+    width, _height = _merged_cell_dimensions(table, 1, 0, plain_tc)
+    assert width == table.columns[0].width
+
+
 def test_check_pptx_reports_chart_label_font_below_minimum(tmp_path: Path) -> None:
     from app.lint.pptx_lint import check_pptx
 

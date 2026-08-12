@@ -975,12 +975,38 @@ def _content_overflow_items(
                 if cell_id in seen_cells or not cell.text.strip():
                     continue
                 seen_cells.add(cell_id)
-                width = shape.table.columns[column_index].width
-                height = shape.table.rows[row_index].height
+                width, height = _merged_cell_dimensions(shape.table, row_index, column_index, cell._tc)
                 minimum = theme["ppt_typography"]["compact_minimum_pt"]
                 if _text_frame_exceeds_minimum(cell.text_frame, width, height, theme, minimum):
                     return [_overflow_warning(slide_index, minimum)]
     return []
+
+
+def _merged_cell_dimensions(table, row_index: int, column_index: int, tc) -> tuple[int, int]:
+    """Real width/height of a possibly merged table cell.
+
+    Merged cells must be measured across their spanned grid columns/rows;
+    using only the anchor column/row under-estimates the available space and
+    produces false HW-W03 overflows for the renderer's own merged headers.
+    """
+    colspan = 1
+    rowspan = 1
+    # gridSpan/rowSpan are unqualified attributes on a:tc (not tcPr children).
+    grid_span = tc.get("gridSpan")
+    if grid_span:
+        colspan = max(1, int(grid_span))
+    row_span = tc.get("rowSpan")
+    if row_span:
+        rowspan = max(1, int(row_span))
+    width = sum(
+        table.columns[column].width
+        for column in range(column_index, min(column_index + colspan, len(table.columns)))
+    )
+    height = sum(
+        table.rows[r].height
+        for r in range(row_index, min(row_index + rowspan, len(table.rows)))
+    )
+    return width, height
 
 
 def _overflow_warning(slide_index: int, minimum: float) -> PptxLintItem:
