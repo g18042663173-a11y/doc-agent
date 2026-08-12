@@ -27,7 +27,7 @@ IR 是唯一契约。模型文本必须先剥壳和校验,非法 IR 不进入 re
 - WPF 构建入口：`scripts/package_document_workbench.py`（便携 ZIP）；
   `scripts/package_installer.py`（Inno Setup 安装程序，需先装 Inno Setup 6，
   设计见 `docs/design/INSTALLER_DESIGN.md`）。
-- 生产 PPT 引擎：DeckIR 2.0 到 `python-pptx`；`experiments/html2pptx/` 仅为隔离对照实验。
+- 生产 PPT 引擎：DeckIR 2.1 到 `python-pptx`；`experiments/html2pptx/` 仅为隔离对照实验。
 - 本仓库不包含训练或推理入口；NGA 是受约束的 IR generator adapter，不是模型训练代码。
 
 ## 环境
@@ -131,7 +131,7 @@ python scripts/generate.py samples/input/需求说明.docx --generator stub --de
 
 ## 图片、信息图与视觉规划
 
-DeckIR 2.0 支持真实图片、`image_text`、2-4 图 `image_grid`、漏斗/象限/循环/矩阵信息图、
+DeckIR 2.1 支持真实图片、`image_text`、2-4 图 `image_grid`、漏斗/象限/循环/矩阵信息图、
 scatter 和 combo。图片必须先规范化为独立 `AssetManifest 1.0`：
 
 ```powershell
@@ -149,14 +149,14 @@ DPI。生成链路同时输出 `visual_plan.json` 与 `visual_selection_audit.js
 组合图由两张对齐的原生可编辑图表实现：主轴 bar 与次轴 line 各自保留为 PowerPoint 图表
 对象。它不是单一 OOXML combo chart，但不栅格化，也不改写业务数据。
 
-模板模式使用 DeckIR 2.0，并输出独立的 `template_profile.json`、`template_plan.json`、
+模板模式使用 DeckIR 2.1，并输出独立的 `template_profile.json`、`template_plan.json`、
 `template_structure.json`、`template_replacement_audit.json` 和 `pptx_package_report.json`。
 原型不安全或容量不足时记录 W201 并在模板母版/主题下重绘；字体替代记录 W202。实现为
 纯 Python，不依赖 HTML、PptxGenJS、浏览器或外部 presentation skill。
 
 ## HTML 对照实验（非生产）
 
-生产渲染固定为 `DeckIR 2.0 -> python-pptx`。`experiments/html2pptx/` 是隔离的
+生产渲染固定为 `DeckIR 2.1 -> python-pptx`。`experiments/html2pptx/` 是隔离的
 DeckIR -> HTML -> PptxGenJS 对照实验，不接入 CLI 默认生成、API、工作台或 Windows
 离线依赖闭包，也不接收上传模板。
 

@@ -142,4 +142,4 @@ Deck 任务还会返回：
 
 停止服务使用 `.\stop_workbench.ps1`。正式入口固定绑定 `127.0.0.1` 并由 Waitress 提供服务。
 
-核心 CLI、IR、renderer 和 lint 不依赖 Web 层；模板只改变确定性渲染策略，不改变 DeckIR 2.0。
+核心 CLI、IR、renderer 和 lint 不依赖 Web 层；模板只改变确定性渲染策略，不改变 DeckIR 2.1。

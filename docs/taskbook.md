@@ -62,7 +62,7 @@
 | A2 | AICoding 输出形态:基本能稳定输出一个 json 代码块,但可能夹带解释文字,必须经“剥壳 + Schema 校验”后方可进入渲染。 |
 | A3 | 密级文案默认:DOCX 页脚为“内部公开”,PPTX 页脚为“HUAWEI CONFIDENTIAL”,均在配置中可改。 |
 | A4 | 中文字体:外网以微软雅黑为主选,HarmonyOS Sans 作为内网目标字体;不追求与母版逐像素一致,字体集中在主题配置,内网只改一处。 |
-| A5 | DeckIR v2.0 已评审冻结:本文 3.3 节和导出的 JSON Schema 为权威版;1.4-1.9 输入先在内存迁移,再按 2.0 校验,不覆盖用户原文件。 |
+| A5 | DeckIR 2.1 已评审冻结:本文 3.3 节和导出的 JSON Schema 为权威版;1.4-1.9 输入先在内存迁移,再按 2.0 校验,不覆盖用户原文件。 |
 | A6 | CLI、Flask 浏览器工作台和 WPF 原生客户端均已交付，底层必须调用相同 parse/generate/render/lint 函数。 |
 | A7 | AICoding 输入约束:单次输入按 8K–16K 字符规划(Prompt 截断上限据此设定);以“把内容贴进 Prompt”为准,不假设 AICoding 能直接读取本地文件路径。 |
 
@@ -284,7 +284,7 @@ CLI 继续作为可审计核心入口；浏览器工作台提供兼容诊断，W
 | PPT 图表 | 只取图表标题与类型,不反解数据(P2 再议)。 |
 | 嵌入图片(全格式) | 记录存在与尺寸,不搬运二进制(DOCX 图片透传列为 P2)。 |
 
-### 3.3  DeckIR v2.0(PPT 输出契约,Step 3 核心)
+### 3.3  DeckIR 2.1(PPT 输出契约,Step 3 核心)
 
 meta 字段:title(必填)、subtitle、author、date、classification(默认 HUAWEI CONFIDENTIAL)、theme(默认 hw_v1)。slides[].layout 枚举 17 种,在 1.9 基础上冻结真实图片、信息图和高级图表能力:
 
@@ -312,7 +312,7 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 
 ```
 {
-  "ir_type": "deck", "ir_version": "2.0",
+  "ir_type": "deck", "ir_version": "2.1",
   "meta": { "title": "Q3 业务汇报", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1" },
   "slides": [
     { "layout": "cover", "title": "Q3 业务汇报", "subtitle": "命令行文档工具链",
@@ -376,7 +376,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 ```
 [角色] 你是企业文档结构化助手。
-[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.2(或 DeckIR v2.0)Schema。
+[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.2(或 DeckIR 2.1)Schema。
 [输出纪律] 只输出一个裸 JSON 对象,不得使用代码围栏或附加文字;不得新增 Schema 之外的字段;
           表格不超过 <上限>;要点每页不超过 7 条。
 [目标 Schema 摘要] <内嵌字段说明或精简 JSON Schema,由 ir 包自动生成,禁止手抄>
@@ -489,9 +489,9 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 - 每次模板渲染生成 `template_profile.json`、`template_plan.json`、`template_structure.json`、`template_replacement_audit.json` 和 `pptx_package_report.json`。替换审计含资产哈希、图片槽、fit/crop/focal 和回退原因;包校验覆盖 Content Types、XML 可解析性、`.rels` 目标以及 XML 中非空 `r:id/r:embed/r:link` 的反向引用。
 - 实现使用 Python 3.12、python-pptx、Pillow 和 Pydantic v2,不依赖 HTML、PptxGenJS、浏览器渲染或外部 presentation skill。
 
-### 6.3.2  DeckIR 2.0 已冻结扩展
+### 6.3.2  DeckIR 2.1 已冻结扩展
 
-DeckIR 2.0 已通过 Schema、正反样例、迁移器和快照测试冻结 scatter、组合图、类目轴/数值轴标题、显式 number format、数据来源/口径字段、真实图片新布局和 infographic 判别联合。组合图仅在主次量纲不同且确有比较价值时使用次轴;数据大小不同本身不是启用双轴的理由。任何后续字段仍须先升版本和评审,不得通过 renderer 私有字段绕过契约。
+DeckIR 2.1 已通过 Schema、正反样例、迁移器和快照测试冻结 scatter、组合图、类目轴/数值轴标题、显式 number format、数据来源/口径字段、真实图片新布局和 infographic 判别联合。组合图仅在主次量纲不同且确有比较价值时使用次轴;数据大小不同本身不是启用双轴的理由。任何后续字段仍须先升版本和评审,不得通过 renderer 私有字段绕过契约。
 
 ### 6.5  视觉自评回路(P1 可选,把审美部分部分纳入自动循环)
 
