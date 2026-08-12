@@ -311,7 +311,9 @@ def _sheet_dimensions(sheet) -> tuple[int, int]:
         return int(sheet.max_row), int(sheet.max_column)
     try:
         min_col, min_row, max_col, max_row = range_boundaries(sheet.calculate_dimension(force=True))
-    except ValueError:
+    except (ValueError, NameError):
+        # openpyxl 3.1.5 raises NameError internally for an empty sheet that
+        # has no <dimension> element (e.g. some WPS writers); treat it as empty.
         return 0, 0
     if min_row == max_row == 1 and min_col == max_col == 1 and sheet["A1"].value is None:
         return 0, 0

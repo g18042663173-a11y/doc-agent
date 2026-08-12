@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import time
 import zipfile
@@ -47,6 +48,34 @@ def test_parse_xlsx_summarizes_sheets_formulas_and_merged_cells(tmp_path: Path) 
     assert sales.merged_count == 1
     assert sales.col_stats[1].type_guess == "number"
     assert sales.col_stats[1].non_empty_ratio > 0
+
+
+def test_parse_xlsx_tolerates_empty_sheet_without_dimension_element(tmp_path: Path) -> None:
+    from app.parsers.xlsx_parser import parse_xlsx
+
+    path = tmp_path / "no-dimension-empty.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(["a", "b"])
+    sheet.append(["1", "2"])
+    workbook.create_sheet("空表")
+    workbook.save(path)
+
+    with zipfile.ZipFile(path) as package:
+        parts = {name: package.read(name) for name in package.namelist()}
+    sheet_xml = parts["xl/worksheets/sheet2.xml"].decode("utf-8")
+    assert "<dimension" in sheet_xml
+    parts["xl/worksheets/sheet2.xml"] = re.sub(r"<dimension[^>]*/>", "", sheet_xml).encode("utf-8")
+    with zipfile.ZipFile(path, "w") as package:
+        for name, data in parts.items():
+            package.writestr(name, data)
+
+    ir = parse_xlsx(path)
+
+    assert [sheet.name for sheet in ir.content.sheets] == ["数据", "空表"]
+    assert ir.content.sheets[1].nrows == 0
+    assert ir.content.sheets[1].preview_rows == []
 
 
 def test_parse_xlsx_truncates_preview_to_20_by_15(tmp_path: Path) -> None:
