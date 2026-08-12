@@ -778,6 +778,22 @@ def test_cleanup_expired_sweeps_orphaned_analysis_dirs(tmp_path: Path) -> None:
     assert other.exists()
 
 
+def test_graphviz_diagnostics_are_cached_within_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.diagnostics as diagnostics
+
+    calls = {"find": 0, "version": 0}
+    monkeypatch.setattr(diagnostics, "_find_graphviz", lambda _root: (calls.__setitem__("find", calls["find"] + 1) or Path("dot"), "system"))
+    monkeypatch.setattr(diagnostics, "_read_graphviz_version", lambda _exe: calls.__setitem__("version", calls["version"] + 1) or "12.0")
+    monkeypatch.setattr(diagnostics, "_graphviz_cache", None)
+
+    first = diagnostics.graphviz_status()
+    second = diagnostics.graphviz_status()
+
+    assert first["version"] == "12.0"
+    assert second == first
+    assert calls["version"] == 1
+
+
 def test_idempotency_key_returns_original_job_without_duplicate_directory(tmp_path: Path) -> None:
     client = create_api_app(work_dir=tmp_path).test_client()
     headers = {"Idempotency-Key": "deck-request-0001"}

@@ -4,7 +4,12 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import time
 from typing import Any
+
+
+_GRAPHVIZ_CACHE_TTL_SECONDS = 60.0
+_graphviz_cache: tuple[float, dict[str, Any]] | None = None
 
 
 def build_runtime_diagnostics(
@@ -43,21 +48,28 @@ def build_runtime_diagnostics(
 
 
 def graphviz_status(repo_root: Path | None = None) -> dict[str, Any]:
+    global _graphviz_cache
     root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
+    now = time.monotonic()
+    if _graphviz_cache is not None and now - _graphviz_cache[0] < _GRAPHVIZ_CACHE_TTL_SECONDS:
+        return dict(_graphviz_cache[1])
     executable, source = _find_graphviz(root)
     if executable is None:
-        return {
+        result = {
             "available": False,
             "source": "missing",
             "version": None,
             "fallback": True,
         }
-    return {
-        "available": True,
-        "source": source,
-        "version": _read_graphviz_version(executable),
-        "fallback": False,
-    }
+    else:
+        result = {
+            "available": True,
+            "source": source,
+            "version": _read_graphviz_version(executable),
+            "fallback": False,
+        }
+    _graphviz_cache = (now, result)
+    return dict(result)
 
 
 def configure_graphviz_path(repo_root: Path) -> None:
