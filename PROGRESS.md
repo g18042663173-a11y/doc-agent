@@ -1,5 +1,20 @@
 # Progress
 
+## 2026-08-12 环境验证三件套完成(全部闭环)
+- **C# 编译验证**: 安装 .NET SDK 8.0.424 → Release 编译 0 警告 0 错误;
+  编译抓到 A8 从静态方法调用实例成员(CS0120)已重构为局部状态;
+  xUnit 16/16 通过(含真实启动 Python 后端的 PortableAcceptance)
+- **#28 job 级取消**: IRTextGenerator.generate 新增 cancel_event + GeneratorCanceled;
+  NGA CLI 轮询取消即杀进程树、HTTP 用守护线程包裹 urlopen 快速返回;
+  repair/depth/web_api 全链路透传(条件 kwargs 兼容旧 fake);
+  JobRunner 见 canceled 即 set 事件
+- **#2 浏览器 token 流程**: main() 默认生成 32 字节随机 token(--no-auth 可关);
+  /api/session-token 同源下发;前端 sessionFetch 包装器全 15 处调用带头;
+  Origin 校验退居二线
+- 回归: pytest 708 passed / 15 skipped;ruff 全绿;verify.py C0 通过;
+  dotnet xUnit 16/16
+- 至此审计报告全部条目处理完毕: 修复/决策/挂起项均已闭环或记录在案
+
 ## 2026-08-12 决策批执行(#2 Origin 校验 + #29 护栏 + R-N3/R-N7/R-N8/L-N3~L-N6/IR-N3/C#/refs)
 - 按用户拍板执行:
   - #2: 浏览器模式加 Origin 校验(非回环 Origin 的写请求 403,堵跨源 CSRF)
