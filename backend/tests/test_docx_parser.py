@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import re
 import zipfile
 import sys
 from pathlib import Path
@@ -133,6 +134,33 @@ def test_parse_docx_records_image_presence_and_dimensions(tmp_path: Path) -> Non
 
     assert ir.stats.images == 1
     assert any("docx image present" in warning for warning in ir.warnings)
+
+
+def test_parse_docx_tolerates_inline_shape_without_extent(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    image = tmp_path / "pixel.png"
+    image.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="))
+    path = tmp_path / "no-extent.docx"
+    doc = Document()
+    doc.add_paragraph("带损坏图片")
+    doc.add_picture(str(image))
+    doc.save(path)
+
+    with zipfile.ZipFile(path) as package:
+        parts = {name: package.read(name) for name in package.namelist()}
+    document_xml = parts["word/document.xml"].decode("utf-8")
+    assert "<wp:extent" in document_xml
+    parts["word/document.xml"] = re.sub(r"<wp:extent[^>]*/>", "", document_xml).encode("utf-8")
+    with zipfile.ZipFile(path, "w") as package:
+        for name, data in parts.items():
+            package.writestr(name, data)
+
+    ir = parse_docx(path)
+
+    assert ir.stats.images == 1
+    assert any("W103" in warning and "unreadable geometry" in warning for warning in ir.warnings)
+    assert ir.content.blocks[0].text == "带损坏图片"
 
 
 def test_parse_docx_records_unsupported_word_features_from_xml(tmp_path: Path) -> None:

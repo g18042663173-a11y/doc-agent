@@ -252,5 +252,15 @@ def _unsupported_warnings(path: Path) -> list[str]:
 def _image_warnings(document: DocxDocument) -> list[str]:
     warnings: list[str] = []
     for index, shape in enumerate(document.inline_shapes, start=1):
-        warnings.append(f"docx image present #{index} width={shape.width / 914400:.2f}in height={shape.height / 914400:.2f}in")
+        try:
+            width_in = shape.width / 914400
+            height_in = shape.height / 914400
+        except Exception as exc:
+            # A malformed inline shape (missing <wp:extent>, dangling rId) must
+            # not kill the whole document parse.
+            warnings.append(
+                f"W103: docx image present #{index} with unreadable geometry ({type(exc).__name__}); geometry skipped"
+            )
+            continue
+        warnings.append(f"docx image present #{index} width={width_in:.2f}in height={height_in:.2f}in")
     return warnings
