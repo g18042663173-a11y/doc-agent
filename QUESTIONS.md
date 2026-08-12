@@ -2,6 +2,21 @@
 
 > 分步执行清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`（Windows 验收与人工交付清单）。
 
+## 2026-08-12 发布候选测试完成(2.1.0 重建产物,待人工终审)
+
+- 已重建发布物(含全部修复与 DeckIR 2.1 契约):`dist/document-workbench-windows-x64-2.1.0.zip`
+  (sha256 `079b4a67b1c6ce47b2146a1c2a93f439f574f45f481d2647e09f2c4d02ced518`,2257 文件)
+  与 `dist/HuaweiDocumentGenerator-Setup-2.1.0.exe`(sha256 `04ef3bb769f11d2a69a30ce3a660d1643cf8f81f430eed4c56f84889c8b13ef3`)
+- 自动化测试全部通过:pytest 708/15、ruff、verify.py C0、dotnet xUnit 16/16;
+  打包应用 UI 走查(便携包与已安装 exe 各 1 次)、包内后端 API 冒烟
+  (token 流程 + word 任务 done + lint pass)、SHA256SUMS 校验、静默安装/卸载清理、
+  离线 wheelhouse --require-hashes dry-run。
+- 测试发现并修复 2 个发布级问题:① 便携包缺 samples/ir few-shot 样例导致包内
+  生成必失败(已补打包并回归测试);② packages.lock.json 与钉定 SDK 8.0.423 的
+  ILLink.Tasks 版本不同步(已用钉定 SDK 重新生成)。
+- TODO(人工终审,自动化无法替代):干净断网机离线安装验收、PowerPoint 视觉审美签字、
+  真实业务语料、真机 NGA 接入、代码签名、Windows 10/11 各 DPI 走查。
+
 ## 2026-08-12 Track A 修复后的新增人工待办
 
 - TODO: 本机无 .NET SDK,`BackendProcessHost.cs` 管道排空改动(A8,commit c24eb1c)

@@ -1,5 +1,21 @@
 # Progress
 
+## 2026-08-12 发布候选测试(L0-L5 全过 + 2 个发布级修复)
+- 重建发布物: 便携 ZIP 105.8MB / 2257 文件、安装程序 EXE 91.9MB,
+  哈希见 dist/*.sha256 与 QUESTIONS.md
+- 测试矩阵:
+  - L0 回归: pytest 708/15、ruff、verify.py C0、dotnet xUnit 16/16
+  - L1 完整性: ZIP 解压清点、runtime-manifest(今日生成)
+  - L2 打包应用: PortableAcceptanceTests 指向便携包 exe 与已安装 exe 各通过
+  - L3 包内后端: 内置 python 起 web_api → token 流程(401/200)+ word 任务
+    done + lint pass
+  - L4 安装程序: 静默安装→SHA256SUMS 校验→已安装 exe 走查→静默卸载→目录清理
+  - L5 离线安装: wheelhouse --require-hashes --dry-run 全命中
+- 测试发现并修复:
+  ① P0 便携包缺 samples/ir(builder few-shot)导致包内所有生成 E001 失败
+  ② packages.lock.json 与 SDK 8.0.423 ILLink.Tasks 版本不同步(NU1004)
+- 未完成(人工): 断网机验收/视觉签字/真实语料/真机 NGA/签名 —— QUESTIONS.md
+
 ## 2026-08-12 环境验证三件套完成(全部闭环)
 - **C# 编译验证**: 安装 .NET SDK 8.0.424 → Release 编译 0 警告 0 错误;
   编译抓到 A8 从静态方法调用实例成员(CS0120)已重构为局部状态;
