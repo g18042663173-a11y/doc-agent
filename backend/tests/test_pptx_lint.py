@@ -674,6 +674,28 @@ def test_check_pptx_does_not_exempt_body_textbox_that_reaches_footer_band(tmp_pa
     assert "HW-W01" in codes
 
 
+def test_check_pptx_estimates_overflow_for_textbox_without_autofit(tmp_path: Path) -> None:
+    from app.lint.pptx_lint import check_pptx
+
+    path = tmp_path / "no-autofit-overflow.pptx"
+    prs = _blank_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_required_footer(slide)
+    # No autofit element (auto_size is None): overflow must still be estimated.
+    shape = slide.shapes.add_textbox(Inches(0.6), Inches(1.5), Inches(2.0), Inches(0.3))
+    shape.text_frame.auto_size = None  # removes normAutofit/noAutofit entirely
+    run = shape.text_frame.paragraphs[0].add_run()
+    run.text = "没有自动缩字的长文本" * 20
+    run.font.name = "微软雅黑"
+    run.font.size = Pt(9)
+    run.font.color.rgb = _rgb("1D1D1A")
+    prs.save(path)
+
+    codes = _codes(check_pptx(path, classification="HUAWEI CONFIDENTIAL"))
+
+    assert "HW-W03" in codes
+
+
 def test_check_pptx_reports_chart_label_font_below_minimum(tmp_path: Path) -> None:
     from app.lint.pptx_lint import check_pptx
 

@@ -1026,7 +1026,11 @@ def _text_frame_exceeds_minimum(
     theme: dict,
     minimum: float,
 ) -> bool:
-    if text_frame.auto_size != MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE:
+    # External files often carry no autofit element (auto_size is None); they
+    # must still be estimated. Only shape-to-fit-text semantics opt out: there
+    # the shape grows instead of overflowing. noAutofit (NONE) means the text
+    # cannot shrink, so estimating is the conservative choice.
+    if text_frame.auto_size not in (None, MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE):
         return False
     minimum = float(minimum)
     line_spacing = float(theme["typography"]["line_spacing"])
