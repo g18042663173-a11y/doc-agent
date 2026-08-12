@@ -1000,6 +1000,19 @@ def create_api_app(
     app.config["API_RATE_LIMITER"] = RateLimiter(max_requests=rate_limit_per_minute)
     app.config["MAX_CONTENT_LENGTH"] = 260 * 1024 * 1024
 
+    @app.errorhandler(413)
+    def _request_too_large(_exc):
+        # werkzeug raises this before any view runs; Flask's default handler
+        # returns an HTML page that breaks the desktop client's JSON parsing.
+        return _error_response(
+            "E004",
+            "请求体超过允许的大小限制。",
+            status=413,
+            stage="request_validation",
+            suggestion="请拆分输入或压缩文件后重试。",
+            retryable=False,
+        )
+
     _register_session_guard(app, session_token)
     _register_service_routes(app, root, jobs, runner, manager)
     _register_generator_routes(app, manager)

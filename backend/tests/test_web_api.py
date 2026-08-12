@@ -496,6 +496,25 @@ def test_corrupt_pptx_input_fails_in_parsing_with_a_safe_diagnostic(tmp_path: Pa
     assert "not actually a pptx" not in json.dumps(failed, ensure_ascii=False)
 
 
+def test_content_length_limit_returns_json_envelope_not_html(tmp_path: Path) -> None:
+    client = create_api_app(work_dir=tmp_path).test_client()
+    client.application.config["MAX_CONTENT_LENGTH"] = 1024
+
+    response = client.post(
+        "/api/generate",
+        data={
+            "type": "word",
+            "input_file": (BytesIO(b"x" * 4096), "oversized.md"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 413
+    assert "text/html" not in response.content_type
+    assert response.get_json()["error"]["code"] == "E004"
+    assert not list(tmp_path.glob("job-*"))
+
+
 def test_input_upload_limit_is_enforced_before_a_job_is_created(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(web_api, "MAX_INPUT_UPLOAD_BYTES", 8)
     client = create_api_app(work_dir=tmp_path).test_client()
