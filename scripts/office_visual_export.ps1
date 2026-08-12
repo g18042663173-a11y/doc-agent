@@ -69,6 +69,7 @@ try {
 }
 
 $reportPath = Join-Path $outputRoot "visual_export_report.json"
-$report | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $reportPath -Encoding utf8
+# PS 5.1 的 -Encoding utf8 会写 UTF-8 BOM,导致 Python 端 json.loads(utf-8) 崩溃;显式写无 BOM UTF-8。
+[System.IO.File]::WriteAllText($reportPath, ($report | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
 Write-Output "visual export report: $reportPath"
 if (-not $report.pass) { exit 1 }

@@ -96,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     ]
     subprocess.run(command, check=False, encoding="utf-8", errors="replace")
     export_path = output_dir / "visual_export_report.json"
-    export = json.loads(export_path.read_text(encoding="utf-8")) if export_path.is_file() else {"pass": False}
+    export = json.loads(export_path.read_text(encoding="utf-8-sig")) if export_path.is_file() else {"pass": False}
     contact_sheet = None
     visual_diff = None
     if args.kind == "deck" and export.get("pass"):

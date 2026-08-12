@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 from typing import Iterable
 import zipfile
@@ -78,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
 
     include_git = not args.without_git
     include_wheelhouse = not args.without_wheelhouse
+    if include_wheelhouse:
+        _verify_wheelhouse_consistency()
     files, skipped_symlinks = _collect_package_files(
         include_git=include_git,
         include_wheelhouse=include_wheelhouse,
@@ -196,6 +199,53 @@ def _should_exclude(
     if name == ".env" or name.startswith(".env."):
         return True
     return relative_path.suffix.lower() in EXCLUDED_FILE_SUFFIXES
+
+
+def _verify_wheelhouse_consistency() -> None:
+    """Fail early when wheelhouse/ disagrees with requirements-win312.lock.
+
+    A wheel missing from wheelhouse/ (or with a stale hash) would silently break
+    the offline `--require-hashes` install on the target machine.
+    """
+    lock_path = ROOT / "requirements-win312.lock"
+    if not lock_path.is_file():
+        raise SystemExit("missing requirements-win312.lock; cannot verify wheelhouse consistency")
+    lock_entries: dict[tuple[str, str], str] = {}
+    for line in lock_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.match(r"^([A-Za-z0-9_.-]+)==([A-Za-z0-9_.-]+) --hash=sha256:([0-9a-f]{64})$", line)
+        if match is None:
+            raise SystemExit(f"unparseable lock line: {line}")
+        name, version, digest = match.groups()
+        lock_entries[(name.replace("_", "-").lower(), version)] = digest
+
+    wheels = sorted((ROOT / "wheelhouse").glob("*.whl"))
+    present: dict[tuple[str, str], Path] = {}
+    for wheel in wheels:
+        stem = wheel.stem
+        parts = stem.split("-")
+        if len(parts) < 4:
+            raise SystemExit(f"unexpected wheel filename: {wheel.name}")
+        name, version = parts[0], parts[1]
+        present[(name.replace("_", "-").lower(), version)] = wheel
+
+    problems: list[str] = []
+    for (name, version), digest in sorted(lock_entries.items()):
+        wheel = present.get((name, version))
+        if wheel is None:
+            problems.append(f"lock entry {name}=={version} has no wheel in wheelhouse/")
+            continue
+        actual = hashlib.sha256(wheel.read_bytes()).hexdigest()
+        if actual != digest:
+            problems.append(f"wheel {wheel.name} hash {actual} does not match lock {digest}")
+    for (name, version), wheel in sorted(present.items()):
+        if (name, version) not in lock_entries:
+            problems.append(f"wheel {wheel.name} is not referenced by requirements-win312.lock")
+    if problems:
+        raise SystemExit("wheelhouse is inconsistent with requirements-win312.lock:\n- " + "\n- ".join(problems))
+    print(f"wheelhouse: {len(wheels)} wheels verified against requirements-win312.lock")
 
 
 def _manifest_base(

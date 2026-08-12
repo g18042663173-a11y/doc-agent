@@ -239,7 +239,7 @@ def _run_office_visual_qa(artifact: Path, output_dir: Path) -> dict[str, Any]:
     path = output_dir / "visual_qa_report.json"
     report = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {"status": "failed"}
     export_path = output_dir / "visual_export_report.json"
-    export = json.loads(export_path.read_text(encoding="utf-8")) if export_path.is_file() else {"pass": False}
+    export = json.loads(export_path.read_text(encoding="utf-8-sig")) if export_path.is_file() else {"pass": False}
     report["office_export_pass"] = bool(export.get("pass"))
     return report
 
