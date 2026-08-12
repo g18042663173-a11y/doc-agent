@@ -1,9 +1,9 @@
 {
   "assets": [
     {
-      "bytes": 3400,
+      "bytes": 3565,
       "path": "samples/expected/appendix_b_document_ir.expected.json",
-      "sha256": "1db4b649e65899a1bcaf38c7ecf667619aa64d19f408bfb2cf30efb3c90efd5c"
+      "sha256": "8b14b2122dfd23cd330ef24aeca801d785477a39d797b38ec518258e2c5590a3"
     },
     {
       "bytes": 167,
