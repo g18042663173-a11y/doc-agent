@@ -78,6 +78,36 @@ def test_parse_xlsx_tolerates_empty_sheet_without_dimension_element(tmp_path: Pa
     assert ir.content.sheets[1].preview_rows == []
 
 
+def test_parse_xlsx_closes_workbooks_when_metadata_scan_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.parsers import xlsx_parser
+    from app.parsers.errors import ParseFailure
+
+    path = tmp_path / "t.xlsx"
+    workbook = Workbook()
+    workbook.active.append(["a"])
+    workbook.save(path)
+
+    class FakeWorkbook:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    fakes = [FakeWorkbook(), FakeWorkbook()]
+    monkeypatch.setattr(xlsx_parser, "load_workbook", lambda *_args, **_kwargs: fakes.pop(0))
+
+    def boom(*_args, **_kwargs):
+        raise KeyError("missing rels part")
+
+    monkeypatch.setattr(xlsx_parser, "_worksheet_metadata_by_sheet", boom)
+
+    with pytest.raises(ParseFailure):
+        xlsx_parser.parse_xlsx(path)
+
+    assert all(fake.closed for fake in fakes)
+
+
 def test_parse_xlsx_truncates_preview_to_20_by_15(tmp_path: Path) -> None:
     from app.parsers.xlsx_parser import parse_xlsx
 

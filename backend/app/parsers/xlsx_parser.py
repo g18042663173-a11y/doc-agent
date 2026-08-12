@@ -53,16 +53,19 @@ def _parse_xlsx_impl(path: Path) -> DocumentIR:
     started = time.monotonic()
     warnings = preflight_source_office(path)
     warnings.extend(_preflight_warnings(path))
-    value_workbook = load_workbook(path, read_only=True, data_only=True)
-    formula_workbook = load_workbook(path, read_only=True, data_only=False)
-    metadata_by_sheet = _worksheet_metadata_by_sheet(path)
-    package_warnings, image_count = _package_warnings(path)
-    warnings.extend(package_warnings)
+    value_workbook: Any | None = None
+    formula_workbook: Any | None = None
+    metadata_by_sheet: dict[str, WorksheetMetadata] = {}
     limiter = TextLimiter(warnings)
     sheets: list[dict] = []
     scanned_cells = 0
 
     try:
+        value_workbook = load_workbook(path, read_only=True, data_only=True)
+        formula_workbook = load_workbook(path, read_only=True, data_only=False)
+        metadata_by_sheet = _worksheet_metadata_by_sheet(path)
+        package_warnings, image_count = _package_warnings(path)
+        warnings.extend(package_warnings)
         sheet_names = value_workbook.sheetnames
         if len(sheet_names) > MAX_SHEETS:
             warnings.append(f"W103: xlsx sheet processing limited to first {MAX_SHEETS} of {len(sheet_names)} sheets")
@@ -158,8 +161,10 @@ def _parse_xlsx_impl(path: Path) -> DocumentIR:
                 }
             )
     finally:
-        value_workbook.close()
-        formula_workbook.close()
+        if value_workbook is not None:
+            value_workbook.close()
+        if formula_workbook is not None:
+            formula_workbook.close()
 
     return DocumentIR.model_validate(
         {
