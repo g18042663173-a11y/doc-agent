@@ -256,6 +256,18 @@ def test_codex_generator_reuses_existing_repair_loop(monkeypatch: pytest.MonkeyP
     assert "E002" in prompts[1]
 
 
+def test_codex_extract_text_response_rejects_malformed_choices_shapes_with_coded_error() -> None:
+    from app.generators.codex import CodexApiError, _extract_text_response
+
+    for malformed in (
+        {"choices": [1, 2]},
+        {"choices": [{"message": "not a dict"}]},
+        {"choices": ["text"]},
+    ):
+        with pytest.raises(CodexApiError):
+            _extract_text_response(malformed, api_mode="chat_completions")
+
+
 def test_generator_factory_keeps_stub_default_and_allows_explicit_codex(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.generators.codex import CodexGenerator
     from app.generators.interface import default_ir_generator, generator_from_name

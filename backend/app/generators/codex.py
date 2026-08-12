@@ -191,7 +191,11 @@ def _extract_text_response(payload: Any, *, api_mode: str) -> str:
         raise CodexApiError("OpenAI-compatible API returned an unexpected response shape.")
     if api_mode == "chat_completions":
         choices = payload.get("choices")
-        content = choices[0].get("message", {}).get("content") if isinstance(choices, list) and choices else None
+        content = None
+        if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+            message = choices[0].get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
         text = content.strip() if isinstance(content, str) else ""
     else:
         text = payload.get("output_text", "")
