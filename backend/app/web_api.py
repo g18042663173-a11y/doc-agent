@@ -81,6 +81,8 @@ TargetKind = Literal["word", "deck"]
 JobStatus = Literal["pending", "running", "done", "failed", "canceled"]
 TERMINAL_JOB_STATUSES = {"done", "failed", "canceled"}
 JOB_DIRECTORY_RE = re.compile(r"^job-[0-9a-f]{32}$")
+ANALYSIS_DIRECTORY_RE = re.compile(r"^analysis-[0-9a-f]{32}$")
+ANALYSIS_DIR_RETENTION_HOURS = 1
 IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 DEFAULT_JOB_TIMEOUT_SECONDS = 900.0
 DEFAULT_QUEUE_CAPACITY = 4
@@ -263,7 +265,25 @@ class JobStore:
                     self._idempotency.pop(job.idempotency_key, None)
         for job in expired:
             _remove_job_directory(self.root, job.work_dir)
+        self._sweep_orphaned_analysis_dirs(current)
         return len(expired)
+
+    def _sweep_orphaned_analysis_dirs(self, current: datetime) -> None:
+        """Remove analysis workspaces left behind by a crashed request.
+
+        The analyze handler removes its workspace in a finally block; anything
+        that survives long past the synchronous request duration is an orphan.
+        """
+        cutoff = current - timedelta(hours=ANALYSIS_DIR_RETENTION_HOURS)
+        for entry in self.root.iterdir():
+            if not entry.is_dir() or not ANALYSIS_DIRECTORY_RE.fullmatch(entry.name):
+                continue
+            try:
+                modified = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
+            except OSError:
+                continue
+            if modified < cutoff:
+                shutil.rmtree(entry, ignore_errors=True)
 
     def _load(self) -> None:
         for work_dir in sorted(self.root.iterdir()):

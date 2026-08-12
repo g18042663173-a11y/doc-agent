@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import json
+import os
 import time
 from pathlib import Path
 from threading import Event
@@ -754,6 +755,27 @@ def test_worker_survives_failure_report_write_error_and_keeps_processing_queue(
     completed = _wait_for_terminal_status(client, second.get_json()["job_id"])
     assert completed["status"] == "done"
     assert client.get("/api/health").get_json()["runner"]["worker_alive"] is True
+
+
+def test_cleanup_expired_sweeps_orphaned_analysis_dirs(tmp_path: Path) -> None:
+    from datetime import timedelta
+
+    stale = tmp_path / ("analysis-" + "a" * 32)
+    stale.mkdir()
+    (stale / "junk").write_bytes(b"")
+    old = datetime.now(timezone.utc) - timedelta(hours=2)
+    os.utime(stale, (old.timestamp(), old.timestamp()))
+    fresh = tmp_path / ("analysis-" + "b" * 32)
+    fresh.mkdir()
+    other = tmp_path / "not-an-analysis"
+    other.mkdir()
+
+    client = create_api_app(work_dir=tmp_path).test_client()
+    client.get("/api/jobs")  # triggers cleanup_expired
+
+    assert not stale.exists()
+    assert fresh.exists()
+    assert other.exists()
 
 
 def test_idempotency_key_returns_original_job_without_duplicate_directory(tmp_path: Path) -> None:
