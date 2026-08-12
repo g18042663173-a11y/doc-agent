@@ -5,6 +5,7 @@ from pathlib import Path
 import zipfile
 
 from docx import Document
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
 
@@ -52,6 +53,60 @@ def test_check_docx_reports_east_asian_font_not_in_whitelist(tmp_path: Path) -> 
     report = check_docx(path)
 
     assert any(item.code == "HW-E02" and "宋体" in item.message for item in report.items)
+
+
+def test_check_docx_reports_hyperlink_run_fonts(tmp_path: Path) -> None:
+    from app.lint.docx_lint import check_docx
+
+    path = tmp_path / "hyperlink-run.docx"
+    document = Document()
+    paragraph = document.add_paragraph()
+    hyperlink = OxmlElement("w:hyperlink")
+    run_element = OxmlElement("w:r")
+    rpr = OxmlElement("w:rPr")
+    rfonts = OxmlElement("w:rFonts")
+    rfonts.set(qn("w:ascii"), "Comic Sans MS")
+    rpr.append(rfonts)
+    run_element.append(rpr)
+    text = OxmlElement("w:t")
+    text.text = "超链接文本"
+    run_element.append(text)
+    hyperlink.append(run_element)
+    paragraph._p.append(hyperlink)
+    document.save(path)
+
+    report = check_docx(path)
+
+    assert any("Comic Sans MS" in item.message for item in report.items)
+
+
+def test_check_docx_reports_textbox_paragraph_fonts(tmp_path: Path) -> None:
+    from app.lint.docx_lint import check_docx
+
+    path = tmp_path / "textbox-run.docx"
+    document = Document()
+    normal = document.add_paragraph("正常正文").runs[0]
+    normal.font.name = "微软雅黑"
+    normal.font.size = Pt(9)
+    container = OxmlElement("w:txbxContent")
+    box_paragraph = OxmlElement("w:p")
+    box_run = OxmlElement("w:r")
+    box_rpr = OxmlElement("w:rPr")
+    box_rfonts = OxmlElement("w:rFonts")
+    box_rfonts.set(qn("w:ascii"), "Impact")
+    box_rpr.append(box_rfonts)
+    box_run.append(box_rpr)
+    box_text = OxmlElement("w:t")
+    box_text.text = "文本框内容"
+    box_run.append(box_text)
+    box_paragraph.append(box_run)
+    container.append(box_paragraph)
+    document.element.body.append(container)
+    document.save(path)
+
+    report = check_docx(path)
+
+    assert any("Impact" in item.message for item in report.items)
 
 
 def test_check_docx_reports_missing_classification_footer(tmp_path: Path) -> None:

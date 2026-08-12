@@ -8,6 +8,8 @@ from typing import Any
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
+from docx.text.run import Run
 
 from app.ir.word_ir import WORD_CLASSIFICATIONS
 from app.rendering.theme import load_theme
@@ -134,7 +136,7 @@ def _font_items(document: Document, theme: dict) -> list[DocxLintItem]:
     for paragraph in _iter_all_paragraphs(document):
         if not paragraph.text.strip():
             continue
-        visible_runs = [run for run in paragraph.runs if run.text.strip()]
+        visible_runs = [run for run in _iter_paragraph_runs(paragraph) if run.text.strip()]
         for run in visible_runs or [None]:
             font_names = _effective_font_names(paragraph, run)
             if not font_names:
@@ -272,6 +274,19 @@ def _iter_all_paragraphs(document: Document):
         for row in table.rows:
             for cell in row.cells:
                 yield from cell.paragraphs
+    # Paragraphs inside drawing text boxes (w:txbxContent) are not exposed by
+    # document.paragraphs; lint them too so boxed content cannot bypass rules.
+    for container in document.element.body.iter(qn("w:txbxContent")):
+        for element in container.findall(qn("w:p")):
+            yield Paragraph(element, document)
+
+
+def _iter_paragraph_runs(paragraph):
+    """Direct runs plus runs nested in w:hyperlink (python-docx omits them)."""
+    yield from paragraph.runs
+    for hyperlink in paragraph._p.findall(qn("w:hyperlink")):
+        for element in hyperlink.findall(qn("w:r")):
+            yield Run(element, paragraph)
 
 
 def _effective_font_names(paragraph, run) -> list[str]:
