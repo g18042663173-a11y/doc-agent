@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import posixpath
 from pathlib import Path, PurePosixPath
+import re
 import zipfile
 from xml.etree import ElementTree
 
@@ -51,7 +52,9 @@ def validate_template_package(path: Path) -> dict:
             total_size = sum(info.file_size for info in infos)
             if total_size > MAX_TEMPLATE_UNCOMPRESSED_BYTES:
                 raise TemplateInputError("E001", "template_file", "模板解包体积超过 500 MB 资源上限。")
-            slide_count = sum(name.startswith("ppt/slides/slide") and name.endswith(".xml") for name in names)
+            # Only real slide parts count: a name like ppt/slides/slideLayout1.xml
+            # (non-standard writers) must not inflate the slide total.
+            slide_count = sum(bool(re.fullmatch(r"ppt/slides/slide\d+\.xml", name)) for name in names)
             if slide_count < 1 or slide_count > MAX_TEMPLATE_SLIDES:
                 raise TemplateInputError("E001", "template_file", "模板页数必须在 1-200 页之间。")
             external = _external_relationships(package)
