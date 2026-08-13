@@ -547,7 +547,10 @@ class BlockingGenerator:
 
     def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
         self.started.set()
-        self.release.wait(timeout=5)
+        # Generous wait: a short timeout would let workers slip past the
+        # release gate under heavy load, changing the queue state the tests
+        # assert on.
+        self.release.wait(timeout=60)
         return StubGenerator().generate(prompt, target=target, cancel_event=cancel_event)
 
 
@@ -1055,9 +1058,9 @@ def test_queue_rejects_request_beyond_active_plus_waiting_capacity(tmp_path: Pat
     ).test_client()
 
     first = _submit_word_job(client, "first")
-    assert generator.started.wait(timeout=2)
+    assert generator.started.wait(timeout=10)
     second = _submit_word_job(client, "second")
-    assert generator.started.wait(timeout=2)
+    assert generator.started.wait(timeout=10)
     third = _submit_word_job(client, "third")
     fourth = _submit_word_job(client, "fourth")
 
@@ -1078,7 +1081,7 @@ def test_running_job_can_be_canceled_and_late_work_is_discarded(tmp_path: Path) 
     generator = BlockingGenerator()
     client = create_api_app(work_dir=tmp_path, generator=generator).test_client()
     created = _submit_word_job(client, "cancel")
-    assert generator.started.wait(timeout=2)
+    assert generator.started.wait(timeout=10)
 
     canceled = client.post(f"/api/jobs/{created.get_json()['job_id']}/cancel")
 
@@ -1673,7 +1676,7 @@ def test_canceled_job_does_not_retain_original_input(tmp_path: Path) -> None:
         content_type="multipart/form-data",
     )
     job_id = created.get_json()["job_id"]
-    assert generator.started.wait(timeout=2)
+    assert generator.started.wait(timeout=10)
     client.post(f"/api/jobs/{job_id}/cancel")
     terminal = _wait_for_terminal_status(client, job_id)
     assert terminal["status"] == "canceled"
