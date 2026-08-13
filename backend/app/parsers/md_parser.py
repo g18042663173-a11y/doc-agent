@@ -73,6 +73,13 @@ def parse_markdown(path: Path) -> DocumentIR:
             flush_paragraph()
             index += 1
             continue
+        if TABLE_SEPARATOR_RE.match(line) is not None:
+            # A bare separator line (e.g. the second "|---|---|" after a table,
+            # or a stray one) has no standalone meaning; skip it instead of
+            # leaking "|---|---|" into a paragraph.
+            flush_paragraph()
+            index += 1
+            continue
 
         heading = HEADING_RE.match(line)
         if heading:

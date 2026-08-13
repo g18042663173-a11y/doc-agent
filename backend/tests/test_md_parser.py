@@ -234,3 +234,16 @@ def test_parse_markdown_skips_all_empty_list_without_emitting_block(tmp_path: Pa
 
     result = parse_markdown(path)
     assert all(block.type != "bullet_list" for block in result.content.blocks)
+
+
+def test_parse_markdown_skips_bare_table_separator_line_after_table(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "second-separator.md"
+    path.write_text("| A | B |\n|---|---|\n| 1 | 2 |\n|---|---|\n\ntext\n", encoding="utf-8")
+
+    result = parse_markdown(path)
+
+    assert [block.type for block in result.content.blocks] == ["table", "paragraph"]
+    assert result.content.blocks[0].rows == [["1", "2"]]
+    assert result.content.blocks[1].text == "text"
