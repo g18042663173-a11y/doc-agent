@@ -1069,9 +1069,9 @@ def test_queue_rejects_request_beyond_active_plus_waiting_capacity(tmp_path: Pat
     assert fourth.status_code == 429
     assert fourth.get_json()["error"]["code"] == "E008"
     generator.release.set()
-    assert _wait_for_terminal_status(client, first.get_json()["job_id"])["status"] == "done"
-    assert _wait_for_terminal_status(client, second.get_json()["job_id"])["status"] == "done"
-    assert _wait_for_terminal_status(client, third.get_json()["job_id"])["status"] == "done"
+    for tag, job in (("first", first), ("second", second), ("third", third)):
+        terminal = _wait_for_terminal_status(client, job.get_json()["job_id"])
+        assert terminal["status"] == "done", f"{tag} job: {terminal}"
 
 
 def test_running_job_can_be_canceled_and_late_work_is_discarded(tmp_path: Path) -> None:
