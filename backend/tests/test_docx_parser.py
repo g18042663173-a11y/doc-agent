@@ -59,6 +59,24 @@ def test_parse_docx_preserves_monospace_code_paragraph_indentation(tmp_path: Pat
     assert ir.content.blocks[0].code == "if (ready) {\n    send();\n}"
 
 
+def test_parse_docx_keeps_monospace_font_heading_as_heading(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "monospace-heading.docx"
+    doc = Document()
+    heading = doc.add_heading("Section 1", level=1)
+    for run in heading.runs:
+        run.font.name = "Courier New"
+    doc.add_paragraph("normal body text")
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert [block.type for block in ir.content.blocks] == ["heading", "paragraph"]
+    assert ir.content.blocks[0].text == "Section 1"
+    assert ir.stats.headings == 1
+
+
 def test_parse_docx_truncates_table_preview_to_20_rows(tmp_path: Path) -> None:
     from app.parsers.docx_parser import parse_docx
 
@@ -135,6 +153,27 @@ def test_parse_docx_clamps_negative_outline_level_to_heading_1(tmp_path: Path) -
 
     assert ir.content.blocks[0].type == "heading"
     assert ir.content.blocks[0].level == 1
+
+
+def test_parse_docx_does_not_treat_body_text_outline_level_9_as_heading(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "outline-9.docx"
+    doc = Document()
+    doc.add_heading("真实标题", level=1)
+    paragraph = doc.add_paragraph("Body Text 大纲级")
+    ppr = paragraph._p.get_or_add_pPr()
+    outline = OxmlElement("w:outlineLvl")
+    outline.set(qn("w:val"), "9")
+    ppr.append(outline)
+    doc.save(path)
+
+    ir = parse_docx(path)
+
+    assert ir.stats.headings == 1
+    assert ir.content.blocks[0].type == "heading"
+    assert ir.content.blocks[1].type == "paragraph"
+    assert [item.text for item in ir.content.outline] == ["真实标题"]
 
 
 def test_parse_docx_records_image_presence_and_dimensions(tmp_path: Path) -> None:
@@ -261,3 +300,55 @@ def test_parse_docx_truncates_wide_table_to_contract_limit(tmp_path: Path) -> No
     assert len(ir.content.blocks[0].header) == 12
     assert len(ir.content.blocks[0].rows[0]) == 12
     assert any("table 1 preview truncated to 12 columns" in warning for warning in ir.warnings)
+
+
+def test_parse_docx_pads_grid_before_rows_to_rectangle(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "grid-before.docx"
+    doc = Document()
+    table = doc.add_table(rows=2, cols=3)
+    table.cell(0, 0).text = "h1"
+    table.cell(0, 1).text = "h2"
+    table.cell(0, 2).text = "h3"
+    # Row 1 drops one physical <w:tc> and declares w:gridBefore=1 instead.
+    tr = table.rows[1]._tr
+    tr.remove(tr.findall(qn("w:tc"))[0])
+    tr_pr = tr.get_or_add_trPr()
+    grid_before = OxmlElement("w:gridBefore")
+    grid_before.set(qn("w:val"), "1")
+    tr_pr.append(grid_before)
+    doc.save(path)
+
+    ir = parse_docx(path)
+    table_block = next(block for block in ir.content.blocks if block.type == "table")
+    assert table_block.header == ["h1", "h2", "h3"]
+    assert len(table_block.rows) == 1
+    assert len(table_block.rows[0]) == 3
+
+
+def test_parse_docx_strips_relationships_pointing_at_missing_parts(tmp_path: Path) -> None:
+    from app.parsers.docx_parser import parse_docx
+
+    path = tmp_path / "dangling-rel.docx"
+    doc = Document()
+    doc.add_paragraph("正文保留")
+    doc.save(path)
+    with zipfile.ZipFile(path) as package:
+        rels = package.read("word/_rels/document.xml.rels").decode("utf-8")
+    dangling = (
+        '<Relationship Id="rIdImg99" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+        'Target="media/img99.png"/>'
+    )
+    rels = rels.replace("</Relationships>", f"{dangling}</Relationships>")
+    broken = tmp_path / "broken.docx"
+    with zipfile.ZipFile(path) as source, zipfile.ZipFile(broken, "w", zipfile.ZIP_DEFLATED) as target:
+        for name in source.namelist():
+            payload = rels if name == "word/_rels/document.xml.rels" else source.read(name)
+            target.writestr(name, payload)
+
+    ir = parse_docx(broken)
+
+    assert any(block.type == "paragraph" and block.text == "正文保留" for block in ir.content.blocks)
+    assert any("relationship" in warning and "missing parts" in warning for warning in ir.warnings)

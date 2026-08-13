@@ -610,3 +610,35 @@ class _FakeHardDeadlineContext:
         assert args
         assert daemon is True
         return self.process
+
+
+def test_parse_xlsx_survives_inf_nan_numeric_literals(tmp_path: Path) -> None:
+    from app.parsers.xlsx_parser import parse_xlsx
+
+    path = tmp_path / "inf.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(["name", "value"])
+    sheet.append(["a", "v2"])
+    sheet.append(["b", "keep"])
+    workbook.save(path)
+
+    with zipfile.ZipFile(path) as package:
+        xml = package.read("xl/worksheets/sheet1.xml").decode("utf-8")
+    # A cell holding the XSD double literal INF: openpyxl's _cast_number calls
+    # int("INF") and raises ValueError, which used to fail the whole file.
+    xml = xml.replace('<c r="B2" t="inlineStr"><is><t>v2</t></is></c>', '<c r="B2"><v>INF</v></c>')
+    broken = tmp_path / "broken.xlsx"
+    with zipfile.ZipFile(path) as source, zipfile.ZipFile(broken, "w", zipfile.ZIP_DEFLATED) as target:
+        for name in source.namelist():
+            payload = xml if name == "xl/worksheets/sheet1.xml" else source.read(name)
+            target.writestr(name, payload)
+
+    ir = parse_xlsx(broken)
+
+    assert ir.source.format == "xlsx"
+    # The INF cell is preserved as text and every row after it still parses.
+    sheet = ir.content.sheets[0]
+    assert sheet.preview_rows == [["name", "value"], ["a", "INF"], ["b", "keep"]]
+    assert any("INF/NaN" in warning and "preserved as text" in warning for warning in ir.warnings)

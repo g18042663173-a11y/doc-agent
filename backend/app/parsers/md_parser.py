@@ -82,6 +82,13 @@ def parse_markdown(path: Path) -> DocumentIR:
                 heading.group(2).strip(),
                 loc=f"markdown heading line {index + 1}",
             )
+            if not text_value:
+                # Whitespace-only heading ("#   " or "#  " pasted from
+                # Word) carries no content. Drop the line instead of emitting a
+                # heading that violates the IR text min_length and fails the
+                # whole file with E001.
+                index += 1
+                continue
             if level > 4:
                 warnings.append(f"heading level {level} capped to 4: {text_value}")
                 level = 4
@@ -115,7 +122,8 @@ def parse_markdown(path: Path) -> DocumentIR:
                 limiter=limiter,
                 start_line=index + 1,
             )
-            blocks.append(list_block)
+            if list_block["items"]:
+                blocks.append(list_block)
             index += consumed
             continue
 
@@ -155,14 +163,61 @@ def _is_table_start(lines: list[str], index: int) -> bool:
 def _read_markdown_text(path: Path) -> tuple[str, str | None]:
     data = path.read_bytes()
     try:
-        return data.decode("utf-8-sig"), None
+        utf8_text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
-        if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
-            return data.decode("utf-16"), "markdown decoded as UTF-16"
-        try:
-            return data.decode("gb18030"), "markdown decoded using gb18030 fallback"
-        except UnicodeDecodeError as exc:
-            raise encoding_failure(path) from exc
+        utf8_text = None
+    if utf8_text is not None and "\x00" not in utf8_text:
+        return utf8_text, None
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return data.decode("utf-16"), "markdown decoded as UTF-16"
+    no_bom = _decode_utf16_without_bom(data)
+    if no_bom is not None:
+        return no_bom, "markdown decoded as UTF-16 (no BOM)"
+    if utf8_text is not None:
+        # UTF-8 "decoded" but produced embedded NULs (a UTF-16 no-BOM file
+        # whose bytes are all valid UTF-8) and the UTF-16 pattern check did not
+        # trigger; keep the bytes rather than degrading to gb18030.
+        return utf8_text, "markdown decoded as UTF-8 with embedded NULs"
+    try:
+        return data.decode("gb18030"), "markdown decoded using gb18030 fallback"
+    except UnicodeDecodeError as exc:
+        raise encoding_failure(path) from exc
+
+
+def _decode_utf16_without_bom(data: bytes) -> str | None:
+    """Decode UTF-16 text that carries no BOM.
+
+    UTF-16LE stores ASCII as ``<char>\\x00`` and UTF-16BE as ``\\x00<char>``,
+    so the raw bytes show NULs on a regular interval while the decoded text has
+    none. Without this, a UTF-16 no-BOM file is silently mis-decoded as UTF-8
+    with embedded NULs or as gb18030 garbage. Only reached after a UTF-8 decode
+    failure, so a genuine UTF-8 file can never trigger it.
+    """
+    window = data[:1024]
+    if len(window) < 4:
+        return None
+    sample = min(len(window), 512)
+    even_nul = sum(1 for index in range(0, sample, 2) if window[index] == 0)
+    odd_nul = sum(1 for index in range(1, sample, 2) if window[index] == 0)
+    pairs = sample // 2
+    if pairs == 0:
+        return None
+    preferred = None
+    if odd_nul > even_nul and odd_nul >= pairs * 0.4:
+        preferred = "utf-16-le"
+    elif even_nul > odd_nul and even_nul >= pairs * 0.4:
+        preferred = "utf-16-be"
+    if preferred is None:
+        return None
+    try:
+        decoded = data.decode(preferred)
+    except UnicodeDecodeError:
+        return None
+    # A real UTF-16 text has no NUL characters in its content; a non-UTF-16
+    # file that happened to pass the byte pattern check is rejected here.
+    if "\x00" in decoded:
+        return None
+    return decoded
 
 
 def _parse_table(
@@ -239,6 +294,12 @@ def _parse_list(
             match.group(2).strip(),
             loc=f"markdown list item line {start_line + consumed}",
         )
+        if not text:
+            # Whitespace-only item ("-  ", "1.  " or "-  ") carries no
+            # content. Drop the item instead of failing the whole file with a
+            # ListItem.text min_length error.
+            consumed += 1
+            continue
         items.append({"text": text, "level": level})
         consumed += 1
     block_type = "numbered_list" if ordered else "bullet_list"

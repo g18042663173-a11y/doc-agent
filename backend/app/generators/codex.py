@@ -12,10 +12,14 @@ from urllib.request import Request, urlopen
 from app.generation.layout_policy import LAYOUT_SELECTION_RULES
 
 GeneratorTarget = Literal["word_ir", "deck_ir", "analysis"]
-API_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_MODEL = "gpt-5.6-terra"
+# Defaults target the opencode-go gateway (https://opencode.ai/zen/go/v1,
+# wire_api "responses", requires_openai_auth). Mapping from the canonical
+# opencode config: model -> "DeepSeek V4 Flash", model_reasoning_effort ->
+# "high", disable_response_storage -> payload "store": False below.
+API_BASE_URL = "https://opencode.ai/zen/go/v1"
+DEFAULT_MODEL = "DeepSeek V4 Flash"
 DEFAULT_MAX_TOKENS = 4096
-DEFAULT_REASONING_EFFORT = "xhigh"
+DEFAULT_REASONING_EFFORT = "high"
 DEFAULT_TIMEOUT_SECONDS = 300
 API_MODES = {"responses", "chat_completions"}
 TRANSPORTS = {"http", "cli"}

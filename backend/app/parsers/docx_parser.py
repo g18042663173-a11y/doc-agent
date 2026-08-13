@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import posixpath
 import re
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Iterator
@@ -29,7 +32,13 @@ MONOSPACE_FONT_NAMES = {"consolas", "courier new", "courier", "menlo", "monaco"}
 @parser_error_boundary
 def parse_docx(path: Path) -> DocumentIR:
     warnings = preflight_source_office(path)
-    document = Document(str(path))
+    parse_path, rels_warnings = _sanitize_dangling_rels(path)
+    warnings.extend(rels_warnings)
+    try:
+        document = Document(str(parse_path))
+    finally:
+        if parse_path != path:
+            parse_path.unlink(missing_ok=True)
     numbering = _numbering_num_fmt(path)
     blocks: list[dict] = []
     outline: list[dict] = []
@@ -47,23 +56,26 @@ def parse_docx(path: Path) -> DocumentIR:
 
     for item_index, item in enumerate(_iter_block_items(document), start=1):
         if isinstance(item, Paragraph):
-            if _is_code_paragraph(item):
-                flush_list()
-                code = item.text
-                if code.strip():
-                    blocks.append({"type": "code_block", "code": code})
-                continue
             text = limiter.limit(item.text.strip(), loc=f"docx body paragraph {item_index}")
-            if not text:
-                continue
             heading_level = _heading_level(item)
-            if heading_level is not None:
+            # Heading semantics win over code-font detection: a heading styled
+            # paragraph that happens to carry a monospace run must stay a
+            # heading, or the whole outline/TOC is silently lost.
+            if heading_level is not None and text:
                 flush_list()
                 if heading_level > 4:
                     warnings.append(f"heading level {heading_level} capped to 4: {text}")
                     heading_level = 4
                 blocks.append({"type": "heading", "level": heading_level, "text": text})
                 outline.append({"level": heading_level, "text": text})
+                continue
+            if _is_code_paragraph(item):
+                flush_list()
+                code = item.text
+                if code.strip():
+                    blocks.append({"type": "code_block", "code": code})
+                continue
+            if not text:
                 continue
 
             list_kind = _list_kind(item, numbering)
@@ -138,9 +150,14 @@ def _heading_level(paragraph: Paragraph) -> int | None:
     try:
         # Some writers emit out-of-spec negative outline levels (e.g. -1);
         # clamp to the valid heading range instead of crashing the parse.
-        return max(1, int(value) + 1)
+        level = int(value) + 1
     except ValueError:
         return None
+    if level > 9:
+        # OOXML outlineLvl 9 means "Body Text", not a heading; anything beyond
+        # the 0-8 heading range must not enter the outline.
+        return None
+    return max(1, level)
 
 
 def _is_code_paragraph(paragraph: Paragraph) -> bool:
@@ -242,6 +259,13 @@ def _parse_table(
         or f"Column {index + 1}"
         for index, cell in enumerate(table.rows[0].cells[:column_count])
     ]
+    # Rows may legally declare fewer <w:tc> than the grid (w:gridBefore /
+    # w:gridAfter span the missing columns, e.g. a row merged into an adjacent
+    # one). python-docx's row.cells exposes only the physical cells, so short
+    # rows must be padded to a rectangle or the DocumentIR validator rejects
+    # the whole file with E001.
+    while len(header) < column_count:
+        header.append(f"Column {len(header) + 1}")
     rows: list[list[str]] = []
     truncated = False
     for row_index, row in enumerate(table.rows[1:], start=1):
@@ -253,6 +277,7 @@ def _parse_table(
             )
             for column_index, cell in enumerate(row.cells[:column_count])
         ]
+        values.extend([""] * (column_count - len(values)))
         if len(rows) < 20:
             rows.append(values)
         else:
@@ -311,6 +336,76 @@ def _unsupported_warnings(path: Path) -> list[str]:
                 f"{len(embedding_parts)} at parts {', '.join(embedding_parts)}; binary skipped, total_bytes={total_bytes}"
             )
     return warnings
+
+
+def _sanitize_dangling_rels(path: Path) -> tuple[Path, list[str]]:
+    """Return (path to parse, warnings), stripping relationship targets that
+    point at parts missing from the archive.
+
+    python-docx eagerly resolves every relationship target when the package is
+    loaded, so a rel that references a stripped part (e.g. a removed
+    ``word/media/img.png``) raises KeyError and fails the whole file with E001
+    before ``_image_warnings`` can report it. When dangling rels exist, copy
+    the package to a temp file with those relationships removed so the
+    remaining text still parses.
+    """
+    with zipfile.ZipFile(path) as package:
+        names = set(package.namelist())
+        rewrites: dict[str, bytes] = {}
+        removed: list[str] = []
+        for rels_name in sorted(name for name in names if name.endswith(".rels")):
+            root = ElementTree.fromstring(package.read(rels_name))
+            source_part = _relationship_source_part(rels_name)
+            changed = False
+            for relationship in list(root):
+                if relationship.attrib.get("TargetMode") == "External":
+                    continue
+                target = _relationship_target_path(source_part, relationship.attrib.get("Target", ""))
+                if target in names:
+                    continue
+                removed.append(f"{rels_name}:{relationship.attrib.get('Id', '?')} -> {target}")
+                root.remove(relationship)
+                changed = True
+            if changed:
+                rewrites[rels_name] = ElementTree.tostring(
+                    root, encoding="utf-8", xml_declaration=True
+                )
+        if not removed:
+            return path, []
+    fd, temp_name = tempfile.mkstemp(suffix=".docx")
+    os.close(fd)
+    temp_path = Path(temp_name)
+    try:
+        with zipfile.ZipFile(path) as source, zipfile.ZipFile(
+            temp_path, "w", zipfile.ZIP_DEFLATED
+        ) as target:
+            for info in source.infolist():
+                target.writestr(info, rewrites.get(info.filename, source.read(info.filename)))
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+    warnings = [
+        f"W103: docx contains {len(removed)} relationship(s) pointing at missing parts; "
+        "stripped from preview"
+    ]
+    return temp_path, warnings
+
+
+def _relationship_source_part(rels_name: str) -> str:
+    """Resolve a ``*.rels`` file back to the part that owns it."""
+    if rels_name == "_rels/.rels":
+        return ""
+    folder, base = rels_name.split("/_rels/", 1)
+    return posixpath.join(folder, base.removesuffix(".rels"))
+
+
+def _relationship_target_path(source_part: str, target: str) -> str:
+    """Resolve a relationship Target (relative to its source part) to a package path."""
+    normalized = target.replace("\\", "/")
+    if normalized.startswith("/"):
+        return posixpath.normpath(normalized.lstrip("/"))
+    folder = posixpath.dirname(source_part)
+    return posixpath.normpath(posixpath.join(folder, normalized))
 
 
 def _image_warnings(document: DocxDocument) -> list[str]:

@@ -2,7 +2,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.ir.deck_ir import DECK_IR_VERSION
 from app.web_api import create_api_app
+
+
+def test_frontend_version_gate_matches_backend_deck_ir_contract(tmp_path: Path) -> None:
+    """The browser frontend must require the same DeckIR version the backend reports."""
+    client = create_api_app(work_dir=tmp_path).test_client()
+
+    text = client.get("/static/index.html").get_data(as_text=True)
+    assert f'version.deck_ir_version !== "{DECK_IR_VERSION}"' in text, (
+        "frontend version gate drifted from backend DeckIR contract"
+    )
+
+    version = client.get("/api/version").get_json()
+    assert version["deck_ir_version"] == DECK_IR_VERSION
 
 
 def test_web_api_serves_frontend_from_same_origin(tmp_path: Path) -> None:

@@ -11,6 +11,11 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from app.ir.common import ContractModel, ListItem, non_empty
 from app.ir.word_ir import WORD_CLASSIFICATIONS
 
+# Single source for the DeckIR contract version, shared by the pydantic model
+# below and the web API / diagnostics version endpoints. Bump it together with
+# the DeckIR.ir_version literal in every contract ceremony.
+DECK_IR_VERSION = "2.2"
+
 
 class DeckMeta(ContractModel):
     title: str = Field(min_length=1)
@@ -143,7 +148,7 @@ def _table_cell_has_content(value: DeckTableCellValue) -> bool:
 
 class DeckTable(ContractModel):
     header: list[str] = Field(min_length=1, max_length=8)
-    rows: list[list[DeckTableCellValue]] = Field(default_factory=list, max_length=12)
+    rows: list[list[DeckTableCellValue]] = Field(default_factory=list, min_length=1, max_length=12)
     col_widths: list[float] | None = Field(
         default=None,
         description="各列的正数相对宽度权重；渲染时归一化到版心可用宽度，不是英寸或其它绝对单位。",
@@ -220,6 +225,16 @@ class DeckTable(ContractModel):
             if used & span_cells:
                 raise ValueError("cell_spans must not overlap")
             used.update(span_cells)
+            if span.area == "body":
+                # A row-group label is rendered as an extra row inserted before
+                # its start_row. A body span whose row range strictly crosses a
+                # group start row would have to merge through that already
+                # merged label row (the renderer raises on a merged cell).
+                if any(
+                    span.row < group.start_row < span.row + span.rowspan
+                    for group in self.row_groups
+                ):
+                    raise ValueError("body cell_spans must not span a row_groups label row")
 
     def _validate_covered_cell_content(self) -> None:
         for span in self.cell_spans:
@@ -1025,11 +1040,11 @@ DeckSlide = Annotated[
 ]
 
 
-def migrate_deck_payload(value: Any, *, target_version: str = "2.1") -> tuple[Any, str | None]:
+def migrate_deck_payload(value: Any, *, target_version: str = "2.2") -> tuple[Any, str | None]:
     if (
         not isinstance(value, dict)
-        or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0"}
-        or target_version != "2.1"
+        or value.get("ir_version") not in {"1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0", "2.1"}
+        or target_version != "2.2"
     ):
         return value, None
     source_version = value["ir_version"]
@@ -1053,7 +1068,7 @@ def migrate_deck_payload(value: Any, *, target_version: str = "2.1") -> tuple[An
 
 class DeckIR(ContractModel):
     ir_type: Literal["deck"]
-    ir_version: Literal["2.1"]
+    ir_version: Literal["2.2"]
     meta: DeckMeta
     slides: list[DeckSlide] = Field(min_length=1, max_length=30)
 

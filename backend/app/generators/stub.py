@@ -118,7 +118,7 @@ def _word_payload(context: dict[str, Any] | None) -> dict[str, Any]:
         ]
     return {
         "ir_type": "word",
-        "ir_version": "1.2",
+        "ir_version": "1.3",
         "meta": {"title": title, "classification": "内部公开"},
         "blocks": blocks,
     }
@@ -312,7 +312,7 @@ def _deck_payload(context: dict[str, Any] | None) -> dict[str, Any]:
     )
     return {
         "ir_type": "deck",
-        "ir_version": "2.1",
+        "ir_version": "2.2",
         "meta": {"title": title, "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
         "slides": slides,
     }

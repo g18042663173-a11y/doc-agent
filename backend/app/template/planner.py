@@ -68,6 +68,27 @@ def build_template_plan(deck: DeckIR, profile: TemplateProfile) -> TemplatePlan:
             replacements = []
         else:
             use_counts[best_profile.prototype_id] = use_counts.get(best_profile.prototype_id, 0) + 1
+            essential_count = sum(1 for _role, _source, _text, essential in required if essential)
+            if len(replacements) < essential_count:
+                # Prototype replacement would silently drop unmatched essential
+                # content (e.g. an 8-item agenda against a 5-slot prototype).
+                # Render from the master instead so no deck content is lost.
+                unmatched = essential_count - len(replacements)
+                use_counts[best_profile.prototype_id] = max(
+                    0, use_counts[best_profile.prototype_id] - 1
+                )
+                replacements = []
+                strategy = "master_redraw"
+                warning = TemplateWarning(
+                    code="W201",
+                    loc=f"slides[{output_index - 1}].template",
+                    message=(
+                        f"模板原型 {best_profile.prototype_id} 无法容纳全部必需内容"
+                        f"（未匹配 {unmatched} 项），已在同一模板母版/主题下重绘以保留完整内容。"
+                    ),
+                )
+                slide_warnings.append(warning)
+                warnings.append(warning)
         slide_plans.append(
             TemplateSlidePlan(
                 output_index=output_index,
@@ -140,7 +161,7 @@ def _font_substitution_warnings(profile: TemplateProfile) -> list[TemplateWarnin
 
 def _candidate(
     deck_layout: str,
-    required: list[tuple[str, str, str]],
+    required: list[tuple[str, str, str, bool]],
     candidate: TemplateSlideProfile,
     reuse_count: int,
 ) -> tuple[TemplateSlideProfile, TemplateScoreDetails, list[TemplateReplacement]]:
@@ -148,7 +169,7 @@ def _candidate(
     available = [shape for shape in candidate.shapes if shape.role not in {"brand", "footer", "decorative"}]
     matched = _match_replacements(required, available)
     slots_score = round(25 * len(matched) / max(len(required), 1))
-    required_chars = sum(len(text) for _role, _source, text in required)
+    required_chars = sum(len(text) for _role, _source, text, _essential in required)
     matched_shape_ids = {replacement.shape_id for replacement in matched}
     available_chars = sum(
         shape.capacity.char_capacity
@@ -183,7 +204,7 @@ def _match_replacements(required, available) -> list[TemplateReplacement]:
         "body": ("body", "agenda_item", "content_slot", "unknown"),
         "title": ("title",),
     }
-    for role, source_path, _text in required:
+    for role, source_path, _text, _essential in required:
         match = next((shape for shape in remaining if shape.role in aliases.get(role, (role,))), None)
         if match is None:
             continue
@@ -192,35 +213,48 @@ def _match_replacements(required, available) -> list[TemplateReplacement]:
     return replacements
 
 
-def _required_content(slide) -> list[tuple[str, str, str]]:
+def _required_content(slide) -> list[tuple[str, str, str, bool]]:
+    """Return (role, source_path, text, essential) content items for a slide.
+
+    ``essential`` marks content whose loss would be a data-integrity problem
+    (title, body, agenda items); optional metadata like a cover's presenter or
+    date is still matched to a template slot when one exists, but its absence
+    from the prototype must not force a master_redraw fallback.
+    """
     layout = slide.layout
     if layout == "cover":
-        values = [("title", "title", slide.title)]
+        values: list[tuple[str, str, str, bool]] = [("title", "title", slide.title, True)]
         if slide.subtitle:
-            values.append(("subtitle", "subtitle", slide.subtitle))
+            values.append(("subtitle", "subtitle", slide.subtitle, True))
+        if slide.presenter:
+            values.append(("body", "presenter", slide.presenter, False))
+        if slide.date:
+            values.append(("body", "date", slide.date, False))
         return values
     if layout == "agenda":
-        return [("agenda_item", f"items[{index}]", item) for index, item in enumerate(slide.items)]
+        return [("agenda_item", f"items[{index}]", item, True) for index, item in enumerate(slide.items)]
     if layout == "section":
-        values = [("title", "title", slide.title)]
+        values = [("title", "title", slide.title, True)]
         if slide.subtitle:
-            values.append(("subtitle", "subtitle", slide.subtitle))
+            values.append(("subtitle", "subtitle", slide.subtitle, True))
+        if slide.index:
+            values.append(("body", "index", str(slide.index), False))
         return values
     if layout == "title_bullets":
-        return [("title", "title", slide.title), ("body", "bullets", "\n".join(item.text for item in slide.bullets))]
+        return [("title", "title", slide.title, True), ("body", "bullets", "\n".join(item.text for item in slide.bullets), True)]
     if layout == "two_column":
         left = _column_text(slide.left)
         right = _column_text(slide.right)
-        return [("title", "title", slide.title), ("body", "left", left), ("body", "right", right)]
+        return [("title", "title", slide.title, True), ("body", "left", left, True), ("body", "right", right, True)]
     if layout == "conclusion":
-        values = [("title", "title", slide.title)]
+        values = [("title", "title", slide.title, True)]
         if slide.bullets:
-            values.append(("body", "bullets", "\n".join(slide.bullets)))
+            values.append(("body", "bullets", "\n".join(slide.bullets), True))
         if slide.cta:
-            values.append(("body", "cta", slide.cta))
+            values.append(("body", "cta", slide.cta, True))
         return values
     title = getattr(slide, "title", layout)
-    return [("title", "title", title)]
+    return [("title", "title", title, True)]
 
 
 def _column_text(column) -> str:

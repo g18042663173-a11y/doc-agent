@@ -49,7 +49,7 @@ def test_health_and_version_expose_release_compatibility_without_paths(tmp_path:
         "service": "huawei-document-generator",
         "app_version": APP_VERSION,
         "api_version": "1.0",
-        "deck_ir_version": "2.1",
+        "deck_ir_version": "2.2",
         "failure_envelope_version": "1.0",
         "job_state_version": "1.0",
     }
@@ -60,6 +60,19 @@ def test_health_and_version_expose_release_compatibility_without_paths(tmp_path:
     assert payload["runner"]["worker_alive"] is True
     assert payload["runner"]["queue_capacity"] == 4
     assert str(tmp_path) not in health.get_data(as_text=True)
+
+
+def test_deck_ir_contract_version_is_consistent_across_model_and_endpoints(tmp_path: Path) -> None:
+    """DeckIR model literal, /api/version and /api/diagnostics must never drift."""
+    from app.ir.deck_ir import DECK_IR_VERSION, DeckIR
+
+    model_version = DeckIR.model_fields["ir_version"].annotation.__args__[0]
+    assert model_version == DECK_IR_VERSION
+
+    client = create_api_app(work_dir=tmp_path).test_client()
+    version_deck = client.get("/api/version").get_json()["deck_ir_version"]
+    diagnostics_deck = client.get("/api/diagnostics").get_json()["application"]["deck_ir_version"]
+    assert version_deck == diagnostics_deck == DECK_IR_VERSION
 
 
 def test_desktop_diagnostics_and_job_list_are_sanitized(tmp_path: Path) -> None:
@@ -80,7 +93,7 @@ def test_desktop_diagnostics_and_job_list_are_sanitized(tmp_path: Path) -> None:
     payload = diagnostics.get_json()
     assert payload["diagnostics_version"] == "1.0"
     assert payload["application"]["version"] == APP_VERSION
-    assert payload["application"]["deck_ir_version"] == "2.0"
+    assert payload["application"]["deck_ir_version"] == "2.2"
     assert payload["generator"]["name"] == "stub"
     assert payload["graphviz"]["source"] in {"bundled", "system", "missing"}
     assert "executable" not in payload["graphviz"]
@@ -288,6 +301,35 @@ def test_generate_records_failed_background_job(tmp_path: Path) -> None:
     assert report_payload["error"] == failed["error"]
     assert "provider_secret" not in report.get_data(as_text=True)
     assert client.get(f"/api/download/{failed['job_id']}/lint").status_code == 409
+
+
+def test_generate_deck_with_unknown_theme_fails_cleanly_with_d001(tmp_path: Path) -> None:
+    """A model-issued unknown meta.theme must fail as a validation error, not
+    crash the renderer with an UnknownThemeError."""
+    class UnknownThemeGenerator:
+        name = "unknown-theme"
+
+        def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+            _ = prompt, target, cancel_event
+            return (
+                '{"ir_type": "deck", "ir_version": "2.1", '
+                '"meta": {"title": "T", "theme": "nonexistent-theme"}, '
+                '"slides": [{"layout": "cover", "title": "T"}]}'
+            )
+
+    client = create_api_app(work_dir=tmp_path, generator=UnknownThemeGenerator()).test_client()
+    created = client.post(
+        "/api/generate",
+        data={"type": "deck", "input_file": (BytesIO(b"# T"), "t.md")},
+        content_type="multipart/form-data",
+    )
+    assert created.status_code == 202
+
+    failed = _wait_for_terminal_status(client, created.get_json()["job_id"])
+
+    assert failed["status"] == "failed"
+    assert failed["error"]["code"] == "D001"
+    assert "theme" in json.dumps(failed, ensure_ascii=False)
 
 
 def test_word_job_exposes_lint_report_as_downloadable_asset(tmp_path: Path) -> None:
@@ -736,7 +778,7 @@ def test_completed_job_persists_across_app_restart_and_removes_sensitive_interme
     assert restarted.get(f"/api/download/{completed['job_id']}").status_code == 200
 
 
-def test_restart_marks_interrupted_job_failed_and_removes_input(tmp_path: Path) -> None:
+def test_restart_marks_interrupted_job_failed_and_retains_input_for_retry(tmp_path: Path) -> None:
     job_id = "job-0123456789abcdef0123456789abcdef"
     job_dir = tmp_path / job_id
     job_dir.mkdir()
@@ -760,7 +802,11 @@ def test_restart_marks_interrupted_job_failed_and_removes_input(tmp_path: Path) 
     assert recovered["error"]["code"] == "E015"
     assert recovered["error"]["stage"] == "interrupted"
     assert "failure-report" in recovered["assets"]
-    assert not (job_dir / "input.md").exists()
+    # C-N9: a failed job keeps its original input (24h window) so the desktop
+    # retry button can replay the exact source.
+    assert "original-input" in recovered["assets"]
+    assert (job_dir / "input.md").exists()
+    assert client.get(f"/api/download/{job_id}/original-input").get_data() == b"secret"
 
 
 def test_job_timeout_is_terminal_and_late_generator_cannot_overwrite_state(tmp_path: Path) -> None:
@@ -820,9 +866,11 @@ def test_job_cancel_sets_generator_cancel_event_and_returns_promptly(tmp_path: P
 
         def __init__(self) -> None:
             self.cancel_seen = False
+            self.started = Event()
 
         def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
             _ = prompt, target
+            self.started.set()
             for _ in range(300):
                 if cancel_event is not None and cancel_event.is_set():
                     self.cancel_seen = True
@@ -830,7 +878,8 @@ def test_job_cancel_sets_generator_cancel_event_and_returns_promptly(tmp_path: P
                 time.sleep(0.02)
             return '{"ir_type": "word", "ir_version": "1.0", "meta": {"title": "T"}, "blocks": [{"type": "paragraph", "text": "x"}]}'
 
-    client = create_api_app(work_dir=tmp_path, generator=CancelableSlowGenerator()).test_client()
+    generator = CancelableSlowGenerator()
+    client = create_api_app(work_dir=tmp_path, generator=generator).test_client()
     created = client.post(
         "/api/generate",
         data={"type": "word", "input_file": (BytesIO(b"# Cancel"), "cancel.md")},
@@ -838,12 +887,11 @@ def test_job_cancel_sets_generator_cancel_event_and_returns_promptly(tmp_path: P
     )
     job_id = created.get_json()["job_id"]
 
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline:
-        status = client.get(f"/api/status/{job_id}").get_json()
-        if status["status"] == "running":
-            break
-        time.sleep(0.02)
+    # Synchronize on the generator actually being entered. The job's "running"
+    # status is set before parsing and prompt building, so cancelling the instant
+    # "running" is observed can abort the job before generate() is ever called,
+    # leaving cancel_seen False and making this assertion flaky.
+    assert generator.started.wait(timeout=5)
 
     started = time.monotonic()
     canceled = client.post(f"/api/jobs/{job_id}/cancel")
@@ -853,7 +901,6 @@ def test_job_cancel_sets_generator_cancel_event_and_returns_promptly(tmp_path: P
 
     assert terminal["status"] == "canceled"
     assert elapsed < 5
-    generator = client.application.config["API_GENERATOR_MANAGER"].snapshot().generator
     deadline = time.monotonic() + 3
     while time.monotonic() < deadline and not generator.cancel_seen:
         time.sleep(0.02)
@@ -997,27 +1044,34 @@ def test_idempotency_key_returns_original_job_without_duplicate_directory(tmp_pa
     assert len(list(tmp_path.glob("job-*"))) == 1
 
 
-def test_single_worker_queue_rejects_request_beyond_active_plus_waiting_capacity(tmp_path: Path) -> None:
+def test_queue_rejects_request_beyond_active_plus_waiting_capacity(tmp_path: Path) -> None:
     generator = BlockingGenerator()
     client = create_api_app(
         work_dir=tmp_path,
         generator=generator,
         queue_capacity=1,
+        num_workers=2,
         rate_limit_per_minute=100,
     ).test_client()
 
     first = _submit_word_job(client, "first")
     assert generator.started.wait(timeout=2)
     second = _submit_word_job(client, "second")
+    assert generator.started.wait(timeout=2)
     third = _submit_word_job(client, "third")
+    fourth = _submit_word_job(client, "fourth")
 
     assert first.status_code == 202
     assert second.status_code == 202
-    assert third.status_code == 429
-    assert third.get_json()["error"]["code"] == "E008"
+    assert third.status_code == 202
+    # Two workers run concurrently and one waiting slot is allowed; the 4th
+    # request exceeds active(2) + waiting(1) capacity.
+    assert fourth.status_code == 429
+    assert fourth.get_json()["error"]["code"] == "E008"
     generator.release.set()
     assert _wait_for_terminal_status(client, first.get_json()["job_id"])["status"] == "done"
     assert _wait_for_terminal_status(client, second.get_json()["job_id"])["status"] == "done"
+    assert _wait_for_terminal_status(client, third.get_json()["job_id"])["status"] == "done"
 
 
 def test_running_job_can_be_canceled_and_late_work_is_discarded(tmp_path: Path) -> None:
@@ -1299,3 +1353,329 @@ def test_preflight_allows_deck_via_cli_off_windows(tmp_path, monkeypatch) -> Non
         content_type="multipart/form-data",
     )
     assert response.status_code == 202
+
+
+def test_generate_oserror_does_not_leak_queue_slot_or_workspace(tmp_path: Path, monkeypatch) -> None:
+    """A filesystem failure between reserve() and submit must release the slot."""
+    import app.web_api as web_api
+
+    original = web_api._new_workspace
+    calls = {"count": 0}
+
+    def fail_once(root: Path, *, prefix: str) -> Path:
+        calls["count"] += 1
+        if prefix == "job" and calls["count"] == 1:
+            raise OSError(28, "No space left on device")
+        return original(root, prefix=prefix)
+
+    monkeypatch.setattr(web_api, "_new_workspace", fail_once)
+    client = create_api_app(work_dir=tmp_path, queue_capacity=1).test_client()
+
+    first = client.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO(b"# a"), "a.md")},
+        content_type="multipart/form-data",
+    )
+    assert first.status_code == 500
+    assert first.get_json()["error"]["code"] == "E001"
+    # The failed request must not leave an orphan job directory.
+    assert not list(tmp_path.glob("job-*"))
+
+    # The slot was released, so a follow-up request must not be rejected 429.
+    second = client.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO(b"# b"), "b.md")},
+        content_type="multipart/form-data",
+    )
+    assert second.status_code == 202
+
+
+def test_naive_timestamp_job_state_does_not_crash_cleanup_or_list(tmp_path: Path) -> None:
+    import json
+
+    from app.web_api import JobStore
+
+    jobdir = tmp_path / ("job-" + "a" * 32)
+    jobdir.mkdir()
+    (jobdir / "input.md").write_text("# x", encoding="utf-8")
+    state = {
+        "job_state_version": "1.0",
+        "job_id": jobdir.name,
+        "target": "word",
+        "depth": None,
+        "generator_name": "stub",
+        "generator_revision": 0,
+        "generator_mode": "auto",
+        "generator_fallback": False,
+        "status": "done",
+        "stage": "done",
+        "progress_percent": 100,
+        "error": None,
+        "artifact_path": None,
+        "report": None,
+        "manifest": None,
+        "template_path": None,
+        "asset_manifest_path": None,
+        "assets": {},
+        "template_summary": None,
+        "idempotency_key": None,
+        "created_at": "2026-01-01T00:00:00",
+        "updated_at": "2026-01-01T00:00:00",
+        "expires_at": "2020-01-01T00:00:00",
+    }
+    (jobdir / "job_state.json").write_text(json.dumps(state), encoding="utf-8")
+
+    store = JobStore(root=tmp_path)
+    # Both used to raise TypeError: can't compare offset-naive and offset-aware.
+    store.cleanup_expired()
+    assert store.list_payloads() == []
+
+
+def test_orphaned_job_dir_without_state_is_swept(tmp_path: Path) -> None:
+    import os
+    import time
+
+    from app.web_api import JobStore
+
+    stale = tmp_path / ("job-" + "b" * 32)
+    stale.mkdir()
+    (stale / "input.md").write_bytes(b"sensitive" * 100)
+    os.utime(stale, (time.time() - 7200, time.time() - 7200))
+    fresh = tmp_path / ("job-" + "c" * 32)
+    fresh.mkdir()
+    os.utime(fresh, (time.time() - 60, time.time() - 60))
+
+    JobStore(root=tmp_path).cleanup_expired()
+
+    assert not stale.exists()
+    assert fresh.exists()
+
+
+def test_recovery_write_failure_does_not_block_startup(tmp_path: Path, monkeypatch) -> None:
+    import json
+
+    import app.web_api as web_api
+
+    jobdir = tmp_path / ("job-" + "d" * 32)
+    jobdir.mkdir()
+    (jobdir / "input.md").write_text("# x", encoding="utf-8")
+    (jobdir / "job_state.json").write_text(
+        json.dumps(
+            {
+                "job_state_version": "1.0",
+                "job_id": jobdir.name,
+                "target": "word",
+                "depth": None,
+                "generator_name": "stub",
+                "generator_revision": 0,
+                "generator_mode": "auto",
+                "generator_fallback": False,
+                "status": "running",
+                "stage": "generating",
+                "progress_percent": 40,
+                "error": None,
+                "artifact_path": None,
+                "report": None,
+                "manifest": None,
+                "template_path": None,
+                "asset_manifest_path": None,
+                "assets": {},
+                "template_summary": None,
+                "idempotency_key": None,
+                "created_at": "2026-08-01T00:00:00+00:00",
+                "updated_at": "2026-08-01T00:00:00+00:00",
+                "expires_at": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def broken_write(_job, _error):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(web_api, "_write_failure_report", broken_write)
+    # create_api_app must not raise: the interrupted job stays for the next boot.
+    client = create_api_app(work_dir=tmp_path).test_client()
+    assert client.get("/api/health").status_code == 200
+
+
+def test_cancel_losing_done_race_keeps_artifact(tmp_path: Path) -> None:
+    import json
+
+    import app.web_api as web_api
+    from app.web_api import JobStore
+
+    jobdir = tmp_path / ("job-" + "e" * 32)
+    jobdir.mkdir()
+    artifact = jobdir / "word.docx"
+    artifact.write_bytes(b"artifact")
+    (jobdir / "input.md").write_text("# x", encoding="utf-8")
+    (jobdir / "job_state.json").write_text(
+        json.dumps(
+            {
+                "job_state_version": "1.0",
+                "job_id": jobdir.name,
+                "target": "word",
+                "depth": None,
+                "generator_name": "stub",
+                "generator_revision": 0,
+                "generator_mode": "auto",
+                "generator_fallback": False,
+                "status": "running",
+                "stage": "generating",
+                "progress_percent": 40,
+                "error": None,
+                "artifact_path": None,
+                "report": None,
+                "manifest": None,
+                "template_path": None,
+                "asset_manifest_path": None,
+                "assets": {},
+                "template_summary": None,
+                "idempotency_key": None,
+                "created_at": "2026-08-01T00:00:00+00:00",
+                "updated_at": "2026-08-01T00:00:00+00:00",
+                "expires_at": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    store = JobStore(root=tmp_path)
+    job = store.get(jobdir.name)
+    original_write = web_api._write_failure_report
+
+    def racing_write(job_obj, error):
+        path = original_write(job_obj, error)
+        # The task thread wins: mark done with the artifact before _fail_job's
+        # own terminal update runs.
+        store.update(
+            job_obj.job_id,
+            status="done",
+            stage="done",
+            progress_percent=100,
+            artifact_path=artifact,
+            report={},
+            manifest=None,
+        )
+        return path
+
+    monkeypatch_write = racing_write
+    web_api._write_failure_report = monkeypatch_write
+    try:
+        web_api._fail_job(
+            job,
+            store,
+            code="E009",
+            stage="canceled",
+            retryable=False,
+            message="canceled",
+            suggestion="retry",
+            terminal_status="canceled",
+        )
+    finally:
+        web_api._write_failure_report = original_write
+
+    final = store.get(jobdir.name)
+    assert final.status == "done"
+    assert artifact.exists()
+
+
+def test_two_workers_run_jobs_concurrently(tmp_path: Path) -> None:
+    import threading
+
+    class ConcurrentProbe:
+        name = "probe"
+
+        def __init__(self) -> None:
+            self.active = 0
+            self.max_active = 0
+            self.lock = threading.Lock()
+
+        def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+            _ = prompt, target, cancel_event
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            time.sleep(0.3)
+            with self.lock:
+                self.active -= 1
+            return (
+                '{"ir_type": "word", "ir_version": "1.2", '
+                '"meta": {"title": "T", "classification": "HUAWEI CONFIDENTIAL"}, '
+                '"blocks": [{"type": "paragraph", "text": "x"}]}'
+            )
+
+    generator = ConcurrentProbe()
+    client = create_api_app(work_dir=tmp_path, generator=generator, num_workers=2).test_client()
+    first = _submit_word_job(client, "first")
+    second = _submit_word_job(client, "second")
+    assert first.status_code == 202
+    assert second.status_code == 202
+    _wait_for_terminal_status(client, first.get_json()["job_id"])
+    _wait_for_terminal_status(client, second.get_json()["job_id"])
+
+    assert generator.max_active == 2
+    health = client.get("/api/health").get_json()
+    assert health["runner"]["worker_count"] == 2
+
+
+def test_failed_job_retains_original_input_as_downloadable_asset(tmp_path: Path) -> None:
+    class AlwaysFailsGenerator:
+        name = "always-fails"
+
+        def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+            _ = prompt, target, cancel_event
+            raise RuntimeError("boom")
+
+    client = create_api_app(work_dir=tmp_path, generator=AlwaysFailsGenerator()).test_client()
+    created = client.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO(b"# secret input"), "retry.md")},
+        content_type="multipart/form-data",
+    )
+    job_id = created.get_json()["job_id"]
+    failed = _wait_for_terminal_status(client, job_id)
+    assert failed["status"] == "failed"
+    assert "original-input" in failed["assets"]
+
+    download = client.get(f"/api/download/{job_id}/original-input")
+    assert download.status_code == 200
+    assert download.get_data() == b"# secret input"
+    # The failure report must not embed the input content.
+    report = client.get(failed["assets"]["failure-report"]["download_url"]).get_json()
+    assert report["privacy"]["contains_raw_input"] is False
+
+
+def test_canceled_job_does_not_retain_original_input(tmp_path: Path) -> None:
+    from app.generators.interface import GeneratorCanceled
+
+    class CancelableSlowGenerator:
+        name = "cancelable-slow"
+
+        def __init__(self) -> None:
+            self.started = Event()
+
+        def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+            _ = prompt, target
+            self.started.set()
+            for _ in range(200):
+                if cancel_event is not None and cancel_event.is_set():
+                    raise GeneratorCanceled()
+                time.sleep(0.01)
+            return "{}"
+
+    generator = CancelableSlowGenerator()
+    client = create_api_app(work_dir=tmp_path, generator=generator).test_client()
+    created = client.post(
+        "/api/generate",
+        data={"type": "word", "input_file": (BytesIO(b"# c"), "c.md")},
+        content_type="multipart/form-data",
+    )
+    job_id = created.get_json()["job_id"]
+    assert generator.started.wait(timeout=2)
+    client.post(f"/api/jobs/{job_id}/cancel")
+    terminal = _wait_for_terminal_status(client, job_id)
+    assert terminal["status"] == "canceled"
+    assert "original-input" not in terminal.get("assets", {})
+    assert not list(tmp_path.glob("job-*/input.*"))

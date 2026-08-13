@@ -8,6 +8,7 @@ from xml.etree import ElementTree
 import zipfile
 
 from pptx import Presentation
+from pptx.oxml.ns import qn
 
 from app.ir.document_ir import DocumentIR
 from app.parsers.errors import parser_error_boundary
@@ -84,10 +85,17 @@ def _slide_title(
     if fallback is None:
         return None
     text = fallback.text.strip()
+    if not text:
+        return None
+    # A fallback shape with several paragraphs is really a body box: only its
+    # first line is title-like, the remaining paragraphs stay in the bodies.
+    title = text.splitlines()[0].strip()
+    if not title:
+        return None
     candidates = shapes if shapes is not None else list(_iter_shapes(slide.shapes, []))
     shape_index = next((index for index, candidate in enumerate(candidates, start=1) if candidate is fallback), 0)
     loc = f"pptx slide {slide_index} fallback title shape {shape_index}"
-    return limiter.limit(text, loc=loc) if limiter is not None else text
+    return limiter.limit(title, loc=loc) if limiter is not None else title
 
 
 def _fallback_title_shape(slide, shapes: list | None):
@@ -112,6 +120,19 @@ def _slide_bodies(
     bodies: list[str] = []
     for shape_index, shape in enumerate(shapes if shapes is not None else _iter_shapes(slide.shapes, []), start=1):
         if shape is title_shape or shape is fallback_shape:
+            # A multi-paragraph fallback title keeps its non-title paragraphs
+            # as body content instead of swallowing the whole shape.
+            if shape is fallback_shape and getattr(shape, "has_text_frame", False):
+                parts = [part.strip() for part in shape.text.splitlines() if part.strip()]
+                for part_index, part in enumerate(parts[1:], start=2):
+                    bodies.append(
+                        limiter.limit(
+                            part,
+                            loc=f"pptx slide {slide_index} shape {shape_index} paragraph {part_index}",
+                        )
+                        if limiter is not None
+                        else part
+                    )
             continue
         if getattr(shape, "has_table", False):
             continue
@@ -153,31 +174,66 @@ def _slide_tables(
         column_count = min(len(table.columns), 12)
         if len(table.columns) > column_count and limiter is not None:
             limiter.warnings.append(f"W103: pptx slide {slide_index} table {shape_index} truncated to 12 columns")
-        header = [
-            _cell_text(
-                table.cell(0, col),
-                limiter=limiter,
-                loc=f"pptx slide {slide_index} table {shape_index} header column {col + 1}",
-            )
-            or f"Column {col + 1}"
-            for col in range(column_count)
-        ]
+        header = _table_row_values(
+            table.rows[0],
+            column_count=column_count,
+            limiter=limiter,
+            slide_index=slide_index,
+            table_index=shape_index,
+            row_index=0,
+        )
         rows: list[list[str]] = []
-        for row in range(1, min(len(table.rows), 21)):
+        for row_index in range(1, min(len(table.rows), 21)):
             rows.append(
-                [
-                    _cell_text(
-                        table.cell(row, col),
-                        limiter=limiter,
-                        loc=f"pptx slide {slide_index} table {shape_index} row {row} column {col + 1}",
-                    )
-                    for col in range(column_count)
-                ]
+                _table_row_values(
+                    table.rows[row_index],
+                    column_count=column_count,
+                    limiter=limiter,
+                    slide_index=slide_index,
+                    table_index=shape_index,
+                    row_index=row_index,
+                )
             )
         if len(table.rows) > 21 and limiter is not None:
             limiter.warnings.append(f"W103: pptx slide {slide_index} table {shape_index} preview truncated to 20 rows")
         tables.append({"header": header, "rows": rows})
     return tables
+
+
+def _table_row_values(
+    row,
+    *,
+    column_count: int,
+    limiter: TextLimiter | None,
+    slide_index: int,
+    table_index: int,
+    row_index: int,
+) -> list[str]:
+    """Extract one physical PPTX table row, expanding gridSpan cells.
+
+    ``table.cell(row, col)`` indexes the physical tc list and ignores
+    ``gridSpan``, so a header merged across columns raises IndexError and
+    kills the whole file with E001. Read the row's physical cells instead and
+    expand each across its grid span so the preview stays rectangular.
+    """
+    values: list[str] = []
+    column = 0
+    for cell in row.cells:
+        span = max(1, int(cell._tc.get(qn("a:gridSpan")) or 1))
+        text = _cell_text(
+            cell,
+            limiter=limiter,
+            loc=f"pptx slide {slide_index} table {table_index} row {row_index} column {column + 1}",
+        )
+        for _ in range(span):
+            values.append(text)
+            column += 1
+            if column >= column_count:
+                break
+        if column >= column_count:
+            break
+    values.extend([""] * (column_count - len(values)))
+    return values
 
 
 def _chart_title(chart) -> str | None:

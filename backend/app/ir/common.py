@@ -69,7 +69,7 @@ class NumberedListBlock(ContractModel):
 class TableBlock(ContractModel):
     type: Literal["table"]
     header: list[str] = Field(min_length=1, max_length=12)
-    rows: list[list[str]] = Field(max_length=100)
+    rows: list[list[str]] = Field(min_length=1, max_length=100)
     caption: str | None = None
     col_widths: list[float] | None = Field(
         default=None,

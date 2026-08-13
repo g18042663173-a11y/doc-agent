@@ -69,6 +69,34 @@ def test_parse_markdown_falls_back_to_gbk_with_warning(tmp_path: Path) -> None:
     assert any("gb18030 fallback" in warning for warning in ir.warnings)
 
 
+@pytest.mark.parametrize("encoding", ["utf-16-le", "utf-16-be"])
+def test_parse_markdown_decodes_utf16_without_bom(tmp_path: Path, encoding: str) -> None:
+    """A BOM-less UTF-16 file must decode correctly, not silently corrupt."""
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "utf16.md"
+    path.write_bytes("# 标题\n\n正文内容 test".encode(encoding))
+
+    ir = parse_markdown(path)
+
+    assert ir.content.outline[0].text == "标题"
+    assert ir.content.blocks[-1].text == "正文内容 test"
+    assert any("UTF-16 (no BOM)" in warning for warning in ir.warnings)
+
+
+def test_parse_markdown_utf16_no_bom_ascii_only_is_not_nul_corrupted(tmp_path: Path) -> None:
+    """Pure-ASCII UTF-16LE no-BOM bytes are valid UTF-8 too; must still decode as UTF-16."""
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "ascii-utf16.md"
+    path.write_bytes("# Heading\n\nBody text".encode("utf-16-le"))
+
+    ir = parse_markdown(path)
+
+    assert ir.content.outline[0].text == "Heading"
+    assert "\x00" not in ir.content.outline[0].text
+
+
 def test_parse_markdown_warns_for_malformed_table_rows(tmp_path: Path) -> None:
     from app.parsers.md_parser import parse_markdown
 
@@ -171,3 +199,38 @@ def test_parse_markdown_limits_long_text_with_locations(tmp_path: Path) -> None:
     assert len(bullet.items[0].text) == 2000
     assert any("markdown paragraph" in warning for warning in result.warnings)
     assert any("markdown list item" in warning for warning in result.warnings)
+
+
+def test_parse_markdown_skips_whitespace_only_headings(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "empty-heading.md"
+    path.write_text("#   \n##  \n#  \u00a0\n\nreal content\n", encoding="utf-8")
+
+    result = parse_markdown(path)
+    assert [block.type for block in result.content.blocks] == ["paragraph"]
+    assert result.content.blocks[0].text == "real content"
+    assert result.content.outline == []
+
+
+def test_parse_markdown_skips_whitespace_only_list_items(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "empty-items.md"
+    path.write_text("- a\n-  \n- \u00a0\n- b\n\n1. x\n2.  \n3. y\n", encoding="utf-8")
+
+    result = parse_markdown(path)
+    bullet = next(block for block in result.content.blocks if block.type == "bullet_list")
+    numbered = next(block for block in result.content.blocks if block.type == "numbered_list")
+    assert [item.text for item in bullet.items] == ["a", "b"]
+    assert [item.text for item in numbered.items] == ["x", "y"]
+
+
+def test_parse_markdown_skips_all_empty_list_without_emitting_block(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "all-empty.md"
+    path.write_text("-  \n- \u00a0\n\nbody\n", encoding="utf-8")
+
+    result = parse_markdown(path)
+    assert all(block.type != "bullet_list" for block in result.content.blocks)

@@ -3,8 +3,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from dataclasses import dataclass
 import multiprocessing
+import os
 from pathlib import Path
 import posixpath
+import re
+import tempfile
 import time
 from typing import Any
 from xml.etree import ElementTree
@@ -42,6 +45,58 @@ class WorksheetMetadata:
     hidden_cols: set[int]
 
 
+# XSD double literals openpyxl 3.1.5 cannot cast: its _cast_number calls int()
+# on values lacking "."/"E", so bare INF/NaN (and signed variants) raise
+# ValueError and abort the whole sheet read.
+_SPECIAL_NUMBER_CELL_RE = re.compile(r"<c([^>]*)><v>\s*([+-]?(?:INF|NaN))\s*</v>")
+
+
+def _rewrite_special_number_cell(match: re.Match) -> str:
+    attrs = re.sub(r"\bt=\"[^\"]*\"", "", match.group(1)).strip()
+    value = match.group(2)
+    tag = f"<c {attrs}" if attrs else "<c"
+    return f"{tag} t=\"str\"><v>{value}</v>"
+
+
+def _sanitize_inf_nan_worksheets(path: Path) -> tuple[Path, list[str]]:
+    """Rewrite bare INF/NaN numeric literals as string cells in a temp copy.
+
+    openpyxl cannot skip an INF/NaN cell: a read-only iteration that reaches it
+    raises ValueError and every later re-iteration hits it again. Rewriting the
+    offending ``<c>`` cells with ``t="str"`` lets every row parse and preserves
+    the literal text in the preview. Returns the original path when no such
+    literal is present (the common case, zero cost).
+    """
+    with zipfile.ZipFile(path) as package:
+        names = set(package.namelist())
+        rewrites: dict[str, bytes] = {}
+        total = 0
+        for name in sorted(name for name in names if name.startswith("xl/worksheets/") and name.endswith(".xml")):
+            xml = package.read(name).decode("utf-8")
+            count = len(_SPECIAL_NUMBER_CELL_RE.findall(xml))
+            if not count:
+                continue
+            xml = _SPECIAL_NUMBER_CELL_RE.sub(_rewrite_special_number_cell, xml)
+            rewrites[name] = xml.encode("utf-8")
+            total += count
+        if not rewrites:
+            return path, []
+    fd, temp_name = tempfile.mkstemp(suffix=".xlsx")
+    os.close(fd)
+    temp_path = Path(temp_name)
+    try:
+        with zipfile.ZipFile(path) as source, zipfile.ZipFile(
+            temp_path, "w", zipfile.ZIP_DEFLATED
+        ) as target:
+            for info in source.infolist():
+                target.writestr(info, rewrites.get(info.filename, source.read(info.filename)))
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+    warnings = [f"W103: xlsx contains {total} cell(s) with INF/NaN literals; preserved as text"]
+    return temp_path, warnings
+
+
 @parser_error_boundary
 def parse_xlsx(path: Path) -> DocumentIR:
     if path.stat().st_size >= HARD_GUARD_FILE_BYTES:
@@ -53,6 +108,8 @@ def _parse_xlsx_impl(path: Path) -> DocumentIR:
     started = time.monotonic()
     warnings = preflight_source_office(path)
     warnings.extend(_preflight_warnings(path))
+    parse_path, inf_nan_warnings = _sanitize_inf_nan_worksheets(path)
+    warnings.extend(inf_nan_warnings)
     value_workbook: Any | None = None
     formula_workbook: Any | None = None
     metadata_by_sheet: dict[str, WorksheetMetadata] = {}
@@ -61,8 +118,8 @@ def _parse_xlsx_impl(path: Path) -> DocumentIR:
     scanned_cells = 0
 
     try:
-        value_workbook = load_workbook(path, read_only=True, data_only=True)
-        formula_workbook = load_workbook(path, read_only=True, data_only=False)
+        value_workbook = load_workbook(parse_path, read_only=True, data_only=True)
+        formula_workbook = load_workbook(parse_path, read_only=True, data_only=False)
         metadata_by_sheet = _worksheet_metadata_by_sheet(path)
         package_warnings, image_count = _package_warnings(path)
         warnings.extend(package_warnings)
@@ -169,6 +226,10 @@ def _parse_xlsx_impl(path: Path) -> DocumentIR:
             value_workbook.close()
         if formula_workbook is not None:
             formula_workbook.close()
+        if parse_path != path:
+            # Wait until the read-only workbooks are closed so the temp file is
+            # not locked (Windows).
+            parse_path.unlink(missing_ok=True)
 
     return DocumentIR.model_validate(
         {
@@ -287,31 +348,40 @@ def _preview_rows(
         return rows, source_rows, False
 
     max_source_rows = min(nrows, MAX_PREVIEW_SOURCE_ROWS)
-    for row_number, row in enumerate(
-        sheet.iter_rows(
-        min_row=1,
-        max_row=max_source_rows,
-        min_col=1,
-        max_col=max(visible_cols),
-        values_only=True,
-        ),
-        start=1,
-    ):
-        if row_number in hidden_rows:
-            continue
-        rows.append(
-            [
-                _stringify(
-                    row[column - 1],
-                    limiter=limiter,
-                    loc=f"xlsx sheet {sheet_name} row {row_number} column {column}",
-                )
-                for column in visible_cols
-            ]
-        )
-        source_rows.append(row_number)
-        if len(rows) >= MAX_PREVIEW_ROWS:
-            break
+    try:
+        for row_number, row in enumerate(
+            sheet.iter_rows(
+            min_row=1,
+            max_row=max_source_rows,
+            min_col=1,
+            max_col=max(visible_cols),
+            values_only=True,
+            ),
+            start=1,
+        ):
+            if row_number in hidden_rows:
+                continue
+            rows.append(
+                [
+                    _stringify(
+                        row[column - 1],
+                        limiter=limiter,
+                        loc=f"xlsx sheet {sheet_name} row {row_number} column {column}",
+                    )
+                    for column in visible_cols
+                ]
+            )
+            source_rows.append(row_number)
+            if len(rows) >= MAX_PREVIEW_ROWS:
+                break
+    except ValueError:
+        # openpyxl 3.1.5 casts XSD double literals like <v>INF</v> and
+        # <v>NaN</v> (which lack "."/"E") through int(), raising ValueError and
+        # failing the whole file. Keep the rows read so far and stop instead.
+        if limiter is not None:
+            limiter.warnings.append(
+                f"xlsx sheet {sheet_name} preview stopped at an unreadable numeric value"
+            )
     return rows, source_rows, nrows > max_source_rows and len(rows) < MAX_PREVIEW_ROWS
 
 
@@ -324,10 +394,16 @@ def _header_row_strings(
 ) -> list[str]:
     if not visible_cols:
         return []
-    row = next(
-        sheet.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max(visible_cols), values_only=True),
-        None,
-    )
+    try:
+        row = next(
+            sheet.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max(visible_cols), values_only=True),
+            None,
+        )
+    except ValueError:
+        # See _preview_rows: openpyxl fails on <v>INF</v>/<v>NaN</v> cells.
+        if limiter is not None:
+            limiter.warnings.append(f"xlsx sheet {sheet_name} header row contains an unreadable numeric value")
+        return []
     if row is None:
         return []
     values = [
@@ -407,32 +483,39 @@ def _column_stats(
     scanned_rows = 0
     if not visible_cols:
         return []
-    for row_number, row in enumerate(
-        sheet.iter_rows(
-            min_row=1,
-            max_row=min(nrows, MAX_COLUMN_STATS_ROWS),
-            min_col=1,
-            max_col=max(visible_cols),
-            values_only=True,
-        ),
-        start=1,
-    ):
-        if row_number in hidden_rows:
-            continue
-        scanned_rows += 1
-        for index, column in enumerate(visible_cols):
-            value = row[column - 1]
-            if value is None:
+    try:
+        for row_number, row in enumerate(
+            sheet.iter_rows(
+                min_row=1,
+                max_row=min(nrows, MAX_COLUMN_STATS_ROWS),
+                min_col=1,
+                max_col=max(visible_cols),
+                values_only=True,
+            ),
+            start=1,
+        ):
+            if row_number in hidden_rows:
                 continue
-            values_by_col[index].append(value)
-            if len(samples_by_col[index]) < 3:
-                samples_by_col[index].append(
-                    _stringify(
-                        value,
-                        limiter=limiter,
-                        loc=f"xlsx sheet {sheet_name} column {column} sample row {row_number}",
+            scanned_rows += 1
+            for index, column in enumerate(visible_cols):
+                value = row[column - 1]
+                if value is None:
+                    continue
+                values_by_col[index].append(value)
+                if len(samples_by_col[index]) < 3:
+                    samples_by_col[index].append(
+                        _stringify(
+                            value,
+                            limiter=limiter,
+                            loc=f"xlsx sheet {sheet_name} column {column} sample row {row_number}",
+                        )
                     )
-                )
+    except ValueError:
+        # See _preview_rows: openpyxl fails on <v>INF</v>/<v>NaN</v> cells.
+        if limiter is not None:
+            limiter.warnings.append(
+                f"xlsx sheet {sheet_name} column statistics stopped at an unreadable numeric value"
+            )
 
     stats: list[dict] = []
     for index, col in enumerate(visible_cols):
@@ -473,27 +556,32 @@ def _scan_formula_and_cell_types(
     error_count = 0
     boolean_count = 0
     date_count = 0
-    for row_number, row in enumerate(
-        sheet.iter_rows(
-            min_row=1,
-            max_row=min(nrows, MAX_FORMULA_SCAN_ROWS),
-            min_col=1,
-            max_col=max(visible_cols),
-        ),
-        start=1,
-    ):
-        if row_number in hidden_rows:
-            continue
-        for column in visible_cols:
-            cell = row[column - 1]
-            if cell.data_type == "f":
-                formula_count += 1
-            elif cell.data_type == "e":
-                error_count += 1
-            elif cell.data_type == "b":
-                boolean_count += 1
-            if cell.is_date:
-                date_count += 1
+    try:
+        for row_number, row in enumerate(
+            sheet.iter_rows(
+                min_row=1,
+                max_row=min(nrows, MAX_FORMULA_SCAN_ROWS),
+                min_col=1,
+                max_col=max(visible_cols),
+            ),
+            start=1,
+        ):
+            if row_number in hidden_rows:
+                continue
+            for column in visible_cols:
+                cell = row[column - 1]
+                if cell.data_type == "f":
+                    formula_count += 1
+                elif cell.data_type == "e":
+                    error_count += 1
+                elif cell.data_type == "b":
+                    boolean_count += 1
+                if cell.is_date:
+                    date_count += 1
+    except ValueError:
+        # See _preview_rows: openpyxl fails on <v>INF</v>/<v>NaN</v> cells.
+        warnings: list[str] = ["formula/cell-type scan stopped at an unreadable numeric value"]
+        return formula_count, warnings
     warnings: list[str] = []
     if error_count:
         warnings.append(f"error cells detected: {error_count}; preserved as text")

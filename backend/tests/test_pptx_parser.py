@@ -78,6 +78,34 @@ def test_parse_pptx_fallback_title_is_not_duplicated_into_bodies_and_empty_place
     assert "回退标题" not in summary.bodies
 
 
+def test_parse_pptx_fallback_title_only_takes_first_line_and_keeps_rest_as_body(tmp_path: Path) -> None:
+    """A multi-paragraph fallback title shape must not swallow the whole body."""
+    from app.parsers.pptx_parser import parse_pptx
+
+    path = tmp_path / "fallback-multiline.pptx"
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    for placeholder in list(slide.placeholders):
+        if placeholder.placeholder_format.idx == 0:
+            placeholder._element.getparent().remove(placeholder._element)
+    body = next((p for p in slide.placeholders if p.placeholder_format.idx == 1), None)
+    assert body is not None
+    body.text_frame.clear()
+    body.text_frame.text = "第一段正文内容"
+    second = body.text_frame.add_paragraph()
+    second.text = "第二段正文内容"
+    third = body.text_frame.add_paragraph()
+    third.text = "第三段正文内容"
+    footer = slide.shapes.add_textbox(Inches(0.5), Inches(5), Inches(3), Inches(0.5))
+    footer.text = "页脚标签"
+    prs.save(path)
+
+    summary = parse_pptx(path).content.slides[0]
+
+    assert summary.title == "第一段正文内容"
+    assert summary.bodies == ["第二段正文内容", "第三段正文内容", "页脚标签"]
+
+
 def test_parse_pptx_records_transition_warning(tmp_path: Path) -> None:
     from app.parsers.pptx_parser import parse_pptx
 
@@ -278,3 +306,27 @@ def _inject_embedding(path: Path) -> None:
             target.writestr(info, data)
         target.writestr("ppt/embeddings/oleObject1.bin", b"fake-ole")
     shutil.move(temp, path)
+
+
+def test_parse_pptx_handles_grid_span_merged_header_row(tmp_path: Path) -> None:
+    from app.parsers.pptx_parser import parse_pptx
+
+    path = tmp_path / "merged-header.pptx"
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    table = slide.shapes.add_table(2, 3, Inches(1), Inches(1), Inches(6), Inches(2)).table
+    table.cell(0, 0).text = "合并表头"
+    table.cell(1, 0).text = "a"
+    table.cell(1, 1).text = "b"
+    table.cell(1, 2).text = "c"
+    tr = table._tbl.tr_lst[0]
+    cells = list(tr.tc_lst)
+    for tc in cells[1:]:
+        tr.remove(tc)
+    cells[0].set("gridSpan", "3")
+    prs.save(path)
+
+    ir = parse_pptx(path)
+    summary = ir.content.slides[0]
+    assert summary.tables[0]["header"] == ["合并表头", "", ""]
+    assert summary.tables[0]["rows"] == [["a", "b", "c"]]

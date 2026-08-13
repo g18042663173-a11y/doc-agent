@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from PIL import ImageFont
+from pptx.oxml.ns import qn
 from pptx.util import Pt
 
 
@@ -52,9 +53,17 @@ def replace_text_preserving_style(
     font_name = source_run.font.name if source_run is not None else None
     rendered_font_name = font_name if font_is_available(font_name) else fallback_font_name
 
+    # The template paragraph may render its own bullet (a:buChar / a:buAutoNum).
+    # When it does, a caller-supplied "• " prefix (used for plain-text bodies)
+    # must be stripped or the slide shows a double bullet.
+    template_owns_bullet = source_ppr is not None and (
+        source_ppr.find(qn("a:buChar")) is not None or source_ppr.find(qn("a:buAutoNum")) is not None
+    )
     lines = text.splitlines() or [""]
     frame.clear()
     for index, line in enumerate(lines):
+        if template_owns_bullet:
+            line = line.removeprefix("• ").removeprefix("•")
         paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
         paragraph.text = line
         if source_ppr is not None:
@@ -93,6 +102,11 @@ def _fitted_font_size(shape, text: str, font_name: str | None, start_size: float
 
 
 def _text_fits(shape, text: str, font_name: str | None, size_pt: float) -> bool:
+    if shape.width is None or shape.height is None:
+        # A placeholder shape without explicit <a:xfrm> inherits its geometry
+        # from the layout, which python-pptx cannot resolve here. Treat the
+        # text as fitting instead of crashing on the None subtraction.
+        return True
     frame = shape.text_frame
     width_px = max(
         1,
@@ -104,8 +118,19 @@ def _text_fits(shape, text: str, font_name: str | None, size_pt: float) -> bool:
     )
     font = _load_font(font_name, max(1, round(size_pt * PX_PER_INCH / 72)))
     line_height = max(font.getbbox("国Ag")[3] - font.getbbox("国Ag")[1], 1) * 1.2
-    line_count = sum(_wrapped_line_count(line, font, width_px) for line in (text.splitlines() or [""]))
-    return line_count * line_height <= height_px + 1
+    lines = text.splitlines() or [""]
+    body_pr = frame._txBody.find(qn("a:bodyPr"))
+    wrap_none = body_pr is not None and body_pr.get("wrap") == "none"
+    if wrap_none:
+        # wrap="none" clips instead of wrapping: every explicit line must fit the
+        # width as a single line, or the content is silently cut off.
+        for line in lines:
+            if font.getlength(line) > width_px + 1:
+                return False
+        line_counts = [1] * len(lines)
+    else:
+        line_counts = [_wrapped_line_count(line, font, width_px) for line in lines]
+    return sum(line_counts) * line_height <= height_px + 1
 
 
 def _wrapped_line_count(text: str, font, width_px: float) -> int:

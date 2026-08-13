@@ -235,7 +235,7 @@ def test_validate_deck_ir_maps_unknown_layout_to_d003() -> None:
     assert result.errors[0].code == "D003"
 
 
-@pytest.mark.parametrize("source_version", ["1.4", "1.5", "1.6", "1.7", "1.8"])
+@pytest.mark.parametrize("source_version", ["1.4", "1.5", "1.6", "1.7", "1.8", "2.1"])
 def test_validate_deck_ir_migrates_legacy_versions_without_mutating_input(source_version: str) -> None:
     import copy
 
@@ -253,14 +253,14 @@ def test_validate_deck_ir_migrates_legacy_versions_without_mutating_input(source
     direct = DeckIR.model_validate(payload)
 
     assert result.ok and result.value is not None
-    assert result.value.ir_version == "2.1"
-    assert direct.ir_version == "2.1"
+    assert result.value.ir_version == "2.2"
+    assert direct.ir_version == "2.2"
     assert payload == original
     assert any(
         item.code == "D004"
         and item.loc == "ir_version"
         and source_version in item.message
-        and "2.1" in item.message
+        and "2.2" in item.message
         for item in result.warnings
     )
 
@@ -351,10 +351,10 @@ def test_validate_deck_ir_migrates_v17_single_composite_component_without_mutati
     result = validate_deck_ir(payload)
 
     assert result.ok and result.value is not None
-    assert result.value.ir_version == "2.1"
+    assert result.value.ir_version == "2.2"
     assert [len(region.components) for region in result.value.slides[0].regions] == [1, 1]
     assert payload == original
-    assert any(item.code == "D004" and "1.7" in item.message and "2.1" in item.message for item in result.warnings)
+    assert any(item.code == "D004" and "1.7" in item.message and "2.2" in item.message for item in result.warnings)
 
 
 def test_validate_deck_ir_accepts_three_stacked_components_and_rejects_fourth() -> None:

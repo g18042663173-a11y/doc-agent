@@ -20,6 +20,7 @@ from uuid import uuid4
 
 from flask import Flask, jsonify, request, send_file
 from pydantic import ValidationError
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.assets.errors import AssetError
 from app.assets.pipeline import AssetRegistry, load_asset_manifest, normalize_assets
@@ -36,6 +37,7 @@ from app.generators.nga import (
     NgaHttpConfig,
 )
 from app.generators.stub import StubGenerator
+from app.ir.deck_ir import DECK_IR_VERSION
 from app.ir.document_ir import DocumentIR
 from app.ir.errors import ValidationResult
 from app.ir.repair import repair_generated_text, repair_ir_text
@@ -70,6 +72,7 @@ ALLOWED_DOWNLOAD_ASSETS = {
     "visual-plan",
     "visual-selection-audit",
     "deck-ir",
+    "original-input",
 }
 MAX_INPUT_UPLOAD_BYTES = 100 * 1024 * 1024
 MAX_TEMPLATE_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -85,9 +88,11 @@ TERMINAL_JOB_STATUSES = {"done", "failed", "canceled"}
 JOB_DIRECTORY_RE = re.compile(r"^job-[0-9a-f]{32}$")
 ANALYSIS_DIRECTORY_RE = re.compile(r"^analysis-[0-9a-f]{32}$")
 ANALYSIS_DIR_RETENTION_HOURS = 1
+JOB_DIR_ORPHAN_RETENTION_HOURS = 1
 IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 DEFAULT_JOB_TIMEOUT_SECONDS = 900.0
 DEFAULT_QUEUE_CAPACITY = 4
+DEFAULT_NUM_WORKERS = 2
 DEFAULT_RETENTION_HOURS = 24
 DEFAULT_RATE_LIMIT_PER_MINUTE = 30
 API_VERSION = "1.0"
@@ -268,7 +273,30 @@ class JobStore:
         for job in expired:
             _remove_job_directory(self.root, job.work_dir)
         self._sweep_orphaned_analysis_dirs(current)
+        self._sweep_orphaned_job_dirs(current)
         return len(expired)
+
+    def _sweep_orphaned_job_dirs(self, current: datetime) -> None:
+        """Remove job workspaces that never gained a job_state.json.
+
+        A job directory without a state file means the request crashed or
+        failed between ``_new_workspace`` and ``jobs.create``, or a previous
+        ``shutil.rmtree`` failed silently (Windows file locks). Such a
+        directory can hold the user's upload (up to 100 MB, possibly
+        sensitive); sweep it once it is long past the creation window.
+        """
+        cutoff = current - timedelta(hours=JOB_DIR_ORPHAN_RETENTION_HOURS)
+        for entry in self.root.iterdir():
+            if not entry.is_dir() or not JOB_DIRECTORY_RE.fullmatch(entry.name):
+                continue
+            if (entry / "job_state.json").is_file():
+                continue
+            try:
+                modified = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
+            except OSError:
+                continue
+            if modified < cutoff:
+                shutil.rmtree(entry, ignore_errors=True)
 
     def _sweep_orphaned_analysis_dirs(self, current: datetime) -> None:
         """Remove analysis workspaces left behind by a crashed request.
@@ -330,14 +358,21 @@ class JobRunner:
         jobs: JobStore,
         timeout_seconds: float,
         queue_capacity: int,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> None:
         self.jobs = jobs
         self.timeout_seconds = timeout_seconds
         self.queue_capacity = queue_capacity
-        self._queue: Queue[QueuedJob] = Queue(maxsize=queue_capacity + 1)
-        self._slots = BoundedSemaphore(queue_capacity + 1)
-        self._worker = Thread(target=self._loop, daemon=True, name="web-api-worker")
-        self._worker.start()
+        self.num_workers = max(1, num_workers)
+        total_slots = queue_capacity + self.num_workers
+        self._queue: Queue[QueuedJob] = Queue(maxsize=total_slots)
+        self._slots = BoundedSemaphore(total_slots)
+        self._workers = [
+            Thread(target=self._loop, daemon=True, name=f"web-api-worker-{index}")
+            for index in range(self.num_workers)
+        ]
+        for worker in self._workers:
+            worker.start()
         self._supervisor = Thread(target=self._supervise, daemon=True, name="web-api-supervisor")
         self._supervisor.start()
 
@@ -356,24 +391,31 @@ class JobRunner:
 
     def stats(self) -> dict[str, Any]:
         return {
-            "worker_alive": self._worker.is_alive(),
+            "worker_alive": all(worker.is_alive() for worker in self._workers),
+            "worker_count": len(self._workers),
             "queue_capacity": self.queue_capacity,
             "queued": self._queue.qsize(),
             "timeout_seconds": self.timeout_seconds,
         }
 
     def _supervise(self) -> None:
-        """Restart the worker thread if it ever dies so the queue never stalls."""
+        """Restart any worker thread that dies so the queue never stalls."""
         while True:
             time.sleep(5)
-            if not self._worker.is_alive():
-                print(
-                    "web-api: worker thread died; restarting it",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                self._worker = Thread(target=self._loop, daemon=True, name="web-api-worker")
-                self._worker.start()
+            for index, worker in enumerate(self._workers):
+                if not worker.is_alive():
+                    print(
+                        f"web-api: worker {index} died; restarting it",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    replacement = Thread(
+                        target=self._loop,
+                        daemon=True,
+                        name=f"web-api-worker-{index}",
+                    )
+                    self._workers[index] = replacement
+                    replacement.start()
 
     def _loop(self) -> None:
         while True:
@@ -397,7 +439,12 @@ class JobRunner:
                         try:
                             current = self.jobs.get(item.job_id)
                             if current is not None and current.status in {"failed", "canceled"}:
-                                _cleanup_sensitive_job_files(current)
+                                # Failed jobs keep their original input so the
+                                # desktop retry button can replay it; canceled
+                                # jobs have no retry and get the input removed.
+                                _cleanup_sensitive_job_files(
+                                    current, keep_input=current.status == "failed"
+                                )
                         finally:
                             finished.set()
 
@@ -571,7 +618,7 @@ def _diagnostics_response(root: Path, runner: JobRunner, manager: GeneratorManag
         build_runtime_diagnostics(
             app_version=APP_VERSION,
             api_version=API_VERSION,
-            deck_ir_version="2.0",
+            deck_ir_version=DECK_IR_VERSION,
             generator=generator_snapshot.name,
             generator_revision=generator_snapshot.revision,
             jobs=jobs.stats(),
@@ -888,11 +935,30 @@ def _generate_request(
         template_path = _save_template_upload(job_dir, target)
         asset_manifest_path = _save_asset_uploads(job_dir, target)
     except ApiRequestError as exc:
-        if reserved:
-            runner.release_reservation()
-        if job_dir is not None:
-            shutil.rmtree(job_dir, ignore_errors=True)
+        _release_generate_reservation(runner, reserved, job_dir)
         return _api_request_error_response(exc)
+    except Exception as exc:
+        # A filesystem failure while creating the workspace (mkdir OSError,
+        # upload disk error escaping the upload helpers) must not leak the
+        # queue slot or leave an orphan job directory behind.
+        _release_generate_reservation(runner, reserved, job_dir)
+        if isinstance(exc, RequestEntityTooLarge):
+            # 413 is handled by the Flask errorhandler to keep the JSON
+            # envelope; release the reservation first, then re-raise.
+            raise
+        print(
+            f"web-api: workspace creation failed for request: {exc!r}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return _error_response(
+            "E001",
+            "创建任务目录失败。",
+            status=500,
+            stage="queued",
+            suggestion="请检查磁盘空间和输出目录权限后重试。",
+            retryable=True,
+        )
 
     try:
         generator_snapshot = manager.snapshot()
@@ -908,6 +974,11 @@ def _generate_request(
             asset_manifest_path=asset_manifest_path,
             idempotency_key=idempotency_key,
         )
+        # Once the item is queued the worker releases the slot on completion,
+        # so the reservation is no longer ours. Clearing the flag before
+        # submit_reserved also prevents a double release if put_nowait ever
+        # raises queue.Full (it releases internally in that path).
+        reserved = False
         runner.submit_reserved(
             QueuedJob(
                 job_id=job.job_id,
@@ -916,11 +987,8 @@ def _generate_request(
                 generator_revision=generator_snapshot.revision,
             )
         )
-        reserved = False
     except ValueError:
-        if reserved:
-            runner.release_reservation()
-        shutil.rmtree(job_dir, ignore_errors=True)
+        _release_generate_reservation(runner, reserved, job_dir)
         existing = jobs.get_by_idempotency_key(idempotency_key or "")
         if existing is None:
             return _error_response(
@@ -933,7 +1001,32 @@ def _generate_request(
             )
         job = existing
         response_status = 200 if existing.status in TERMINAL_JOB_STATUSES else 202
+    except Exception as exc:
+        # jobs.create persistence or queue-submit failure (disk full while
+        # writing job_state.json) must release the reservation and clean up.
+        _release_generate_reservation(runner, reserved, job_dir)
+        print(
+            f"web-api: job persistence failed for request: {exc!r}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return _error_response(
+            "E001",
+            "任务状态写入失败。",
+            status=500,
+            stage="queued",
+            suggestion="请检查磁盘空间后重试。",
+            retryable=True,
+        )
     return jsonify(job.payload()), response_status
+
+
+def _release_generate_reservation(runner: JobRunner, reserved: bool, job_dir: Path | None) -> None:
+    """Release a held queue slot and remove a half-created job workspace."""
+    if reserved:
+        runner.release_reservation()
+    if job_dir is not None:
+        shutil.rmtree(job_dir, ignore_errors=True)
 
 
 def _job_status_response(jobs: JobStore, job_id: str):
@@ -968,7 +1061,8 @@ def _audit_download_response(jobs: JobStore, job_id: str, asset: str):
     if job is None:
         return _error_response("E001", "任务不存在。", status=404)
     failure_report_available = job.status in {"failed", "canceled"} and asset == "failure-report"
-    if job.status != "done" and not failure_report_available:
+    original_input_available = job.status == "failed" and asset == "original-input"
+    if job.status != "done" and not (failure_report_available or original_input_available):
         return _error_response("E001", "任务尚未完成，暂无可下载审计文件。", status=409)
     path = job.artifact_path if asset == "output" else job.assets.get(asset)
     if path is None or not path.is_file():
@@ -1055,7 +1149,7 @@ def _register_service_routes(
                 "service": "huawei-document-generator",
                 "app_version": APP_VERSION,
                 "api_version": API_VERSION,
-                "deck_ir_version": "2.1",
+                "deck_ir_version": DECK_IR_VERSION,
                 "failure_envelope_version": "1.0",
                 "job_state_version": "1.0",
             }
@@ -1135,6 +1229,7 @@ def create_api_app(
     session_token: str | None = None,
     job_timeout_seconds: float = DEFAULT_JOB_TIMEOUT_SECONDS,
     queue_capacity: int = DEFAULT_QUEUE_CAPACITY,
+    num_workers: int = DEFAULT_NUM_WORKERS,
     retention_hours: int = DEFAULT_RETENTION_HOURS,
     rate_limit_per_minute: int = DEFAULT_RATE_LIMIT_PER_MINUTE,
 ) -> Flask:
@@ -1157,6 +1252,7 @@ def create_api_app(
         jobs=jobs,
         timeout_seconds=job_timeout_seconds,
         queue_capacity=queue_capacity,
+        num_workers=num_workers,
     )
     app.config["API_WORK_DIR"] = root
     app.config["API_GENERATOR_MANAGER"] = manager
@@ -1606,8 +1702,15 @@ def _fail_job(
     failure_path = _write_failure_report(job, error)
     assets = dict(current.assets)
     assets["failure-report"] = failure_path
-    _cleanup_sensitive_job_files(job)
-    jobs.update(
+    if terminal_status == "failed":
+        # Retaining the original input lets the desktop "retry" button replay
+        # the exact source instead of silently re-submitting the current form.
+        # The file is kept only for the job's 24h retention window and never
+        # enters the failure report itself.
+        original_input = _original_input_path(job)
+        if original_input is not None:
+            assets["original-input"] = original_input
+    updated = jobs.update(
         job.job_id,
         status=terminal_status,
         stage=stage,
@@ -1616,6 +1719,14 @@ def _fail_job(
         assets=assets,
         template_path=None,
     )
+    if updated:
+        # Only the caller that actually transitioned the job to its terminal
+        # state may delete the output artifact. Deleting first lets a
+        # concurrent task-thread "done" update win the race, leaving a "done"
+        # job whose artifact file is already gone (download 404, silent data
+        # loss). jobs.update is guarded by the store lock, so if it returned
+        # True the terminal status is durably recorded before we remove files.
+        _cleanup_sensitive_job_files(job, keep_input=terminal_status == "failed")
 
 
 def _support_id(job_id: str) -> str:
@@ -1742,27 +1853,42 @@ def _resolve_job_path(work_dir: Path, relative: str | None) -> Path | None:
 
 def _recover_interrupted_jobs(jobs: JobStore) -> None:
     for job in jobs.interrupted():
-        _fail_job(
-            job,
-            jobs,
-            code="E015",
-            stage="interrupted",
-            retryable=True,
-            message="服务重启前任务未正常结束。",
-            suggestion="请重新提交任务；若持续失败，请提供支持编号。",
-        )
+        try:
+            _fail_job(
+                job,
+                jobs,
+                code="E015",
+                stage="interrupted",
+                retryable=True,
+                message="服务重启前任务未正常结束。",
+                suggestion="请重新提交任务；若持续失败，请提供支持编号。",
+            )
+        except OSError:
+            # A persistence failure while writing one failure report must not
+            # prevent the whole service from starting; the job stays
+            # interrupted and will be retried on the next startup.
+            print(
+                f"web-api: failed to record interrupted job {job.job_id}: {job.work_dir}",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
 
 
-def _cleanup_sensitive_job_files(job: ApiJob, *, keep_artifact: bool = False) -> None:
+def _original_input_path(job: ApiJob) -> Path | None:
+    candidates = sorted(job.work_dir.glob("input.*"))
+    return candidates[0] if candidates else None
+
+
+def _cleanup_sensitive_job_files(job: ApiJob, *, keep_artifact: bool = False, keep_input: bool = False) -> None:
     work_dir = job.work_dir.resolve()
-    for path in list(work_dir.glob("input.*")) + [
-        work_dir / "template.pptx",
-        work_dir / "document_ir.json",
-        work_dir / "prompt.txt",
-        work_dir / "raw_ir.txt",
-        work_dir / "generation_manifest.json",
-        *([] if keep_artifact else [work_dir / "word.docx", work_dir / "deck.pptx"]),
-    ]:
+    paths = [work_dir / "template.pptx", work_dir / "document_ir.json", work_dir / "prompt.txt", work_dir / "raw_ir.txt", work_dir / "generation_manifest.json"]
+    if not keep_artifact:
+        paths.append(work_dir / "word.docx")
+        paths.append(work_dir / "deck.pptx")
+    if not keep_input:
+        paths.extend(work_dir.glob("input.*"))
+    for path in paths:
         try:
             if path.resolve().parent == work_dir:
                 path.unlink(missing_ok=True)
@@ -1973,6 +2099,25 @@ def _generate_single_artifact(
     _ensure_job_active(job, context.jobs)
     if not validation.ok or validation.value is None:
         raise ApiValidationError(_validation_items(validation))
+
+    if job.target == "deck":
+        # The generated DeckIR's meta.theme is model output (schema-validated as
+        # a plain string), but the renderer only knows the registered themes.
+        # Reject unknown themes here so the job fails with a clear D001 instead
+        # of an UnknownThemeError crash inside the renderer.
+        theme_name = validation.value.meta.theme
+        if theme_name not in THEME_REGISTRY:
+            raise ApiValidationError(
+                [
+                    {
+                        "level": "Error",
+                        "code": "D001",
+                        "loc": "meta.theme",
+                        "message": f"生成的 DeckIR 使用了不受支持的主题：{theme_name}。",
+                        "suggestion": f"请将 theme 改为 {', '.join(sorted(THEME_REGISTRY))} 之一后重试。",
+                    }
+                ]
+            )
 
     context.jobs.update(job.job_id, stage="rendering", progress_percent=75)
     if job.target == "word":

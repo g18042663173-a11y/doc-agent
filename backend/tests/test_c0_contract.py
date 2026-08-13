@@ -32,12 +32,12 @@ def test_word_ir_validates_minimal_report() -> None:
     )
 
     assert ir.meta.title == "周报"
-    assert ir.ir_version == "1.2"
+    assert ir.ir_version == "1.3"
     assert ir.blocks[0].type == "heading"
 
 
-@pytest.mark.parametrize("source_version", ["1.0", "1.1"])
-def test_word_ir_legacy_versions_migrate_to_v12_without_mutating_input(source_version: str) -> None:
+@pytest.mark.parametrize("source_version", ["1.0", "1.1", "1.2"])
+def test_word_ir_legacy_versions_migrate_to_v13_without_mutating_input(source_version: str) -> None:
     import copy
 
     from app.ir.word_ir import WordIR
@@ -52,7 +52,7 @@ def test_word_ir_legacy_versions_migrate_to_v12_without_mutating_input(source_ve
 
     migrated = WordIR.model_validate(payload)
 
-    assert migrated.ir_version == "1.2"
+    assert migrated.ir_version == "1.3"
     assert payload == original
 
 
@@ -398,7 +398,7 @@ def test_deck_schema_exposes_decision_matrix_table_contract() -> None:
     schema = load_schema("deck_ir")
     table_props = schema["$defs"]["DeckTable"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "2.1"
+    assert schema["properties"]["ir_version"]["const"] == "2.2"
     assert {"column_groups", "row_groups", "cell_spans", "conclusion_col", "col_widths"} <= set(table_props)
     assert table_props["rows"]["maxItems"] == 12
     assert table_props["header"]["maxItems"] == 8
@@ -418,7 +418,7 @@ def test_deck_schema_v20_exposes_kpi_card_variant() -> None:
     schema = load_schema("deck_ir")
     cards_props = schema["$defs"]["CardsSlide"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "2.1"
+    assert schema["properties"]["ir_version"]["const"] == "2.2"
     assert cards_props["variant"]["default"] == "default"
     assert set(cards_props["variant"]["enum"]) == {"default", "kpi"}
 
@@ -430,7 +430,7 @@ def test_deck_schema_exposes_architecture_diagram_contract() -> None:
     edge_props = schema["$defs"]["ArchitectureEdge"]["properties"]
     group_props = schema["$defs"]["ArchitectureGroup"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "2.1"
+    assert schema["properties"]["ir_version"]["const"] == "2.2"
     assert {"nodes", "edges", "groups", "manual_hints"} <= set(slide_props)
     assert {"layout", "title", "nodes", "edges", "groups"} <= set(schema["$defs"]["ArchitectureDiagramSlide"]["required"])
     assert {"id", "text", "type", "group", "position", "size"} <= set(node_props)
@@ -447,7 +447,7 @@ def test_deck_schema_v20_exposes_process_flow_and_timeline_contracts() -> None:
     timeline_props = schema["$defs"]["TimelineSlide"]["properties"]
     milestone_props = schema["$defs"]["TimelineMilestone"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "2.1"
+    assert schema["properties"]["ir_version"]["const"] == "2.2"
     assert {"layout", "title", "steps", "orientation"} <= set(process_props)
     assert process_props["steps"]["minItems"] == 2
     assert process_props["steps"]["maxItems"] == 7
@@ -464,7 +464,7 @@ def test_deck_schema_v20_exposes_stacked_composite_as_existing_component_union()
     composite_props = schema["$defs"]["CompositeSlide"]["properties"]
     region_props = schema["$defs"]["CompositeRegion"]["properties"]
 
-    assert schema["properties"]["ir_version"]["const"] == "2.1"
+    assert schema["properties"]["ir_version"]["const"] == "2.2"
     assert composite_props["regions"]["minItems"] == 2
     assert composite_props["regions"]["maxItems"] == 2
     assert set(region_props["slot"]["enum"]) == {"left", "right"}
@@ -594,3 +594,17 @@ def test_verify_coverage_gate_rejects_low_package_and_overall_coverage(
     monkeypatch.setattr(verify.subprocess, "run", write_low_coverage)
 
     assert verify._run_pytest_with_coverage(tmp_path) is False
+
+
+def test_table_row_schemas_require_min_one_row_but_document_ir_stays_lenient() -> None:
+    word = load_schema("word_ir")
+    deck = load_schema("deck_ir")
+    document = load_schema("document_ir")
+
+    # IR-N4: the output contracts' exported schema must match the model's
+    # runtime "at least one data row" validator so the model never emits a
+    # table that the validator then rejects.
+    assert word["$defs"]["TableBlock"]["properties"]["rows"]["minItems"] == 1
+    assert deck["$defs"]["DeckTable"]["properties"]["rows"]["minItems"] == 1
+    # IR-N8: DocumentIR is source data; empty tables are legal there.
+    assert "minItems" not in document["$defs"]["DocumentTableBlock"]["properties"]["rows"]

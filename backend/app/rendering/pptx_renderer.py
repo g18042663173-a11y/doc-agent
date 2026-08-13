@@ -506,7 +506,12 @@ def _apply_table_spans(table, table_ir, header_row_index: int, data_row_map: dic
         if end_row == start_row and end_col == span.col:
             continue
         cell = table.cell(start_row, span.col)
-        cell.merge(table.cell(end_row, end_col))
+        try:
+            cell.merge(table.cell(end_row, end_col))
+        except ValueError:
+            # A span whose rectangle includes an already-merged row-group or
+            # column-group cell must not crash the whole render; skip it.
+            continue
         _set_cell_border(cell, theme)
 
 
@@ -1013,19 +1018,30 @@ def _format_chart(chart, chart_ir: ChartSpec, theme: dict) -> None:
         plot.gap_width = theme["layouts"]["chart"]["bar_gap_width"]
     _format_chart_series(chart, chart_ir, theme)
     if chart_ir.show_data_labels:
-        plot.has_data_labels = True
-        labels = plot.data_labels
-        if chart_ir.kind == "pie":
-            labels.position = XL_DATA_LABEL_POSITION.BEST_FIT
-            labels.show_category_name = True
-            labels.show_percentage = True
-            labels.show_value = False
-            labels.number_format = "0%"
+        if chart_ir.kind == "scatter":
+            # python-pptx exposes no high-level data-labels API for scatter
+            # charts (CT_ScatterChart lacks the dLbls member), so insert the
+            # element at the schema-correct position (after ser, before axId)
+            # instead of crashing on plot.has_data_labels.
+            from pptx.oxml.chart.datalabel import CT_DLbls
+
+            dLbls = CT_DLbls.new_dLbls()
+            dLbls.showVal.val = True
+            plot._element.insert_element_before(dLbls, "c:axId", "c:extLst")
         else:
-            labels.position = XL_DATA_LABEL_POSITION.OUTSIDE_END if chart_ir.kind == "bar" else XL_DATA_LABEL_POSITION.ABOVE
-            labels.number_format = _chart_number_format(chart_ir)
-            labels.number_format_is_linked = False
-        _format_chart_font(labels.font, theme, size=theme["layouts"]["chart"]["data_label_font_size_pt"], color_key="secondary")
+            plot.has_data_labels = True
+            labels = plot.data_labels
+            if chart_ir.kind == "pie":
+                labels.position = XL_DATA_LABEL_POSITION.BEST_FIT
+                labels.show_category_name = True
+                labels.show_percentage = True
+                labels.show_value = False
+                labels.number_format = "0%"
+            else:
+                labels.position = XL_DATA_LABEL_POSITION.OUTSIDE_END if chart_ir.kind == "bar" else XL_DATA_LABEL_POSITION.ABOVE
+                labels.number_format = _chart_number_format(chart_ir)
+                labels.number_format_is_linked = False
+            _format_chart_font(labels.font, theme, size=theme["layouts"]["chart"]["data_label_font_size_pt"], color_key="secondary")
     if chart_ir.kind != "pie":
         _format_chart_axes(chart, chart_ir, theme)
 

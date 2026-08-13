@@ -141,16 +141,19 @@ def _raw_shape(shape, slide_width: int, slide_height: int, theme: TemplateTheme)
         text = "\n".join(paragraph.text for paragraph in shape.text_frame.paragraphs).strip()
     style = _text_style(shape, theme) if getattr(shape, "has_text_frame", False) else None
     font_size = style.font_size_pt if style and style.font_size_pt else 18.0
-    width_in = max(float(getattr(shape, "width", 0)) / EMU_PER_INCH, 0)
-    height_in = max(float(getattr(shape, "height", 0)) / EMU_PER_INCH, 0)
+    # Placeholder shapes that inherit their geometry from a layout have no
+    # <a:xfrm>, so shape.width/left are None; coerce them to 0 instead of
+    # crashing the whole template profile.
+    width_in = max(float(getattr(shape, "width", 0) or 0) / EMU_PER_INCH, 0)
+    height_in = max(float(getattr(shape, "height", 0) or 0) / EMU_PER_INCH, 0)
     return {
         "shape_id": int(shape.shape_id),
         "name": str(shape.name or f"Shape {shape.shape_id}"),
         "kind": _shape_kind(shape),
-        "left_ratio": round(float(getattr(shape, "left", 0)) / slide_width, 5),
-        "top_ratio": round(float(getattr(shape, "top", 0)) / slide_height, 5),
-        "width_ratio": round(float(getattr(shape, "width", 0)) / slide_width, 5),
-        "height_ratio": round(float(getattr(shape, "height", 0)) / slide_height, 5),
+        "left_ratio": round(float(getattr(shape, "left", 0) or 0) / slide_width, 5),
+        "top_ratio": round(float(getattr(shape, "top", 0) or 0) / slide_height, 5),
+        "width_ratio": round(float(getattr(shape, "width", 0) or 0) / slide_width, 5),
+        "height_ratio": round(float(getattr(shape, "height", 0) or 0) / slide_height, 5),
         "text": text,
         "text_preview": _preview(text) if text else None,
         "style": style,

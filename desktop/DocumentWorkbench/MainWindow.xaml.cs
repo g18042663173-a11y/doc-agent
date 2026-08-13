@@ -166,11 +166,11 @@ public partial class MainWindow : Window
     private async Task InitializeServiceAsync()
     {
         var version = await _api.GetVersionAsync(_lifetime.Token);
-        if (version.ApiVersion != "1.0" || version.DeckIrVersion != "2.0")
+        if (version.ApiVersion != "1.0" || version.DeckIrVersion != "2.2")
         {
             _generatorBlocked = true;
             SetServiceState(false, "版本不兼容");
-            GenerateGuardText.Text = $"需要 API 1.0 / DeckIR 2.0，当前为 {version.ApiVersion} / {version.DeckIrVersion}";
+            GenerateGuardText.Text = $"需要 API 1.0 / DeckIR 2.2，当前为 {version.ApiVersion} / {version.DeckIrVersion}";
             return;
         }
 
@@ -544,6 +544,11 @@ public partial class MainWindow : Window
             {
                 // Per-request poll timeout (15s): the backend may be hung, but
                 // the loop must stay responsive and keep retrying with backoff.
+                if (!_backend.IsProcessAlive())
+                {
+                    await StopPollingForDeadBackendAsync();
+                    return;
+                }
                 consecutiveFailures++;
                 ProgressTitleText.Text = "连接中断，正在恢复任务状态";
                 SetServiceState(false, "连接中断，正在重试");
@@ -551,6 +556,11 @@ public partial class MainWindow : Window
             }
             catch (HttpRequestException)
             {
+                if (!_backend.IsProcessAlive())
+                {
+                    await StopPollingForDeadBackendAsync();
+                    return;
+                }
                 consecutiveFailures++;
                 ProgressTitleText.Text = "连接中断，正在恢复任务状态";
                 SetServiceState(false, "连接中断，正在重试");
@@ -562,6 +572,24 @@ public partial class MainWindow : Window
                 SetBusy(false);
                 return;
             }
+        }
+    }
+
+    private async Task StopPollingForDeadBackendAsync()
+    {
+        // The backend process is gone and desktop_host has no auto-restart, so
+        // retrying is futile. Stop the poll, surface a terminal message and
+        // release the busy state so the user is not stuck on a spinner forever.
+        SetBusy(false);
+        ProgressTitleText.Text = "本地服务已停止";
+        SetServiceState(false, "本地服务已停止，请重启工作台");
+        try
+        {
+            await RefreshJobsAsync();
+        }
+        catch (Exception)
+        {
+            // A dead backend cannot refresh the job list; ignore.
         }
     }
 
@@ -655,7 +683,42 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void Retry_Click(object sender, RoutedEventArgs e) => await SubmitGenerationAsync();
+    private async void Retry_Click(object sender, RoutedEventArgs e) => await RetrySelectedJobAsync();
+
+    private async Task RetrySelectedJobAsync()
+    {
+        // Replay the SELECTED failed job's exact input instead of silently
+        // re-submitting whatever is currently in the form (C-N9).
+        if (_currentJob is not { Status: "failed" } ||
+            !_currentJob.Assets.TryGetValue("original-input", out var originalInput))
+        {
+            await SubmitGenerationAsync();
+            return;
+        }
+        try
+        {
+            SetBusy(true);
+            var extension = Path.GetExtension(originalInput.Name);
+            var tempPath = Path.Combine(Path.GetTempPath(), $"retry-{Guid.NewGuid():N}{extension}");
+            await _api.DownloadAsync(originalInput.DownloadUrl, tempPath, _lifetime.Token);
+            _inputPath = tempPath;
+            SelectComboByTag(TargetComboBox, _currentJob.Type);
+            if (_currentJob.Type == "deck")
+            {
+                SelectComboByText(DepthComboBox, string.IsNullOrWhiteSpace(_currentJob.Depth) ? "标准" : _currentJob.Depth!);
+                SelectComboByText(GenerateThemeComboBox, _currentJob.Theme ?? "hw_v1");
+            }
+            InputFileTextBox.Text = $"{Path.GetFileName(tempPath)}  ·  {FormatBytes(new FileInfo(tempPath).Length)}";
+            ShowMessage("已载入该任务原始输入，正在重试。", false);
+            SetBusy(false);
+            await SubmitGenerationAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowOperationError(ex, "重试失败");
+            SetBusy(false);
+        }
+    }
 
     private async void DownloadOutput_Click(object sender, RoutedEventArgs e)
     {
@@ -897,11 +960,11 @@ public partial class MainWindow : Window
     private async Task<GeneratorSettingsResponse> SaveNgaDraftAsync()
     {
         var config = ReadNgaControls();
-        var token = CredentialManager.ReadNgaToken();
-        if (string.IsNullOrWhiteSpace(token) && !string.IsNullOrWhiteSpace(NgaTokenPasswordBox.Password))
-        {
-            token = NgaTokenPasswordBox.Password;
-        }
+        // A freshly typed token in the password box wins over a stored one; the
+        // box may hold a renewal while an old credential still exists.
+        var token = string.IsNullOrWhiteSpace(NgaTokenPasswordBox.Password)
+            ? CredentialManager.ReadNgaToken()
+            : NgaTokenPasswordBox.Password;
         if (string.IsNullOrWhiteSpace(token))
         {
             throw new InvalidDataException("请先输入 NGA Token。");

@@ -88,18 +88,18 @@ WordBlock = Annotated[
 ]
 
 
-def migrate_word_payload(value: Any, *, target_version: str = "1.2") -> tuple[Any, str | None]:
-    if not isinstance(value, dict) or value.get("ir_version") not in {"1.0", "1.1"} or target_version != "1.2":
+def migrate_word_payload(value: Any, *, target_version: str = "1.3") -> tuple[Any, str | None]:
+    if not isinstance(value, dict) or value.get("ir_version") not in {"1.0", "1.1", "1.2"} or target_version != "1.3":
         return value, None
     migrated = copy.deepcopy(value)
     source_version = migrated["ir_version"]
-    migrated["ir_version"] = "1.2"
+    migrated["ir_version"] = "1.3"
     return migrated, source_version
 
 
 class WordIR(ContractModel):
     ir_type: Literal["word"]
-    ir_version: Literal["1.2"]
+    ir_version: Literal["1.3"]
     meta: WordMeta
     blocks: list[WordBlock] = Field(min_length=1)
 

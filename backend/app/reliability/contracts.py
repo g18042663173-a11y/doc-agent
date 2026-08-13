@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -74,6 +74,17 @@ class JobState(FailureContractModel):
     @classmethod
     def asset_paths_are_safe(cls, value: dict[str, str]) -> dict[str, str]:
         return {name: _safe_relative_path(path) for name, path in value.items()}
+
+    @field_validator("created_at", "updated_at", "expires_at")
+    @classmethod
+    def timestamps_are_tz_aware(cls, value: datetime | None) -> datetime | None:
+        # A persisted job_state.json with naive timestamps makes cleanup_expired
+        # (expires_at <= now) and list_payloads (created_at sort) raise
+        # "can't compare offset-naive and offset-aware datetimes". Assume naive
+        # stamps mean UTC so the service never crashes on such states.
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 def _safe_relative_path(value: str) -> str:

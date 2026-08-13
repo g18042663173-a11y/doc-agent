@@ -48,7 +48,7 @@ def test_build_prompt_truncates_context_and_declares_it() -> None:
     prompt = build_prompt(kind="deck", context=context, max_context_chars=300)
     context_json = prompt.split("[输入 DocumentIR]", 1)[1].split("[字符估算]", 1)[0].strip()
 
-    assert "DeckIR v2.1" in prompt
+    assert "DeckIR v2.2" in prompt
     assert "已截断说明" in prompt
     assert "最终 JSON 中禁止出现“原文未提供”" in prompt
     assert len(context_json) <= 300
@@ -229,7 +229,7 @@ def test_build_deck_prompt_contains_weak_model_rules_and_few_shot() -> None:
             separators=(",", ":"),
         )
         assert compact_sample in prompt
-        assert '"ir_version":"2.1"' in compact_sample
+        assert '"ir_version":"2.2"' in compact_sample
     assert "est_chars=2" in prompt
     assert "```" not in prompt
 
@@ -536,13 +536,13 @@ def test_deck_prompt_optional_depth_rules_keep_default_path_deterministic() -> N
     detailed = build_prompt(kind="deck", context=context, depth="详细", pages=16)
 
     assert hashlib.sha256(legacy.encode("utf-8")).hexdigest() == (
-        "9ebf411c97146080f27203eb934b955759c83c3d3e0afc0c2b2a41f7705cd445"
+        "49e0c7ebb72be7c031d00c7635e69e848ed3652db28103661a1d8c6b6205aa17"
     )
     from app.generators.stub import StubGenerator
 
     legacy_raw = StubGenerator().generate(legacy, target="deck_ir")
     assert hashlib.sha256(legacy_raw.encode("utf-8")).hexdigest() == (
-        "d78bfadb23c35e0b6366d9ea376d6edb3be4e806f5d8f0653771e99693f65b89"
+        "23334bd40ef062d45eb6526aad582b566071212ec87f96e73c9fcd586ab0ab53"
     )
     assert "[生成深度与目标页数]" not in legacy
     assert "结论句 + 1个关键支撑" in standard

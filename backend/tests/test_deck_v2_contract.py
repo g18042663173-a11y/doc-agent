@@ -16,12 +16,12 @@ def _deck(slide: dict) -> dict:
     }
 
 
-def test_deck_ir_19_is_migrated_in_memory_to_21() -> None:
+def test_deck_ir_19_is_migrated_in_memory_to_22() -> None:
     payload = _deck({"layout": "image", "title": "占位", "placeholder": "稍后补图"})
     payload["ir_version"] = "1.9"
     result = validate_deck_ir(payload)
     assert result.ok
-    assert result.value is not None and result.value.ir_version == "2.1"
+    assert result.value is not None and result.value.ir_version == "2.2"
     assert result.warnings == []
 
 

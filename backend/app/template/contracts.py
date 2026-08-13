@@ -239,7 +239,7 @@ class TemplatePlan(TemplateContractModel):
     plan_version: Literal["1.1"]
     template_sha256: str
     profile_sha256: str
-    deck_ir_version: Literal["2.1"]
+    deck_ir_version: Literal["2.2"]
     slides: list[TemplateSlidePlan] = Field(min_length=1, max_length=30)
     warnings: list[TemplateWarning] = Field(default_factory=list)
 
@@ -249,8 +249,8 @@ class TemplatePlan(TemplateContractModel):
         if isinstance(value, dict) and value.get("plan_version") == "1.0":
             value = dict(value)
             value["plan_version"] = "1.1"
-            if value.get("deck_ir_version") in {"1.9", "2.0"}:
-                value["deck_ir_version"] = "2.1"
+            if value.get("deck_ir_version") in {"1.9", "2.0", "2.1"}:
+                value["deck_ir_version"] = "2.2"
         return value
 
     @field_validator("template_sha256", "profile_sha256")

@@ -76,6 +76,9 @@ public sealed class JobInfo
     [JsonPropertyName("depth")]
     public string? Depth { get; set; }
 
+    [JsonPropertyName("theme")]
+    public string? Theme { get; set; }
+
     [JsonPropertyName("generator")]
     public GeneratorState Generator { get; set; } = new();
 

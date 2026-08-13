@@ -203,7 +203,7 @@
   "additionalProperties": false,
   "properties": {
     "deck_ir_version": {
-      "const": "2.1",
+      "const": "2.2",
       "title": "Deck Ir Version",
       "type": "string"
     },

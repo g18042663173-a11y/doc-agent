@@ -56,14 +56,14 @@ def test_codex_generator_posts_responses_request_with_json_only_system_prompt(mo
 
     assert raw == _word_ir()
     request, timeout = requests[0]
-    assert request.full_url == "https://api.openai.com/v1/responses"
+    assert request.full_url == "https://opencode.ai/zen/go/v1/responses"
     assert timeout == 31
     headers = {key.lower(): value for key, value in request.header_items()}
     assert headers["authorization"] == "Bearer test-key"
     payload = json.loads(request.data.decode("utf-8"))
     assert payload["model"] == "claude-test"
     assert payload["input"] == "[完整目标 Schema]\n{}"
-    assert payload["reasoning"] == {"effort": "xhigh"}
+    assert payload["reasoning"] == {"effort": "high"}
     assert payload["store"] is False
     assert payload["text"] == {"format": {"type": "json_object"}}
     assert "只输出一个完整、合法的 JSON 对象" in payload["instructions"]

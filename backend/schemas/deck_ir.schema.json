@@ -1065,6 +1065,7 @@
             "type": "array"
           },
           "maxItems": 12,
+          "minItems": 1,
           "title": "Rows",
           "type": "array"
         }
@@ -2165,7 +2166,7 @@
       "type": "string"
     },
     "ir_version": {
-      "const": "2.1",
+      "const": "2.2",
       "title": "Ir Version",
       "type": "string"
     },

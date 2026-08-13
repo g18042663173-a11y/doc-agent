@@ -557,3 +557,137 @@ def _rewrite_package(
             target.writestr(info, data)
         for name, data in (extra or {}).items():
             target.writestr(name, data)
+
+
+def test_plan_falls_back_when_agenda_content_exceeds_prototype_slots(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.template.planner import build_template_plan
+    from app.template.profile import extract_template_profile
+
+    path = tmp_path / "slots.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    for index in range(5):
+        _textbox(slide, f"AGENDA SLOT {index + 1}", 0.8, 1.0 + index * 0.6, 9.0, 0.5, 18)
+    presentation.save(path)
+    profile = extract_template_profile(path)
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.1",
+            "meta": {"title": "T", "classification": "HUAWEI CONFIDENTIAL"},
+            "slides": [{"layout": "agenda", "title": "目录", "items": [f"item{i}" for i in range(8)]}],
+        }
+    )
+    plan = build_template_plan(deck, profile)
+
+    assert plan.slides[0].strategy == "master_redraw"
+    assert any(warning.code == "W201" for warning in plan.slides[0].warnings)
+
+
+def test_cover_optional_metadata_does_not_force_fallback_but_maps_when_slot_exists(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.template.planner import build_template_plan
+    from app.template.profile import extract_template_profile
+
+    def make_template(with_body: bool) -> Path:
+        path = tmp_path / f"cover-{with_body}.pptx"
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        _textbox(slide, "TEMPLATE TITLE", 1.0, 0.5, 8.0, 1.0, 32)
+        _textbox(slide, "TEMPLATE SUBTITLE", 1.0, 2.0, 6.0, 0.7, 18)
+        if with_body:
+            _textbox(slide, "TEMPLATE BODY", 1.0, 3.0, 6.0, 0.6, 14)
+        presentation.save(path)
+        return path
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.1",
+            "meta": {"title": "T", "classification": "HUAWEI CONFIDENTIAL"},
+            "slides": [{"layout": "cover", "title": "T", "subtitle": "S", "presenter": "张三", "date": "2026-08-13"}],
+        }
+    )
+
+    profile_without_body = extract_template_profile(make_template(with_body=False))
+    plan = build_template_plan(deck, profile_without_body)
+    assert plan.slides[0].strategy == "prototype_replace"
+
+    profile_with_body = extract_template_profile(make_template(with_body=True))
+    body_slots = [shape.shape_id for shape in profile_with_body.slides[0].shapes if shape.role == "body"]
+    assert body_slots, (
+        "template profile exposes no body slot for the presenter/date metadata; "
+        f"roles={[(s.shape_id, s.role) for s in profile_with_body.slides[0].shapes]}"
+    )
+    plan = build_template_plan(deck, profile_with_body)
+    assert any(replacement.source_path == "presenter" for replacement in plan.slides[0].replacements), (
+        "presenter metadata was not mapped to a template slot; "
+        f"strategy={plan.slides[0].strategy}, "
+        f"replacements={[(r.source_path, r.role) for r in plan.slides[0].replacements]}, "
+        f"warnings={[w.message for w in plan.slides[0].warnings]}"
+    )
+
+
+def test_profile_survives_placeholder_shape_without_explicit_geometry(tmp_path: Path) -> None:
+    from pptx.oxml.ns import qn
+    from app.template.profile import extract_template_profile
+
+    path = tmp_path / "no-geometry.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    textbox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    textbox.text = "TITLE"
+    sp = textbox._element
+    sp_pr = sp.find(qn("p:spPr"))
+    xfrm = sp_pr.find(qn("a:xfrm"))
+    if xfrm is not None:
+        sp_pr.remove(xfrm)
+    presentation.save(path)
+
+    profile = extract_template_profile(path)
+    assert profile.slides[0].shapes
+
+
+def test_text_fit_does_not_crash_on_shape_without_geometry(tmp_path: Path) -> None:
+    from pptx.oxml.ns import qn
+    from app.template.text_fit import replace_text_preserving_style
+
+    path = tmp_path / "no-geometry.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    textbox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1))
+    textbox.text = "TITLE"
+    sp = textbox._element
+    sp_pr = sp.find(qn("p:spPr"))
+    xfrm = sp_pr.find(qn("a:xfrm"))
+    if xfrm is not None:
+        sp_pr.remove(xfrm)
+    presentation.save(path)
+
+    presentation = Presentation(path)
+    shape = presentation.slides[0].shapes[0]
+    assert replace_text_preserving_style(shape, "Longer replacement title", role="title")
+
+
+def test_text_fit_does_not_double_bullet_when_template_owns_bullet_char(tmp_path: Path) -> None:
+    """A template paragraph with a:buChar must not render '• • item'."""
+    from lxml import etree as _etree
+    from pptx.oxml.ns import qn as _qn
+    from app.template.text_fit import replace_text_preserving_style
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    textbox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(2))
+    textbox.text = "模板正文"
+    paragraph = textbox.text_frame.paragraphs[0]
+    p_pr = paragraph._p.get_or_add_pPr()
+    _etree.SubElement(p_pr, _qn("a:buFont")).set("typeface", "Arial")
+    _etree.SubElement(p_pr, _qn("a:buChar")).set("char", "•")
+    paragraph.text = "模板正文"
+
+    assert replace_text_preserving_style(textbox, "• 第一条\n• 第二条", role="body", fallback_font_name="Arial")
+
+    texts = [paragraph.text for paragraph in textbox.text_frame.paragraphs]
+    assert texts == ["第一条", "第二条"], f"double bullet not stripped: {texts}"

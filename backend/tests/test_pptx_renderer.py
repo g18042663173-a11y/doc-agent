@@ -1748,3 +1748,88 @@ def _cell_fill_hex(cell) -> str:
     rgb = cell.fill.fore_color.rgb
     assert isinstance(rgb, RGBColor)
     return str(rgb)
+
+
+def test_render_scatter_chart_with_default_data_labels_does_not_crash(tmp_path: Path) -> None:
+    import zipfile
+
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR(
+        ir_type="deck",
+        ir_version="2.1",
+        meta={"title": "T", "classification": "HUAWEI CONFIDENTIAL"},
+        slides=[
+            {
+                "layout": "chart",
+                "title": "scatter",
+                "chart": {
+                    "kind": "scatter",
+                    "categories": [],
+                    "series": [{"name": "s", "values": [1.0, 2.0], "x_values": [0.0, 1.0]}],
+                },
+            }
+        ],
+    )
+    output = render_deck_ir(deck, tmp_path / "scatter.pptx")
+
+    with zipfile.ZipFile(output) as package:
+        chart_xml = next(
+            package.read(name).decode("utf-8")
+            for name in package.namelist()
+            if name.startswith("ppt/charts/") and name.endswith(".xml")
+        )
+    assert "dLbls" in chart_xml
+
+
+def test_deck_ir_rejects_body_span_crossing_row_group_label(tmp_path: Path) -> None:
+    from app.ir.validation import validate_deck_ir
+
+    payload = {
+        "ir_type": "deck",
+        "ir_version": "2.1",
+        "meta": {"title": "T", "classification": "HUAWEI CONFIDENTIAL"},
+        "slides": [
+            {
+                "layout": "table",
+                "title": "t",
+                "table": {
+                    "header": ["H1", "H2"],
+                    "rows": [["a", "b"], ["", "d"], ["", "f"]],
+                    "row_groups": [{"start_row": 1, "span": 1, "label": "G"}],
+                    "cell_spans": [{"area": "body", "row": 0, "col": 0, "rowspan": 3, "colspan": 1}],
+                },
+            }
+        ],
+    }
+    result = validate_deck_ir(payload)
+    assert not result.ok
+    assert any(item.code == "D005" for item in result.errors)
+
+
+def test_deck_ir_accepts_span_on_row_group_own_row(tmp_path: Path) -> None:
+    from app.rendering.pptx_renderer import render_deck_ir
+    from app.ir.validation import validate_deck_ir
+
+    payload = {
+        "ir_type": "deck",
+        "ir_version": "2.1",
+        "meta": {"title": "T", "classification": "HUAWEI CONFIDENTIAL"},
+        "slides": [
+            {
+                "layout": "table",
+                "title": "t",
+                "table": {
+                    "header": ["H1", "H2"],
+                    "rows": [["", "b"], ["c", "d"]],
+                    "row_groups": [{"start_row": 0, "span": 1, "label": "G"}],
+                    "cell_spans": [{"area": "body", "row": 0, "col": 0, "rowspan": 1, "colspan": 1}],
+                },
+            }
+        ],
+    }
+    result = validate_deck_ir(payload)
+    assert result.ok
+    if result.value is not None:
+        render_deck_ir(result.value, tmp_path / "table.pptx")
