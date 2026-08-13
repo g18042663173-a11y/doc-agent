@@ -38,6 +38,10 @@ public sealed class SettingsStore
             }
 
             value.Appearance = AppearanceResolver.Normalize(value.Appearance);
+            // A hand-edited settings.json may contain "nga": null or
+            // "recent_job_ids": null; normalize so no consumer sees a null.
+            value.Nga ??= new NgaStoredConfig();
+            value.RecentJobIds ??= [];
             return value;
         }
         catch (IOException)

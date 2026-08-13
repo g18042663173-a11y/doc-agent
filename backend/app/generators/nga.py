@@ -334,7 +334,7 @@ class NgaGenerator:
             "json",
             prompt,
         ]
-        if sys.platform == "win32" and _windows_command_length(command) > _WINDOWS_COMMAND_LINE_LIMIT:
+        if sys.platform == "win32" and len(subprocess.list2cmdline(command)) > _WINDOWS_COMMAND_LINE_LIMIT:
             raise _prompt_exceeds_command_line_limit()
         try:
             if self._subprocess_run is not None:
@@ -530,6 +530,11 @@ def _run_cli_limited(
     for reader in readers:
         reader.join(timeout=5)
 
+    # Re-check the cancel flag after the process has fully exited: a cancel
+    # that lands in the last poll window would otherwise be missed and the
+    # completed output returned as a normal success.
+    if cancel_event is not None and cancel_event.is_set():
+        raise GeneratorCanceled("NGA CLI process canceled")
     if canceled:
         raise GeneratorCanceled("NGA CLI process canceled")
     if timed_out:
@@ -578,16 +583,6 @@ def _stop_cli_process(process: Any) -> None:
         process.kill()
     except (OSError, ProcessLookupError):
         pass
-
-
-def _windows_command_length(command: list[str]) -> int:
-    """Worst-case command-line length after subprocess.list2cmdline quoting.
-
-    Every character may gain an escaping backslash and every argument may be
-    wrapped in quotes, so 2 * len(arg) + 2 per argument is a safe upper bound.
-    """
-
-    return sum(2 * len(arg) + 3 for arg in command)
 
 
 def _prompt_exceeds_command_line_limit() -> NgaGeneratorError:

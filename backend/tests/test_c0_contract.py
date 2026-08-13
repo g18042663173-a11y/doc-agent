@@ -539,16 +539,19 @@ def test_nga_generator_requires_intranet_environment(monkeypatch: pytest.MonkeyP
     assert captured.value.retryable is False
 
 
-def test_verify_main_runs_stub_chain_when_all_gates_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_verify_main_runs_stub_chain_when_all_gates_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import scripts.verify as verify
 
     monkeypatch.setattr(verify, "_run_four_format_e2e", lambda _output_dir: True)
     monkeypatch.setattr(verify, "_run_pytest_with_coverage", lambda _output_dir: True)
 
-    assert verify.main() == 0
-    assert (ROOT / "output" / "c0_word.docx").exists()
-    assert (ROOT / "output" / "c0_deck.pptx").exists()
-    report = json.loads((ROOT / "output" / "report.json").read_text(encoding="utf-8"))
+    # Write into an isolated directory: the shared ROOT/output is a race with
+    # any concurrently running pytest instance (or verify.py) over the same
+    # c0_word.docx/c0_deck.pptx/report.json files.
+    assert verify.main(tmp_path) == 0
+    assert (tmp_path / "c0_word.docx").exists()
+    assert (tmp_path / "c0_deck.pptx").exists()
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
     assert report["summary"]["pass"] is True
 
 

@@ -80,19 +80,19 @@ def test_default_theme_remains_hw_v1() -> None:
     assert attempt.validation.value.meta.theme == "hw_v1"
 
 
-def test_named_theme_renders_pptx(name: str = "hw-academic") -> None:
+def test_named_theme_renders_pptx(tmp_path: Path, name: str = "hw-academic") -> None:
     attempt = generate_deck(
         _document(),
         generator=StubGenerator(),
         options=GenerationOptions(depth="概览", theme=name),
     )
     deck = attempt.validation.value
-    path = render_deck_ir(deck, Path("output") / f"theme-{name}-test.pptx")
+    path = render_deck_ir(deck, tmp_path / f"theme-{name}-test.pptx")
     assert path.exists()
     assert path.stat().st_size > 0
 
 
-def test_named_theme_lint_uses_own_palette() -> None:
+def test_named_theme_lint_uses_own_palette(tmp_path: Path) -> None:
     """主题色板差异（如 hw-academic 的 #1F4E79 锚点）不应被复检误报为色板外颜色。"""
     attempt = generate_deck(
         _document(),
@@ -100,7 +100,7 @@ def test_named_theme_lint_uses_own_palette() -> None:
         options=GenerationOptions(depth="概览", theme="hw-academic"),
     )
     deck = attempt.validation.value
-    path = render_deck_ir(deck, Path("output") / "theme-hw-academic-lint-test.pptx")
+    path = render_deck_ir(deck, tmp_path / "theme-hw-academic-lint-test.pptx")
     report = check_pptx(path, classification=deck.meta.classification, theme_name=deck.meta.theme)
     off_palette = [item for item in report.items if item.code == "HW-W02" and "1F4E79" in item.message]
     assert not off_palette

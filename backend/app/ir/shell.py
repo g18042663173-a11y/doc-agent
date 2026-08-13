@@ -28,8 +28,11 @@ def extract_json_text(raw: str) -> str:
         fenced = fenced_blocks[0]
         candidate = _single_json_object(fenced.group(1).strip())
         outside = f"{text[:fenced.start()]} {text[fenced.end():]}"
-        outside_valid, _outside_invalid, outside_truncated = _scan_json_objects(outside)
-        if outside_valid or outside_truncated:
+        outside_valid, _outside_invalid, _outside_truncated = _scan_json_objects(outside)
+        # Mirrors _single_json_object: a complete fenced object wins over a stray
+        # unbalanced brace (e.g. a '{' in the surrounding explanation). Only a
+        # genuinely complete second JSON object outside the fence is ambiguous.
+        if outside_valid:
             raise JsonExtractionError("multiple JSON objects found")
         return candidate
     return _single_json_object(text)

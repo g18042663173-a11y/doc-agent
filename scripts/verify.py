@@ -30,7 +30,7 @@ CORE_PACKAGE_THRESHOLD = 80.0
 OVERALL_THRESHOLD = 70.0
 
 
-def main() -> int:
+def main(output_dir: Path | None = None) -> int:
     try:
         verify_schema_snapshots(ROOT / "backend" / "schemas")
     except SchemaSnapshotError as exc:
@@ -41,7 +41,7 @@ def main() -> int:
     word = WordIR.model_validate_json(generator.generate("", target="word_ir"))
     deck = DeckIR.model_validate_json(generator.generate("", target="deck_ir"))
 
-    output_dir = ROOT / "output"
+    output_dir = output_dir or (ROOT / "output")
     word_path = render_word_ir(word, output_dir / "c0_word.docx")
     deck_path = render_deck_ir(deck, output_dir / "c0_deck.pptx")
     report = check_pptx(deck_path, classification=deck.meta.classification)

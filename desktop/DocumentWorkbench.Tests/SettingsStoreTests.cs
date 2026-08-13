@@ -111,6 +111,30 @@ public sealed class SettingsStoreTests
         }
     }
 
+    [Fact]
+    public async Task NullNgaAndRecentJobIdsAreNormalizedToNonNull()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"document-workbench-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var store = new SettingsStore(root);
+            await File.WriteAllTextAsync(
+                store.SettingsPath,
+                """{ "settings_version": "1.0", "nga": null, "recent_job_ids": null }""");
+
+            var loaded = await store.LoadAsync();
+
+            Assert.NotNull(loaded.Nga);
+            Assert.NotNull(loaded.RecentJobIds);
+            Assert.Equal("http", loaded.Nga.Transport);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     [Theory]
     [InlineData("system", false, true, "Themes/Palette.Light.xaml")]
     [InlineData("system", false, false, "Themes/Palette.Dark.xaml")]

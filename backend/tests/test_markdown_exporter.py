@@ -52,6 +52,19 @@ def test_export_document_markdown_converts_every_document_block() -> None:
     assert "\n---\n" in markdown
 
 
+def test_exporter_escapes_both_brackets_in_image_caption() -> None:
+    """A caption with '[' must escape it too, or CommonMark stops recognizing
+    the image link and renders the whole line as plain text."""
+    document = _document_with_blocks(
+        [{"type": "image_placeholder", "caption": "图1 [架构] 说明", "ref": "architecture.png"}]
+    )
+
+    markdown = export_document_markdown(document)
+
+    assert "![图1 \\[架构\\] 说明](architecture.png)" in markdown
+    assert "\\[架构" in markdown
+
+
 def test_exporter_uses_a_safe_fence_when_code_contains_backticks() -> None:
     document = _document_with_blocks([{"type": "code_block", "code": "```literal\n    still code"}])
 

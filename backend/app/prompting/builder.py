@@ -72,7 +72,7 @@ TARGETS = {
         "model": WordIR,
     },
     "deck": {
-        "label": "DeckIR v2.1",
+        "label": "DeckIR v2.2",
         "description": "华为风格 PPTX 演示文稿",
         "model": DeckIR,
     },
@@ -98,8 +98,11 @@ def build_prompt(
         raise ValueError("max_output_chars must be at least 2000")
     if kind != "deck" and (depth is not None or pages is not None):
         raise ValueError("depth/pages are only supported for deck prompts")
-    if pages is not None and not 3 <= pages <= 30:
-        raise ValueError("pages must be between 3 and 30")
+    if pages is not None and not 1 <= pages <= 30:
+        # A segmented chunk prompt legitimately carries 1-2 pages for the tail
+        # of a deck (e.g. 13 pages -> 4+4+4+1); only the overall target is
+        # clamped to 3+ by generation options.
+        raise ValueError("pages must be between 1 and 30")
     target = TARGETS[kind]
     schema_json = json.dumps(normalized_schema(target["model"]), ensure_ascii=False, sort_keys=True, indent=2)
     context_json, truncation_notice, context_incomplete = _context_json(
@@ -166,7 +169,7 @@ def _contract_guide(kind: Kind) -> str:
         )
     return (
         "顶层只能有 ir_type、ir_version、meta、slides。"
-        "ir_type 固定为 deck，ir_version 固定为 2.1，meta.title 必填且非空，slides 至少 1 页。\n"
+        "ir_type 固定为 deck，ir_version 固定为 2.2，meta.title 必填且非空，slides 至少 1 页。\n"
         "slides[].layout 只能是 cover、agenda、section、title_bullets、two_column、table、cards、chart、"
         "architecture_diagram、process_flow、timeline、image、image_text、image_grid、infographic、conclusion、composite；"
         "每种 layout 只填写 Schema 为它定义的字段。\n"

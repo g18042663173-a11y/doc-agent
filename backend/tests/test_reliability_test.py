@@ -21,7 +21,7 @@ def test_reliability_entrypoint_writes_json_junit_and_html(tmp_path: Path) -> No
             "scripts/reliability_test.py",
             "--skip-verify",
             "--pytest-target",
-            "backend/tests/test_web_api_static.py",
+            "backend/tests/test_web_api_static.py::test_web_api_serves_frontend_from_same_origin",
             "--output-dir",
             str(output_dir),
         ],

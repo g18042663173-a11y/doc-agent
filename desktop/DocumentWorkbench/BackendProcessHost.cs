@@ -30,6 +30,24 @@ public sealed class BackendProcessHost : IDisposable
     public string ApplicationDataDirectory { get; }
     public int ProcessId => _process.Id;
 
+    /// <summary>
+    /// True while the spawned backend process is still alive. Used by the UI to
+    /// distinguish a transient connection failure from a backend that has
+    /// permanently died (no auto-restart exists in desktop_host), so the job
+    /// poll loop can stop instead of retrying forever.
+    /// </summary>
+    public bool IsProcessAlive()
+    {
+        try
+        {
+            return !_process.HasExited;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     public static async Task<BackendProcessHost> StartAsync(CancellationToken cancellationToken)
     {
         var appData = Path.Combine(

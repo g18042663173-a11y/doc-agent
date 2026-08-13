@@ -282,6 +282,38 @@ def test_nga_cli_config_validates_model_and_cli_path() -> None:
     assert spaced.cli_path == "C:/Program Files/NGA/nga.exe"
 
 
+def test_nga_cli_command_line_guard_uses_exact_length_not_worst_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Windows guard must use the real list2cmdline length, not a 2x worst
+    case estimate that wrongly rejects valid ~16-30KB word prompts."""
+    import sys as _sys
+
+    from app.generators.nga import NgaCliConfig, NgaGenerator, NgaGeneratorError
+
+    called: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        called.append(command)
+        raise AssertionError("subprocess reached (guard passed)")
+
+    generator = NgaGenerator(
+        config=NgaCliConfig(model="m", cli_path="nga"),
+        token="t",
+        subprocess_run_fn=fake_run,
+    )
+    if _sys.platform == "win32":
+        with pytest.raises(AssertionError, match="guard passed"):
+            generator.generate("x" * (16 * 1024), target="word_ir")
+        assert called, "a valid ~16KB prompt must pass the Windows guard"
+        called.clear()
+        with pytest.raises(NgaGeneratorError) as exc_info:
+            generator.generate("x" * (60 * 1024), target="word_ir")
+        assert "command-line length limit" in str(exc_info.value)
+        assert not called, "an over-limit prompt must be rejected before the subprocess"
+    else:
+        with pytest.raises(AssertionError, match="guard passed"):
+            generator.generate("x" * (16 * 1024), target="word_ir")
+
+
 def test_nga_cli_transport_concatenates_text_events(monkeypatch: pytest.MonkeyPatch) -> None:
     stream = "\n".join(
         [

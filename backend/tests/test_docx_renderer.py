@@ -391,6 +391,106 @@ def test_render_word_ir_handles_100_by_12_table(tmp_path: Path) -> None:
     assert len(doc.tables[0].columns) == 12
 
 
+def test_replace_legacy_word_blue_preserves_utf16_parts(tmp_path: Path) -> None:
+    """A UTF-16 word part must not be rewritten as UTF-8 with a UTF-16 declaration."""
+    import zipfile
+
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import _replace_legacy_word_blue, render_word_ir
+    from app.rendering.theme import load_theme
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "T", "classification": "HUAWEI CONFIDENTIAL"},
+            "blocks": [{"type": "paragraph", "text": "x"}],
+        }
+    )
+    source = render_word_ir(ir, tmp_path / "base.docx")
+    converted = tmp_path / "utf16.docx"
+    with zipfile.ZipFile(source, "r") as zin, zipfile.ZipFile(converted, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+        for info in zin.infolist():
+            data = zin.read(info.filename)
+            if info.filename.startswith("word/") and info.filename.endswith(".xml"):
+                text = data.decode("utf-8")
+                if text.startswith("<?xml"):
+                    text = text[text.find("?>") + 2 :]
+                data = ('<?xml version="1.0" encoding="UTF-16"?>' + text).encode("utf-16")
+            zout.writestr(info, data)
+
+    _replace_legacy_word_blue(converted, load_theme("hw_v1"))
+
+    with zipfile.ZipFile(converted) as package:
+        raw = package.read("word/document.xml")
+    assert raw[:2] == b"\xff\xfe", "UTF-16 part was re-encoded without its BOM"
+    text = raw.decode("utf-16")  # raises if bytes are not valid UTF-16
+    assert text.startswith('<?xml version="1.0" encoding="UTF-16"?>')
+
+
+def test_separate_numbered_lists_restart_numbering(tmp_path: Path) -> None:
+    """Two independent numbered lists must not merge into one continuous run."""
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "T", "classification": "HUAWEI CONFIDENTIAL"},
+            "blocks": [
+                {"type": "numbered_list", "items": [{"text": "first one", "level": 1}, {"text": "first two", "level": 1}]},
+                {"type": "paragraph", "text": "gap"},
+                {"type": "numbered_list", "items": [{"text": "second one", "level": 1}, {"text": "second two", "level": 1}]},
+            ],
+        }
+    )
+    output = render_word_ir(ir, tmp_path / "lists.docx")
+
+    with zipfile.ZipFile(output) as package:
+        numbering = package.read("word/numbering.xml").decode("utf-8")
+
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    doc = Document(str(output))
+    list_num_ids: list[int] = []
+    for paragraph in doc.paragraphs:
+        num_pr = paragraph._p.find(f"{w}pPr/{w}numPr")
+        if num_pr is not None:
+            list_num_ids.append(int(num_pr.find(f"{w}numId").get(f"{w}val")))
+
+    # Two separate lists -> two distinct numIds, each restarted at 1.
+    assert len(set(list_num_ids)) == 2
+    for num_id in set(list_num_ids):
+        restart = re.search(
+            rf'<w:num w:numId="{num_id}"[^>]*>\s*<w:abstractNumId w:val="\d+"/>\s*<w:lvlOverride w:ilvl="0">\s*<w:startOverride w:val="1"/>',
+            numbering,
+        )
+        assert restart is not None, f"numId {num_id} is not restarted at 1"
+
+
+def test_legacy_blue_replacement_does_not_corrupt_user_hex_text(tmp_path: Path) -> None:
+    """A literal '4F81BD' in user content must survive the theme recoloring."""
+    from app.ir.word_ir import WordIR
+    from app.rendering.docx_renderer import render_word_ir
+
+    ir = WordIR.model_validate(
+        {
+            "ir_type": "word",
+            "ir_version": "1.0",
+            "meta": {"title": "T", "classification": "HUAWEI CONFIDENTIAL"},
+            "blocks": [
+                {"type": "paragraph", "text": "颜色常量 4F81BD 应原样保留"},
+                {"type": "table", "header": ["项", "值"], "rows": [["颜色", "4F81BD"]]},
+            ],
+        }
+    )
+    output = render_word_ir(ir, tmp_path / "hex.docx")
+
+    doc = Document(str(output))
+    assert "颜色常量 4F81BD 应原样保留" in [paragraph.text for paragraph in doc.paragraphs]
+    assert doc.tables[0].rows[1].cells[1].text == "4F81BD"
+
+
 def _word_package_xml(path: Path) -> str:
     with zipfile.ZipFile(path) as package:
         return "\n".join(

@@ -126,6 +126,23 @@ def test_extract_json_text_ignores_trailing_prose_unbalanced_brace() -> None:
     assert extract_json_text(raw) == '{"value":"x"}'
 
 
+def test_extract_json_text_ignores_trailing_prose_unbalanced_brace_in_fenced_path() -> None:
+    from app.ir.shell import extract_json_text
+
+    raw = f"```json\n{VALID_WORD_JSON}\n```\n后续说明里有一个未闭合的花括号 {{"
+
+    assert extract_json_text(raw) == VALID_WORD_JSON
+
+
+def test_extract_json_text_fenced_still_rejects_complete_second_object_outside() -> None:
+    from app.ir.shell import extract_json_text
+
+    raw = f"```json\n{VALID_WORD_JSON}\n```\n{{\"ir_type\": \"word\"}}"
+
+    with pytest.raises(Exception, match="multiple JSON objects found"):
+        extract_json_text(raw)
+
+
 class RepairingGenerator:
     name = "repairing"
 

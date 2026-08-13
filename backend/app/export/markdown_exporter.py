@@ -153,7 +153,9 @@ def _quote(text: str) -> str:
 
 
 def _image_placeholder(caption: str | None, ref: str | None) -> str:
-    alt = (caption or ref or "图片占位").replace("]", "\\]")
+    # Escape both bracket kinds: a lone escaped ']' with an unescaped '[' makes
+    # CommonMark drop the image link entirely and render the line as text.
+    alt = (caption or ref or "图片占位").replace("]", "\\]").replace("[", "\\[")
     destination = _escape_link_destination(ref or "#image-placeholder")
     return f"![{alt}]({destination})"
 

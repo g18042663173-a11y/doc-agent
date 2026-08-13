@@ -299,6 +299,25 @@ def test_detailed_generation_repairs_truncated_outline_and_wrong_chunk_page_coun
     assert attempt.repair_events[1]["initial_error_codes"] == ["D006"]
 
 
+def test_segmented_generation_supports_partial_last_chunk_page_counts() -> None:
+    """Target page counts that leave a 1-2 page tail chunk (pages % 4 in {1,2})
+    must not crash the segmented path (a tail chunk carries < 3 pages)."""
+    from app.generation.depth import GenerationOptions, generate_deck
+    from app.generators.stub import StubGenerator
+    from app.ir.document_ir import DocumentIR
+
+    document = DocumentIR.model_validate(_document_payload())
+    for target_pages in (9, 10, 13, 14):
+        attempt = generate_deck(
+            document,
+            generator=StubGenerator(),
+            options=GenerationOptions(depth="详细", pages=target_pages),
+        )
+        assert attempt.validation.ok, f"pages={target_pages}: {attempt.validation}"
+        assert attempt.validation.value is not None
+        assert len(attempt.validation.value.slides) == target_pages
+
+
 def test_marker_collision_user_content_echoing_marker_text_does_not_hijack_parsing() -> None:
     from app.generation.analysis import ANALYSIS_MARKER, build_analysis_prompt, measure_document
     from app.generation.depth import OUTLINE_MARKER

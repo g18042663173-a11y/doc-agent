@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
+from typing import Any
 import zipfile
 
 from docx import Document
@@ -9,6 +11,7 @@ from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
+from docx.text.paragraph import Paragraph
 
 from app.ir.common import (
     BulletListBlock,
@@ -22,6 +25,11 @@ from app.ir.common import (
 )
 from app.ir.word_ir import WordIR
 from app.rendering.theme import load_theme
+
+# Legacy Word theme blue that python-docx's default template bakes into color
+# attributes (w:val="4F81BD", a:srgbClr val=...). Matched only as a quoted
+# attribute value so user text containing the hex is never rewritten.
+_LEGACY_BLUE_RE = re.compile(r'(["\'])4[fF]81[bB][dD]\1')
 
 
 def render_word_ir(ir: WordIR, output_path: Path) -> Path:
@@ -317,14 +325,92 @@ def _render_list(document: Document, block: BulletListBlock | NumberedListBlock,
     styles = document.styles
     primary = "List Number" if numbered else "List Bullet"
     secondary = f"{primary} 2"
+    numbering_elm = _numbering_element(document)
+    numbered_ok = (
+        numbered
+        and numbering_elm is not None
+        and _abstract_num_id_for_level(document, numbering_elm, 1) is not None
+    )
+    level_num_ids: dict[int, int] = {}
     for item in block.items:
-        if item.level >= 2 and secondary in styles:
-            style = secondary
-        elif primary in styles:
-            style = primary
+        if numbered_ok:
+            # Give every separate numbered list its own restarting counter; the
+            # shared built-in "List Number" styles would otherwise render two
+            # independent lists as one continuous 1..N run.
+            if item.level not in level_num_ids:
+                level_num_ids[item.level] = _fresh_restarting_num_id(document, numbering_elm, item.level)
+            if item.level >= 2 and secondary in styles:
+                style = secondary
+            elif primary in styles:
+                style = primary
+            else:
+                style = None
+            paragraph = document.add_paragraph(item.text, style=style)
+            # Direct numPr overrides the style's shared numbering (restart).
+            _apply_paragraph_numbering(paragraph, level_num_ids[item.level])
         else:
-            style = None
-        document.add_paragraph(item.text, style=style)
+            if item.level >= 2 and secondary in styles:
+                style = secondary
+            elif primary in styles:
+                style = primary
+            else:
+                style = None
+            document.add_paragraph(item.text, style=style)
+
+
+def _numbering_element(document: Document):
+    """Return the <w:numbering> root element, or None if the part is missing."""
+    numbering_part = getattr(document.part, "numbering_part", None)
+    if numbering_part is None:
+        return None
+    return numbering_part.element
+
+
+def _abstract_num_id_for_level(document: Document, numbering_elm: Any, level: int) -> int | None:
+    """Resolve the abstractNumId behind the built-in list style for `level`."""
+    style_name = "List Number" if level == 1 else "List Number 2"
+    try:
+        style = document.styles[style_name]
+    except KeyError:
+        style = document.styles["List Number"]
+    p_pr = getattr(style.element, "pPr", None)
+    if p_pr is None or p_pr.numPr is None or p_pr.numPr.numId is None:
+        return None
+    num_id = p_pr.numPr.numId.val
+    try:
+        return numbering_elm.num_having_numId(num_id).abstractNumId.val
+    except KeyError:
+        return None
+
+
+def _fresh_restarting_num_id(document: Document, numbering_elm: Any, level: int) -> int:
+    """Create a new w:num that reuses the level's abstract numbering but restarts at 1."""
+    style_name = "List Number" if level == 1 else "List Number 2"
+    try:
+        style = document.styles[style_name]
+    except KeyError:
+        style = document.styles["List Number"]
+    p_pr = getattr(style.element, "pPr", None)
+    if p_pr is None or p_pr.numPr is None or p_pr.numPr.numId is None:
+        abstract_num_id = _abstract_num_id_for_level(document, numbering_elm, level)
+    else:
+        num_id = p_pr.numPr.numId.val
+        try:
+            abstract_num_id = numbering_elm.num_having_numId(num_id).abstractNumId.val
+        except KeyError:
+            abstract_num_id = _abstract_num_id_for_level(document, numbering_elm, level)
+    num_el = numbering_elm.add_num(abstract_num_id)
+    lvl_override = num_el.add_lvlOverride(0)
+    lvl_override.add_startOverride(1)
+    return int(num_el.numId)
+
+
+def _apply_paragraph_numbering(paragraph: Paragraph, num_id: int) -> None:
+    num_pr = paragraph._p.get_or_add_pPr().get_or_add_numPr()
+    ilvl = num_pr.get_or_add_ilvl()
+    ilvl.val = 0
+    num_id_el = num_pr.get_or_add_numId()
+    num_id_el.val = num_id
 
 
 def _format_code_run(run, theme: dict) -> None:
@@ -505,11 +591,14 @@ def _theme_hex(theme: dict, color_key: str) -> str:
     return theme["colors"][color_key].lstrip("#").upper()
 
 
-def _decode_xml_part(data: bytes) -> str | None:
-    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
-        return data.decode("utf-16")
+def _decode_xml_part(data: bytes) -> tuple[str, str] | None:
+    """Decode a word/*.xml part, returning (text, encoding); None if undecodable."""
+    if data[:2] == b"\xff\xfe":
+        return data.decode("utf-16-le"), "utf-16-le"
+    if data[:2] == b"\xfe\xff":
+        return data.decode("utf-16-be"), "utf-16-be"
     try:
-        return data.decode("utf-8")
+        return data.decode("utf-8"), "utf-8"
     except UnicodeDecodeError:
         return None
 
@@ -522,10 +611,23 @@ def _replace_legacy_word_blue(output_path: Path, theme: dict) -> None:
             for info in source.infolist():
                 data = source.read(info.filename)
                 if info.filename.startswith("word/") and info.filename.endswith(".xml"):
-                    text = _decode_xml_part(data)
-                    if text is not None:
-                        text = text.replace("4F81BD", replacement).replace("4f81bd", replacement)
-                        data = text.encode("utf-8")
+                    decoded = _decode_xml_part(data)
+                    if decoded is not None:
+                        text, encoding = decoded
+                        # Only replace the legacy blue when it is a quoted color
+                        # attribute value (w:val="4F81BD", a:srgbClr val=...).
+                        # A raw whole-text replace would also rewrite the hex in
+                        # user content (paragraphs, code, table cells), silently
+                        # corrupting the document.
+                        replaced = _LEGACY_BLUE_RE.sub(
+                            lambda match: f'{match.group(1)}{replacement}{match.group(1)}',
+                            text,
+                        )
+                        if replaced != text:
+                            # Re-encode with the original encoding so a UTF-16
+                            # part is not silently rewritten as UTF-8 while its
+                            # XML declaration still says UTF-16.
+                            data = replaced.encode(encoding)
                 target.writestr(info, data)
         temp_path.replace(output_path)
     finally:
