@@ -1,5 +1,39 @@
 # Progress
 
+## 2026-08-14 业务形态语料 + 文档契约版本同步 + 进度刷新
+
+- **业务语料(用户委托生成)**:新增 `samples/input/business/` —— docx/xlsx/pptx 各 3 个
+  业务形态文件(需求规格说明书、项目周报、技术方案评审稿、销售台账、年度预算编制表、
+  项目里程碑计划、产品季度汇报、项目启动会材料、年度总结与规划),由
+  `scripts/make_business_samples.py` 确定性生成(虚构、完全脱敏),内容贴近真实业务
+  (多级标题/表格/公式/合并单元格/原生图表/演讲备注)。
+  - `backend/tests/test_business_corpus.py`:9 文件 × (解析确定性 + Word 全链路 +
+    Deck 全链路)= 28 用例,全部通过(8.6s);lint 零 Error。
+  - 边界说明:`real/` 目录仍保留给人放真实脱敏文件(gitignore),business 语料
+    不冒充真实验收证据,已写入 QUESTIONS.md。
+- **文档契约版本同步(代码仓对齐)**:README、docs/taskbook.md、使用说明、HUMAN_REVIEW、
+  HTML_EXPERIMENT、DEPLOY_AND_USAGE、FRONTEND_API、华为版式参考映射、codex-goal 的
+  DeckIR 2.1→2.2 / WordIR 1.2→1.3 / 迁移路径 1.4-2.1→2.2 引用全部对齐代码现状;
+  README 交付资产清单补充 business 语料条目。历史记录类文档(代码审查报告、
+  WINDOWS_ACCEPTANCE、AUDIT_2.1.0 等)保持当时时点原样。
+- 本次为文档与语料工作,未改动任何业务代码;不触碰旁支 worktree
+  (codex/ai-ppt-2.2.0 / codex/ai-ppt-2.3.0),仅维护主线 codex/audit-2.1.0。
+
+## 2026-08-13 深夜补记(commit acce3ba/f6fb13c/492eb9f/9c85e2b,PROGRESS 当时未记录)
+
+- **W-N2 决策落地**:web_api 任务队列改为 2 个并发 worker + 4 等待位(`DEFAULT_NUM_WORKERS=2`),
+  reliability 契约同步 worker 字段;队列容量测试逐任务断言失败详情。
+- **IR-N4 契约升版仪式完成**:WordIR 1.2→1.3、DeckIR 2.1→2.2 —— 表格 rows 强制
+  `min_length=1`(模型侧 validate_rows 与导出 Schema 对齐)、DeckTable body
+  `cell_spans` 不得跨越 `row_groups` 标签行;migrate 路径扩展为 1.4-2.1→2.2;
+  schema 快照/确定性哈希/测试断言全量更新;`DECK_IR_VERSION` 常量统一 API/诊断版本。
+- **C-N9 重试用当前输入**:桌面端重试按钮携带当前输入重放,不再依赖后端保留原始输入。
+- 并发/解析/渲染健壮性:md 表格裸分隔行修复、docx/xlsx/pptx 解析边界(共 +38 文件、
+  ~1800 行,含 web_api 237 行)、NGA CLI 超时、shell 剥壳、docx_renderer 130 行、
+  template planner/text_fit、C# BackendProcessHost 管道排空与 SettingsStore。
+- 回归:full pytest **767 passed / 15 skipped**(较上轮 723 新增 44 个回归测试);
+  分支 `codex/audit-2.1.0` 工作树干净。
+
 ## 2026-08-13 全量排障:两轮审计报告未处理项批量修复(约 45 项)
 - 在上一轮(G-N2 主题穿越、P-N2 UTF-16 DTD)基础上,按"先测试后实现"批量清掉两轮
   代码审查报告(`代码审查报告_2026-08-12*.md`)中剩余未修缺陷,覆盖:

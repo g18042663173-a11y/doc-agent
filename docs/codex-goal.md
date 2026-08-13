@@ -15,7 +15,7 @@
 
 要达成(达成即停):
 - 三份 IR(WordIR / DocumentIR / DeckIR)以 pydantic 建模,导出 JSON Schema 到文件并加快照测试,作为第一个 commit 冻结;
-- 实现四个输入解析器(md / docx / xlsx / pptx)、DOCX 渲染器、DeckIR 2.1 的 17 版式华为风格 PPTX 渲染器(真实图片、原生图表与信息图)、合规检查器(含 HW-W06~W16)、Prompt/VisualPlan 组装器与 stub generator;
+- 实现四个输入解析器(md / docx / xlsx / pptx)、DOCX 渲染器、DeckIR 2.2 的 17 版式华为风格 PPTX 渲染器(真实图片、原生图表与信息图)、合规检查器(含 HW-W06~W16)、Prompt/VisualPlan 组装器与 stub generator;
 - 任务卡 S1-1~S3-6 的验收标准全部满足。
 
 停止条件(全部满足才算 done):python scripts/verify.py 在 stub 通道全绿、pytest 全绿、parsers+ir+lint 三包覆盖率 ≥ 80%。

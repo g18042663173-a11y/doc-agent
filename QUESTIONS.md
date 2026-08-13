@@ -2,6 +2,18 @@
 
 > 分步执行清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`（Windows 验收与人工交付清单）。
 
+## 2026-08-14 状态刷新
+
+- **IR-N4(表格 rows 缺 minItems)已解决**:2026-08-13 完成契约升版仪式
+  (WordIR 1.2→1.3、DeckIR 2.1→2.2),rows 强制非空,Schema/迁移/样例/快照同步更新。
+- **W-N2(任务严格串行)已决策**:web_api 改为 2 个并发 worker + 4 等待位。
+- **C-N9(重试按钮)已实现**:重试携带当前输入重放,不再依赖后端保留原始输入。
+- **业务语料已生成(用户委托)**:`samples/input/business/` 含 docx/xlsx/pptx 各 3 个
+  业务形态仿真文件(由 `scripts/make_business_samples.py` 确定性生成,虚构、完全脱敏),
+  已纳入 `backend/tests/test_business_corpus.py`(28 用例:解析确定性 + Word/Deck
+  stub 全链路,lint 零 Error)。**注意**:business 是仿真语料,不冒充真实脱敏文件的
+  验收证据;`samples/input/real/` 仍须业务侧提供真实文件做最终语义验收。
+
 ## 2026-08-13 全量排障后遗留项(需决策或真机验证)
 
 本轮已修复两轮审计报告中绝大多数 HIGH/MEDIUM/LOW 缺陷(主题穿越、UTF-16 DTD、
@@ -11,22 +23,15 @@ md/docx/xlsx/pptx 解析边界、shell 剥壳、模板规划/审计、lint 图�
 ### 需产品决策(Track C)
 - **G-N10**: `generators/codex.py` 默认 `gpt-5.6-terra`/`xhigh` 是不存在的模型/推理
   强度值,真端点必 400。当前默认值仅是占位,正确默认需由内网确认后提供。
-- **W-N2**: JobRunner 严格串行(单 worker),`queue_capacity` 只是接受上限;是否接受
-  串行语义、或需要并发 worker 数上限,属产品决策。
-- **IR-N4**: `TableBlock.rows`/`DeckTable.rows` 导出 Schema 缺 `minItems`(模型侧
-  `validate_rows` 要求 ≥1 行)。修复需升 `ir_version`(WordIR 1.2→1.3、DeckIR
-  2.1→2.2)+ 全量契约仪式;影响面是"模型按提示 Schema 产出空表→repair 重试",非崩溃,
-  收益有限。建议与下一次契约演进合并。
 - **IR-N8**: DocumentIR 表格不要求 rows 非空、image_placeholder 不要求 ref/caption。
   判定为**有意宽松**(DocumentIR 是源数据表示,空表/无引图占位在源文档中合法),
   与 WordIR(输出契约)严格性不一致是设计使然。
 
 ### 需 Windows 真机验证(C# / PowerShell)
 - C# `BackendProcessHost.cs` 管道排空(A8)、本轮 C-N6(FormatBytes 0)、
-  C-N7(下载临时文件唯一名)、C-N8(bootstrap 保留窗口 10→2 分钟)、C-N10(刷新保留选中)
-  改动均**未在本机编译验证**(无 .NET SDK);需 `dotnet build desktop/DocumentWorkbench.sln`
-  + `DocumentWorkbench.Tests`。
-- C-N9(重试按钮用当前输入)未改:需要后端保留原始输入才能重放,涉及隐私取舍,留待决策。
+  C-N7(下载临时文件唯一名)、C-N8(bootstrap 保留窗口 10→2 分钟)、C-N10(刷新保留选中)、
+  C-N9(重试携带当前输入)改动均**未在本机编译验证**(无 .NET SDK);需
+  `dotnet build desktop/DocumentWorkbench.sln` + `DocumentWorkbench.Tests`。
 - `stop_workbench.ps1` S-N4(子进程不再 throw)需在真实运行(dot/NGA 子进程)下验证。
 
 ### 判定为设计/有意保留(不修)
@@ -67,8 +72,12 @@ md/docx/xlsx/pptx 解析边界、shell 剥壳、模板规划/审计、lint 图�
 ## 人工待办
 
 1. 真实业务语料:需要提供脱敏后的真实 docx / xlsx / pptx 各至少 3 个,放入 `samples/input/real/`,用于解析与模板生成回归。
-   - 当前默认值:使用构造样例、固定公开样例和 HIT 模板覆盖结构与边界。
-   - TODO:导师或业务侧提供真实语料后纳入 fixtures,不得用构造样例冒充真实验收。
+   - 当前默认值:已生成业务形态仿真语料 `samples/input/business/`(docx/xlsx/pptx 各 3,
+     由 `scripts/make_business_samples.py` 确定性生成,虚构脱敏),纳入
+     `test_business_corpus.py` 解析确定性 + Word/Deck stub 全链路回归;另有构造样例、
+     固定公开样例与 HIT 模板覆盖结构与边界。
+   - TODO:导师或业务侧提供真实脱敏语料后放入 `samples/input/real/`(gitignore 排除,
+     不提交)纳入 fixtures;business 仿真语料不得冒充真实文件验收证据。
 2. PowerPoint 最终审美签字:需要人在目标 Windows PowerPoint 和目标字体环境中判断模板继承、字体观感、信息密度与专业度是否可交付。
    - 当前结果:自动 lint、包校验和 PowerPoint 16 导出均已执行,HIT 联系表位于 `output/hit_template_acceptance/powerpoint_visual_20260729/contact_sheet.png`；双引擎最终对照联系表位于 `output/html2pptx-final-office/`，均为 `manual_pending`。
    - TODO:业务评审人对最终样例签字;自动检查通过不等于人工审美终审完成。

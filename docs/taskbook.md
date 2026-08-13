@@ -62,7 +62,7 @@
 | A2 | AICoding 输出形态:基本能稳定输出一个 json 代码块,但可能夹带解释文字,必须经“剥壳 + Schema 校验”后方可进入渲染。 |
 | A3 | 密级文案默认:DOCX 页脚为“内部公开”,PPTX 页脚为“HUAWEI CONFIDENTIAL”,均在配置中可改。 |
 | A4 | 中文字体:外网以微软雅黑为主选,HarmonyOS Sans 作为内网目标字体;不追求与母版逐像素一致,字体集中在主题配置,内网只改一处。 |
-| A5 | DeckIR 2.1 已评审冻结:本文 3.3 节和导出的 JSON Schema 为权威版;1.4-1.9 输入先在内存迁移,再按 2.0 校验,不覆盖用户原文件。 |
+| A5 | DeckIR 2.2 已评审冻结(2.1→2.2 契约升版完成于 2026-08-13:表格 rows 强制非空、body cell_spans 不得跨越 row_groups 标签行):本文 3.3 节和导出的 JSON Schema 为权威版;1.4-2.1 输入先在内存迁移,再按 2.2 校验,不覆盖用户原文件。 |
 | A6 | CLI、Flask 浏览器工作台和 WPF 原生客户端均已交付，底层必须调用相同 parse/generate/render/lint 函数。 |
 | A7 | AICoding 输入约束:单次输入按 8K–16K 字符规划(Prompt 截断上限据此设定);以“把内容贴进 Prompt”为准,不假设 AICoding 能直接读取本地文件路径。 |
 
@@ -211,7 +211,7 @@ CLI 继续作为可审计核心入口；浏览器工作台提供兼容诊断，W
 - Schema 冻结与快照测试:三份 JSON Schema 导出为文件入库,配 schema 快照测试;凡改动 IR 字段而未同步升 ir_version、未过评审的,CI 直接失败(见 §7.1),杜绝契约悄悄漂移。
 - IR 契约是唯一可信来源:任何人(含编码 agent)不得为了让某个样例通过而擅自放宽 Schema;确需变更时,先改 Schema + 升版本 + 更新正反样例,再改代码。
 
-### 3.1  WordIR v1.2(Word 输出契约,Step 1 核心)
+### 3.1  WordIR v1.3(Word 输出契约,Step 1 核心)
 
 顶层结构:meta(文档元信息)+ blocks(有序内容块数组)。meta 字段:title(必填)、subtitle、author、classification(密级,默认“内部公开”)、header_text、footer_text、可选 document_control。document_control 用于正式详设文档头:product_name、document_name、version 必填;classification 省略时沿用 meta.classification;prepared/reviewed/approved 均为 { name?, date? }，空值保留在控制表中而不省略行。blocks 类型枚举如下:
 
@@ -284,7 +284,7 @@ CLI 继续作为可审计核心入口；浏览器工作台提供兼容诊断，W
 | PPT 图表 | 只取图表标题与类型,不反解数据(P2 再议)。 |
 | 嵌入图片(全格式) | 记录存在与尺寸,不搬运二进制(DOCX 图片透传列为 P2)。 |
 
-### 3.3  DeckIR 2.1(PPT 输出契约,Step 3 核心)
+### 3.3  DeckIR 2.2(PPT 输出契约,Step 3 核心)
 
 meta 字段:title(必填)、subtitle、author、date、classification(默认 HUAWEI CONFIDENTIAL)、theme(默认 hw_v1)。slides[].layout 枚举 17 种,在 1.9 基础上冻结真实图片、信息图和高级图表能力:
 
@@ -331,7 +331,7 @@ meta 字段:title(必填)、subtitle、author、date、classification(默认 HUA
 
 DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法、D002 缺 meta.title、D003 未知 layout、D004 该 layout 缺必填字段、D005 表格超限 / 行列不规整 / 分组或合并越界、D006 bullets 超条数;W1xx 为可自动降级项(如 agenda 超 8 条截断)。页数合法范围 1-30,演示目标 5-12 页。
 
-1.4-1.9 输入在校验入口深拷贝并迁移为 2.0 后重新执行完整 Schema 校验;迁移不会覆写原文件,renderer 不直接兼容非法旧字段。1.7 composite 单 component 会转换为单元素 components 列表;架构图未知 type 使用主题 default 色。
+1.4-2.1 输入在校验入口深拷贝并迁移为 2.2 后重新执行完整 Schema 校验;迁移不会覆写原文件,renderer 不直接兼容非法旧字段。1.7 composite 单 component 会转换为单元素 components 列表;架构图未知 type 使用主题 default 色。
 
 ### 3.4  图片资产与视觉决策独立契约
 
@@ -347,7 +347,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 | 编号 | 任务 | 关键实现点 | 验收标准 | 预估 |
 | --- | --- | --- | --- | --- |
-| S1-1 | WordIR v1.2 定稿与校验器 | pydantic 模型;错误码表落码;validate_word_ir() 校验函数;Schema 快照导出 | 10 个非法样例逐一命中预期错误码;Schema 文件入库 | 1.0 天 |
+| S1-1 | WordIR v1.3 定稿与校验器 | pydantic 模型;错误码表落码;validate_word_ir() 校验函数;Schema 快照导出 | 10 个非法样例逐一命中预期错误码;Schema 文件入库 | 1.0 天 |
 | S1-2 | 剥壳器 + IR 修复回路 | 三形态剥壳(纯 JSON / 代码块 / 带解释);校验失败回喂错误码限重试 2 次;失败附原文前 200 字(见 §5.3) | 三形态用例全过;注入可修复错误经回路后通过,不可修复者稳定报 E00x | 1.0 天 |
 | S1-3 | DOCX 渲染核心 | 标题 1-4 级、段落、两级列表、quote/note、分页;页眉页脚 + 密级 + 页码;样式集中 STYLES | 样例 1、2 渲染后回读断言全过;Word 中可直接编辑 | 2.0 天 |
 | S1-4 | 表格渲染 | 表头加粗底纹、比例列宽、跨页续排(表头重复)、超限截断 + W103 | 样例 3 通过;100 行 x 12 列极限表可渲染不崩 | 1.0 天 |
@@ -376,7 +376,7 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 
 ```
 [角色] 你是企业文档结构化助手。
-[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.2(或 DeckIR 2.1)Schema。
+[任务] 阅读下方 DocumentIR,生成一份 <目标文档说明>,输出必须符合 WordIR v1.3(或 DeckIR 2.2)Schema。
 [输出纪律] 只输出一个裸 JSON 对象,不得使用代码围栏或附加文字;不得新增 Schema 之外的字段;
           表格不超过 <上限>;要点每页不超过 7 条。
 [目标 Schema 摘要] <内嵌字段说明或精简 JSON Schema,由 ir 包自动生成,禁止手抄>
@@ -489,9 +489,9 @@ DeckIR 校验错误码沿用 WordIR 的分层思路,前缀 D:D001 JSON 不合法
 - 每次模板渲染生成 `template_profile.json`、`template_plan.json`、`template_structure.json`、`template_replacement_audit.json` 和 `pptx_package_report.json`。替换审计含资产哈希、图片槽、fit/crop/focal 和回退原因;包校验覆盖 Content Types、XML 可解析性、`.rels` 目标以及 XML 中非空 `r:id/r:embed/r:link` 的反向引用。
 - 实现使用 Python 3.12、python-pptx、Pillow 和 Pydantic v2,不依赖 HTML、PptxGenJS、浏览器渲染或外部 presentation skill。
 
-### 6.3.2  DeckIR 2.1 已冻结扩展
+### 6.3.2  DeckIR 2.2 已冻结扩展
 
-DeckIR 2.1 已通过 Schema、正反样例、迁移器和快照测试冻结 scatter、组合图、类目轴/数值轴标题、显式 number format、数据来源/口径字段、真实图片新布局和 infographic 判别联合。组合图仅在主次量纲不同且确有比较价值时使用次轴;数据大小不同本身不是启用双轴的理由。任何后续字段仍须先升版本和评审,不得通过 renderer 私有字段绕过契约。
+DeckIR 2.2 已通过 Schema、正反样例、迁移器和快照测试冻结 scatter、组合图、类目轴/数值轴标题、显式 number format、数据来源/口径字段、真实图片新布局和 infographic 判别联合,并在此基础上要求表格 rows 非空、禁止 body cell_spans 跨越 row_groups 标签行。组合图仅在主次量纲不同且确有比较价值时使用次轴;数据大小不同本身不是启用双轴的理由。任何后续字段仍须先升版本和评审,不得通过 renderer 私有字段绕过契约。
 
 ### 6.5  视觉自评回路(P1 可选,把审美部分部分纳入自动循环)
 
@@ -639,7 +639,7 @@ python scripts/verify.py        # 开发机(Mac/类 Unix)一键出验收结论;W
 
 已决事项:
 
-1. DeckIR 以当前 v2.0 Schema 与本文 3.3 节为权威;1.4-1.9 在校验入口确定性迁移到 2.0,不覆盖原文件;renderer 不暗自兼容非法 IR。
+1. DeckIR 以当前 v2.2 Schema 与本文 3.3 节为权威;1.4-2.1 在校验入口确定性迁移到 2.2,不覆盖原文件;renderer 不暗自兼容非法 IR。
 2. chart 使用 python-pptx 原生可编辑对象;bar/line/pie/scatter 已落地,combo 使用两张对齐的原生图表表达主轴与次轴。真实图片、信息图、AssetManifest 和 VisualPlan 已冻结,不再作为未决项。
 
 仍需导师 / 内网确认:

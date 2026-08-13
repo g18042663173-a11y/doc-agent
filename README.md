@@ -27,7 +27,7 @@ IR 是唯一契约。模型文本必须先剥壳和校验,非法 IR 不进入 re
 - WPF 构建入口：`scripts/package_document_workbench.py`（便携 ZIP）；
   `scripts/package_installer.py`（Inno Setup 安装程序，需先装 Inno Setup 6，
   设计见 `docs/design/INSTALLER_DESIGN.md`）。
-- 生产 PPT 引擎：DeckIR 2.1 到 `python-pptx`；`experiments/html2pptx/` 仅为隔离对照实验。
+- 生产 PPT 引擎：DeckIR 2.2 到 `python-pptx`；`experiments/html2pptx/` 仅为隔离对照实验。
 - 本仓库不包含训练或推理入口；NGA 是受约束的 IR generator adapter，不是模型训练代码。
 
 ## 环境
@@ -131,7 +131,7 @@ python scripts/generate.py samples/input/需求说明.docx --generator stub --de
 
 ## 图片、信息图与视觉规划
 
-DeckIR 2.1 支持真实图片、`image_text`、2-4 图 `image_grid`、漏斗/象限/循环/矩阵信息图、
+DeckIR 2.2 支持真实图片、`image_text`、2-4 图 `image_grid`、漏斗/象限/循环/矩阵信息图、
 scatter 和 combo。图片必须先规范化为独立 `AssetManifest 1.0`：
 
 ```powershell
@@ -144,19 +144,19 @@ $env:PYTHONPATH = Join-Path $PWD "backend"
 合法 `image_ref` 会嵌入真实图片；缺失引用返回 `A005`，不会静默生成占位框。只有 IR 明确给出
 `placeholder` 才绘制占位。渲染输出 `asset_usage_audit.json`，记录页码、适配方式、裁切和有效
 DPI。生成链路同时输出 `visual_plan.json` 与 `visual_selection_audit.json`，说明系统为何推荐或
-未采用某种图。1.4-1.9 DeckIR 只在内存迁移到 2.0，不覆盖用户原文件。
+未采用某种图。1.4-2.1 DeckIR 只在内存迁移到 2.2，不覆盖用户原文件。
 
 组合图由两张对齐的原生可编辑图表实现：主轴 bar 与次轴 line 各自保留为 PowerPoint 图表
 对象。它不是单一 OOXML combo chart，但不栅格化，也不改写业务数据。
 
-模板模式使用 DeckIR 2.1，并输出独立的 `template_profile.json`、`template_plan.json`、
+模板模式使用 DeckIR 2.2，并输出独立的 `template_profile.json`、`template_plan.json`、
 `template_structure.json`、`template_replacement_audit.json` 和 `pptx_package_report.json`。
 原型不安全或容量不足时记录 W201 并在模板母版/主题下重绘；字体替代记录 W202。实现为
 纯 Python，不依赖 HTML、PptxGenJS、浏览器或外部 presentation skill。
 
 ## HTML 对照实验（非生产）
 
-生产渲染固定为 `DeckIR 2.1 -> python-pptx`。`experiments/html2pptx/` 是隔离的
+生产渲染固定为 `DeckIR 2.2 -> python-pptx`。`experiments/html2pptx/` 是隔离的
 DeckIR -> HTML -> PptxGenJS 对照实验，不接入 CLI 默认生成、API、工作台或 Windows
 离线依赖闭包，也不接收上传模板。
 
@@ -215,6 +215,9 @@ $dotnet = "$env:LOCALAPPDATA\Codex\dotnet-sdk-8.0.423\dotnet.exe"
 
 - 固定 Office 输入:`samples/input/需求说明.docx`、`销售台账.xlsx`、`项目汇报.pptx`
 - 五类 parser matrix:`samples/input/parser_matrix/manifest.json`
+- 业务形态语料:`samples/input/business/`(docx/xlsx/pptx 各 3 个,由
+  `scripts/make_business_samples.py` 确定性生成,用于解析与全链路回归;
+  真实脱敏业务文件仍由人放入 `samples/input/real/`,不提交)
 - IR 正反例:`samples/ir/`
 - 结构 golden:`samples/expected/`
 - 可编辑结果样例:`samples/output/`

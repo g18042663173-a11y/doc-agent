@@ -2,7 +2,7 @@
 
 ## 边界
 
-生产链路固定为 `DeckIR 2.1 -> python-pptx`。HTML/PptxGenJS 仅位于
+生产链路固定为 `DeckIR 2.2 -> python-pptx`。HTML/PptxGenJS 仅位于
 `experiments/html2pptx/`，用于确定性对照，不是第二个生产渲染器。它不修改 DeckIR，
 不进入 `requirements-win312.lock`、`verify.ps1`、Flask API 或工作台，也不处理用户
 上传的 PPTX 模板。

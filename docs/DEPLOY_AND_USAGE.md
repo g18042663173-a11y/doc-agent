@@ -163,4 +163,4 @@ NGA_MAX_RETRIES
 4. 在 Windows Word/PowerPoint 与实际目标字体/CI 下人工检查字体替换、跨页表格、页眉页脚、元素重叠、可编辑性及视觉观感。
 5. 将经审计的 Graphviz Windows 运行时加入 `tools/graphviz/`；没有它时，架构图仍可渲染但会降级为 fallback 布局。
 
-DeckIR 2.1 已支持经 AssetManifest 安全规范化的真实图片、图文页和图片网格；AI 生图默认禁用。精确 Gantt 和地图版式未实现。自动 lint 和本机预览不能替代上述真实环境验收。
+DeckIR 2.2 已支持经 AssetManifest 安全规范化的真实图片、图文页和图片网格；AI 生图默认禁用。精确 Gantt 和地图版式未实现。自动 lint 和本机预览不能替代上述真实环境验收。

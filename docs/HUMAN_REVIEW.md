@@ -6,7 +6,7 @@
 
 ## 自动化已经覆盖
 
-- DocumentIR 1.2、WordIR 1.2 和 DeckIR 2.1 的 Schema、迁移器、正反样例及剥壳校验。
+- DocumentIR 1.2、WordIR 1.3 和 DeckIR 2.2 的 Schema、迁移器、正反样例及剥壳校验。
 - Markdown、DOCX、XLSX、PPTX 解析到 Stub Word/PPT 的离线确定性链路。
 - `AssetManifest 1.0` 图片安全导入、真实图片嵌入、焦点裁切、DPI 与使用审计。
 - 原生可编辑图表、表格、信息图、模板 Profile/Plan、W201/W202 回退及包关系检查。
