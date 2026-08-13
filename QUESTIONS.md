@@ -2,6 +2,25 @@
 
 > 分步执行清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`（Windows 验收与人工交付清单）。
 
+## 2026-08-14 发布冲刺刷新
+
+- **G-N10 已解决**:`codex.py` 默认模型改为 opencode-go 网关实测可用的
+  `deepseek-v4-flash`(网关 `/models` 验证;显示名 "DeepSeek V4 Flash" 不被接受);
+  网关对 `Python-urllib` UA 返回 403/1010,已加浏览器 UA;真实冒烟全链路通过
+  (WordIR 1.3 + DeckIR 2.2,lint 零 Error)。Key 仅环境变量使用,不落盘、不提交。
+- **NGA 按用户决定不接入**:默认 stub;真实模型链路走 codex/opencode-go 通道
+  (`https://opencode.ai/zen/go/v1`,模型 `deepseek-v4-flash`)。
+- **版本对齐**:`VERSION` → 2.2.0,`dist/document-workbench-windows-x64-2.2.0.zip` 与
+  `HuaweiDocumentGenerator-Setup-2.2.0.exe` 已重建(含全部修复与 UI 缩放),
+  SHA-256 见 `dist/*.sha256`;包内后端冒烟 version=2.2.0 / deck_ir=2.2。
+- **C# 真机编译确认完成**:本机 `dotnet build DocumentWorkbench.csproj -c Release`
+  0 警告 0 错误;`DocumentWorkbench.Tests` xUnit 17/17 通过(C-N6~C-N10 均已编译验证)。
+- **UI 测试修复两处测试资产滞后**(非产品 bug):FailOnceGenerator 缺 `cancel_event`(#28)、
+  测试环境缺 `session_token`(#2);修复后 UI 测试 desktop/mobile 全绿。
+- **A5 代码签名按用户决定不做**(仅要求安装可用)。
+- 剩余人工门禁:干净断网真机验收(本机演练为近似证据,不能冒充)、PowerPoint 视觉
+  签字、真实脱敏语料语义抽查。
+
 ## 2026-08-14 状态刷新
 
 - **IR-N4(表格 rows 缺 minItems)已解决**:2026-08-13 完成契约升版仪式
@@ -28,10 +47,10 @@ md/docx/xlsx/pptx 解析边界、shell 剥壳、模板规划/审计、lint 图�
   与 WordIR(输出契约)严格性不一致是设计使然。
 
 ### 需 Windows 真机验证(C# / PowerShell)
-- C# `BackendProcessHost.cs` 管道排空(A8)、本轮 C-N6(FormatBytes 0)、
-  C-N7(下载临时文件唯一名)、C-N8(bootstrap 保留窗口 10→2 分钟)、C-N10(刷新保留选中)、
-  C-N9(重试携带当前输入)改动均**未在本机编译验证**(无 .NET SDK);需
-  `dotnet build desktop/DocumentWorkbench.sln` + `DocumentWorkbench.Tests`。
+- ~~C-N6~C-N10 未编译验证~~ → **2026-08-14 已在本机编译确认**:
+  `dotnet build DocumentWorkbench.csproj -c Release` 0 警告 0 错误,
+  `DocumentWorkbench.Tests` xUnit 17/17 通过。仍建议在干净目标机跑一次
+  `dotnet test` + 便携包 UI 走查作为最终证据。
 - `stop_workbench.ps1` S-N4(子进程不再 throw)需在真实运行(dot/NGA 子进程)下验证。
 
 ### 判定为设计/有意保留(不修)

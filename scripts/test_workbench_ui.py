@@ -4,6 +4,7 @@ import argparse
 from io import BytesIO
 import json
 from pathlib import Path
+import secrets
 import sys
 from tempfile import TemporaryDirectory
 from threading import Event, Thread
@@ -40,7 +41,9 @@ class FailOnceGenerator:
         self.blocking_started = Event()
         self.blocking_release = Event()
 
-    def generate(self, prompt: str, *, target: str) -> str:
+    def generate(self, prompt: str, *, target: str, cancel_event=None) -> str:
+        # cancel_event is part of the IRTextGenerator protocol (job-level
+        # cancellation, #28); this fake accepts and ignores it.
         self.calls += 1
         if self.calls == 1:
             raise RuntimeError("synthetic provider failure")
@@ -81,7 +84,14 @@ def main(argv: list[str] | None = None) -> int:
 def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: int, height: int) -> dict[str, Any]:
     workspace = output_dir / f"{name}-jobs"
     generator = FailOnceGenerator()
-    app = create_api_app(work_dir=workspace, generator=generator)
+    # Mirror the production token flow (web_api main): register the
+    # same-origin session-token route and require the header on /api/* so the
+    # browser frontend exercises the identical auth path as in production.
+    app = create_api_app(
+        work_dir=workspace,
+        generator=generator,
+        session_token=secrets.token_hex(32),
+    )
     server: BaseWSGIServer = make_server("127.0.0.1", 0, app)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -131,6 +141,19 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             if page.locator("html").get_attribute("data-theme-mode") != "system":
                 raise AssertionError("settings appearance control did not restore system mode")
             page.screenshot(path=str(output_dir / f"workbench-{name}-settings.png"), full_page=True)
+
+            # UI scale control: switching must apply the html zoom CSS variable
+            # and keep both header/settings selects in sync (B8).
+            page.locator("#uiZoomToggle").select_option("125")
+            zoom_value = page.locator("html").evaluate("(el) => getComputedStyle(el).zoom")
+            if zoom_value != "1.25":
+                raise AssertionError(f"ui zoom 125% was not applied (computed zoom={zoom_value})")
+            if page.locator("#settingsUiZoom").input_value() != "125":
+                raise AssertionError("settings zoom control did not reflect the header override")
+            page.locator("#settingsUiZoom").select_option("100")
+            zoom_value = page.locator("html").evaluate("(el) => getComputedStyle(el).zoom")
+            if zoom_value != "1":
+                raise AssertionError(f"ui zoom was not restored to 100% (computed zoom={zoom_value})")
             page.get_by_test_id("nav-diagnostics").click()
             page.get_by_test_id("diagnostics-list").locator("dt").first.wait_for(timeout=5_000)
             refresh_box = page.get_by_test_id("refresh-diagnostics-web").bounding_box()

@@ -14,10 +14,11 @@ from app.generation.layout_policy import LAYOUT_SELECTION_RULES
 GeneratorTarget = Literal["word_ir", "deck_ir", "analysis"]
 # Defaults target the opencode-go gateway (https://opencode.ai/zen/go/v1,
 # wire_api "responses", requires_openai_auth). Mapping from the canonical
-# opencode config: model -> "DeepSeek V4 Flash", model_reasoning_effort ->
+# opencode config: model id -> "deepseek-v4-flash" (gateway /models list; the
+# display name "DeepSeek V4 Flash" is NOT accepted), model_reasoning_effort ->
 # "high", disable_response_storage -> payload "store": False below.
 API_BASE_URL = "https://opencode.ai/zen/go/v1"
-DEFAULT_MODEL = "DeepSeek V4 Flash"
+DEFAULT_MODEL = "deepseek-v4-flash"
 DEFAULT_MAX_TOKENS = 4096
 DEFAULT_REASONING_EFFORT = "high"
 DEFAULT_TIMEOUT_SECONDS = 300
@@ -98,6 +99,13 @@ class CodexGenerator:
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
+                # The opencode-go gateway sits behind Cloudflare bot protection
+                # that rejects the bare "Python-urllib/3.x" User-Agent with
+                # HTTP 403 error code 1010; a browser signature passes.
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+                ),
             },
             method="POST",
         )

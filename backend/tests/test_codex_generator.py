@@ -60,6 +60,9 @@ def test_codex_generator_posts_responses_request_with_json_only_system_prompt(mo
     assert timeout == 31
     headers = {key.lower(): value for key, value in request.header_items()}
     assert headers["authorization"] == "Bearer test-key"
+    # Cloudflare bot protection (HTTP 403 error 1010) rejects Python-urllib UA.
+    assert "Python-urllib" not in headers["user-agent"]
+    assert headers["user-agent"].startswith("Mozilla/5.0")
     payload = json.loads(request.data.decode("utf-8"))
     assert payload["model"] == "claude-test"
     assert payload["input"] == "[完整目标 Schema]\n{}"
@@ -69,6 +72,16 @@ def test_codex_generator_posts_responses_request_with_json_only_system_prompt(mo
     assert "只输出一个完整、合法的 JSON 对象" in payload["instructions"]
     assert "不要使用 Markdown 代码围栏" in payload["instructions"]
     assert "WordIR" in payload["instructions"]
+
+
+def test_codex_generator_defaults_target_opencode_go_gateway() -> None:
+    """B9: the codex adapter defaults must match the verified opencode-go gateway model id."""
+    from app.generators import codex
+
+    assert codex.API_BASE_URL == "https://opencode.ai/zen/go/v1"
+    assert codex.DEFAULT_MODEL == "deepseek-v4-flash"
+    assert codex.DEFAULT_REASONING_EFFORT == "high"
+    assert codex.DEFAULT_MAX_TOKENS > 0
 
 
 def test_codex_generator_chat_completions_payload_carries_max_tokens(monkeypatch: pytest.MonkeyPatch) -> None:

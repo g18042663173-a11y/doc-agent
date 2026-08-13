@@ -1,5 +1,51 @@
 # Progress
 
+## 2026-08-14 发布冲刺:真实模型链路 + 2.2.0 重建发布物 + 本机验收演练 + UI 缩放
+
+### 真实模型链路(opencode-go + DeepSeek v4-flash,B9/A4)
+- 网关探测:`https://opencode.ai/zen/go/v1` 支持模型 ID **`deepseek-v4-flash`**(显示名
+  "DeepSeek V4 Flash" 不被接受,`/models` 实测);responses 与 chat_completions 双模式可用。
+- **codex.py 修复**:默认模型改为 `deepseek-v4-flash`;新增浏览器 User-Agent —— 网关
+  Cloudflare 风控对 `Python-urllib/3.x` 返回 **HTTP 403 error 1010**,实测必须浏览器 UA。
+- 回归测试 +2:网关默认值断言、UA 断言(15 passed)。
+- **真实冒烟全链路通过**(key 仅环境变量,不落盘、不提交):
+  `quarterly_report.md → parse → prompt → DeepSeek v4-flash → 校验 → 渲染 → lint`
+  WordIR 1.3(8 blocks)+ DeckIR 2.2(cover/title_bullets),lint 0 Error 0 Warning。
+
+### 版本对齐 + 发布物重建(B6)
+- `VERSION` → **2.2.0**(installer.iss 同步);/api/version 输出 2.2.0 + deck_ir 2.2。
+- 重建:`dist/document-workbench-windows-x64-2.2.0.zip`(105.8MB / 2257 文件)与
+  `dist/HuaweiDocumentGenerator-Setup-2.2.0.exe`(87.6MB),SHA-256 随包。
+- 包内验证:解压清点、`runtime-manifest.json`(Windows 10/11 x64 / python 3.12.10 /
+  graphviz 15.1.0 / 29 wheels)、`samples/ir` 58 文件(P0 未复发)、包内 python 起
+  web_api → token 流程(401 → session-token → 200,version=2.2.0)。
+
+### 本机验收演练(A1,近似证据;干净真机仍须人工)
+- wheelhouse `--no-index --require-hashes --dry-run` 29 wheel 全命中;
+- 安装 EXE:静默安装(2259 文件)→ GUI 启动存活 → 静默卸载目录清空;
+- Graphviz:系统 PATH 加入 `C:\Program Files\Graphviz\bin` 后 environment_report
+  识别 v15.1.0(source=system),架构图不再走 fallback;
+- verify.ps1 全绿(C0:parsers 91.96 / ir 94.06 / lint 94.26 / overall 89.13)。
+
+### UI 缩放与阅读体验(B8)
+- 工作台新增**界面缩放**(100% / 112% / 125%):`html { zoom: var(--ui-zoom) }`,
+  topbar 与设置页双控件同步,localStorage 持久化;Segoe UI Variable 字体栈优先,
+  最小可读字号 11px;
+- `scripts/test_workbench_ui.py` 修复两处**测试资产滞后**(非产品 bug):
+  ① FailOnceGenerator 缺 `cancel_event`(#28 契约透传);② 测试环境未传
+  `session_token`(#2 token 流程)导致前端每请求先 GET /api/session-token 404。
+  修复后 UI 测试 desktop+mobile 全绿(含新增缩放断言),覆盖真实鉴权路径;
+- 排查期间在 web_api.py 的临时调试代码已还原(无净改动)。
+
+### 编译确认(B7)
+- 本机 `dotnet build DocumentWorkbench.csproj -c Release`:0 警告 0 错误;
+  `dotnet test DocumentWorkbench.Tests`:17/17 通过。
+
+### 回归与遗留
+- pytest **796 passed / 15 skipped**;ruff 全绿;UI 测试全绿。
+- 遗留:干净断网真机验收、PowerPoint 视觉签字、真实脱敏语料、代码签名仍待人工
+  (QUESTIONS.md);NGA 按用户决定不做,默认 stub,真实链路走 codex/opencode-go。
+
 ## 2026-08-14 业务形态语料 + 文档契约版本同步 + 进度刷新
 
 - **业务语料(用户委托生成)**:新增 `samples/input/business/` —— docx/xlsx/pptx 各 3 个

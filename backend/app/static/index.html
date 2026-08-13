@@ -53,16 +53,19 @@
       --space-5: 32px;
       --space-6: 48px;
       --ease: .16s ease;
+      /* UI scale preference (100 / 112 / 125), applied as html zoom so every
+         px-sized component scales together with readable proportions. */
+      --ui-zoom: 1;
     }
 
     * { box-sizing: border-box; }
-    html { background: var(--canvas); }
+    html { background: var(--canvas); zoom: var(--ui-zoom); }
     body {
       margin: 0;
       min-width: 320px;
       color: var(--ink);
       background: var(--canvas);
-      font: 14px/1.55 "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+      font: 14px/1.55 "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
     ::selection { background: var(--accent-subtle); }
@@ -204,7 +207,7 @@
     .button--secondary:hover:not(:disabled) { border-color: var(--accent-coral); color: var(--accent-coral); background: var(--accent-subtle); }
     .button:disabled { color: #6b6675; background: #2e2a34; border-color: #2e2a34; }
     .file-row { display: flex; align-items: center; gap: 12px; padding: 14px; text-align: left; }
-    .file-badge { display: grid; place-items: center; width: 38px; height: 38px; border-radius: var(--radius-sm); background: var(--hw-red-soft); color: var(--accent-coral); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+    .file-badge { display: grid; place-items: center; width: 38px; height: 38px; border-radius: var(--radius-sm); background: var(--hw-red-soft); color: var(--accent-coral); font-size: 11px; font-weight: 700; letter-spacing: .04em; }
     .file-meta { min-width: 0; flex: 1; }
     .file-name { display: block; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .file-size { display: block; color: var(--muted); font-size: 12px; }
@@ -565,7 +568,7 @@
       .topbar__inner, main.app-shell { width: min(100% - 24px, 1360px); }
       .theme-mode > span { display: none; }
       .theme-mode select { min-width: 88px; }
-      .topbar__state { display: inline-flex; max-width: 132px; padding-left: 5px; font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .topbar__state { display: inline-flex; max-width: 132px; padding-left: 5px; font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
       .layout { grid-template-columns: 1fr; }
       .side { display: block; }
       .side-panel + .side-panel { border-left: 0; border-top: 1px solid var(--line); }
@@ -617,6 +620,14 @@
             <option value="system">跟随系统</option>
             <option value="light">浅色</option>
             <option value="dark">深色</option>
+          </select>
+        </label>
+        <label class="theme-mode" for="uiZoomToggle">
+          <span>缩放</span>
+          <select id="uiZoomToggle" data-testid="ui-zoom-toggle" aria-label="界面缩放">
+            <option value="100">100%</option>
+            <option value="112">112%</option>
+            <option value="125">125%</option>
           </select>
         </label>
         <div id="serviceState" class="topbar__state is-connecting" data-testid="service-status"><span class="state-dot" aria-hidden="true"></span><span id="serviceStateText">正在连接本地服务</span></div>
@@ -862,6 +873,14 @@
             <option value="system">跟随系统（推荐）</option>
             <option value="light">浅色</option>
             <option value="dark">深色</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <div><h2>界面缩放</h2><p>按比例放大全部界面元素；适合高分辨率与较大阅读字号偏好。</p></div>
+          <select id="settingsUiZoom" class="text-input settings-row__control" aria-label="设置页界面缩放">
+            <option value="100">100%（推荐）</option>
+            <option value="112">112%</option>
+            <option value="125">125%</option>
           </select>
         </div>
         <div class="settings-row">
@@ -1589,6 +1608,29 @@
       systemPreference.addEventListener("change", () => {
         if (root.dataset.themeMode === "system") apply("system");
       });
+    })();
+  </script>
+  <script>
+    (() => {
+      // UI scale preference: scales the whole workbench with html zoom so all
+      // px-sized components grow together, matching common display scaling and
+      // larger-reading preferences without layout breakage.
+      const storageKey = "huawei-workbench-ui-zoom-v1";
+      const root = document.documentElement;
+      const controls = [document.getElementById("uiZoomToggle"), document.getElementById("settingsUiZoom")].filter(Boolean);
+      const normalize = (value) => ["100", "112", "125"].includes(value) ? value : "100";
+      const apply = (value) => {
+        const normalized = normalize(value);
+        root.style.setProperty("--ui-zoom", String(Number(normalized) / 100));
+        controls.forEach((control) => { control.value = normalized; });
+      };
+      const save = (value) => {
+        const normalized = normalize(value);
+        window.localStorage.setItem(storageKey, normalized);
+        apply(normalized);
+      };
+      apply(normalize(window.localStorage.getItem(storageKey)));
+      controls.forEach((control) => control.addEventListener("change", () => save(control.value)));
     })();
   </script>
 </body>
