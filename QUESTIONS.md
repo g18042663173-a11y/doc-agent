@@ -1,6 +1,20 @@
 # QUESTIONS
 
 > 分步执行清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`（Windows 验收与人工交付清单）。
+> 内网 AI 调用适配所需信息见 `docs/内网AI适配信息清单.md`（拿清单找内网平台方填写即可）。
+
+## 2026-08-14 代码收敛(用户指令)与内网适配准备
+
+- **分支收敛**:主线重命名为 `codex/release-2.2.0`(与 VERSION 对齐);删除全部
+  `backup-*` 与旧 `codex/*` 实验分支及旁支 worktree(ai-ppt-2.2.0/2.3.0)共 20 个,
+  归档到 `dist/git-bundles/branches-archive-20260814.bundle`(9MB,可恢复);
+  2.3.0 未提交改动存档为 `ai-ppt-2.3.0-uncommitted-20260814.patch`(0.3MB)。
+- **dist 清理**:删除 2.1.0 与 7 月旧发布物,仅保留 2.2.0 ZIP/EXE/SHA-256/交付说明。
+- **内网 AI 适配**:新增 `docs/内网AI适配信息清单.md` —— 13 项信息收集表
+  (Base URL/接口路径/认证/模型 ID/JSON 约束/TLS/超时/限流/响应样例等)+ 适配
+  步骤与验证基线。拿到内网信息后:OpenAI-compatible 仅配置零代码;协议不同则
+  新增 adapter,IR/renderer/lint 零改动(I3 不变量)。
+- 主线 `codex/release-2.2.0` 工作树干净,`verify.ps1` C0 通过。
 
 ## 2026-08-14 发布冲刺刷新
 

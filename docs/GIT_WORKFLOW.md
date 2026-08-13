@@ -2,7 +2,9 @@
 
 ## 分支
 
-- 正式稳定分支由项目负责人指定；当前唯一开发候选是 `codex/consolidate-latest-20260801`。
+- 正式稳定分支由项目负责人指定；当前唯一主线是 `codex/release-2.2.0`（2026-08-14
+  收敛：旧 `backup-*`、`codex/*` 实验分支与旁支 worktree 已归档到
+  `dist/git-bundles/branches-archive-20260814.bundle` 后删除，仅保留单主线）。
 - Codex 开发分支统一使用 `codex/<short-purpose>`。
 - 功能、修复、重构使用短生命周期分支，不复制整个目录创建 `final2` 或 `new_new`。
 - `experiments/` 内的试验可使用独立实验分支，但不得反向成为生产入口。
@@ -40,7 +42,8 @@
 - 历史代码优先依赖 Git，而不是在工作树保留 `old`、`copy`、日期副本。
 - 必须留在仓库的非生产实现放 `experiments/<name>/`，包含 README、独立依赖锁和退出标准。
 - 历史审计材料放 `docs/history/`；当前事实只写入 `README.md`、`PROGRESS.md` 和权威专题文档。
-- 当前 `backup-*` 分支均已证明为正式候选的祖先且无独有提交；删除前仍需确认它们不承担人工备份职责。
+- `backup-*` 等历史分支已按 2026-08-14 收敛决策删除（归档 bundle 见上）；如需再恢复历史
+  提交,从 `dist/git-bundles/branches-archive-20260814.bundle` 取回。
 
 ## 发布检查
 

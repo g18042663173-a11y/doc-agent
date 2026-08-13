@@ -238,7 +238,7 @@ PYTHONPATH=backend python scripts/make_lint_violation.py
 python scripts/record_demo.py
 ```
 
-详细说明见 `docs/交付资产说明.md`、`docs/使用说明.md`（含生成器配置决策表：Stub / NGA 本机命令行 / NGA HTTP）、`docs/内网接入.md`、`docs/验收手册.md`。Windows 机器上的分步验收与人工交付清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`。
+详细说明见 `docs/交付资产说明.md`、`docs/使用说明.md`（含生成器配置决策表：Stub / NGA 本机命令行 / NGA HTTP）、`docs/内网接入.md`、`docs/验收手册.md`。进入内网做 AI 调用适配时，按 `docs/内网AI适配信息清单.md` 向平台方收集配置即可。Windows 机器上的分步验收与人工交付清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`。
 
 ## 仓库结构与开发规则
 

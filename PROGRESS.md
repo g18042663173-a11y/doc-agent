@@ -1,5 +1,21 @@
 # Progress
 
+## 2026-08-14 代码收敛(用户指令)+ 内网 AI 适配清单
+
+- **分支收敛**:主线重命名 `codex/audit-2.1.0` → **`codex/release-2.2.0`**(与
+  VERSION 2.2.0 对齐);删除 20 个冗余分支(12 个 `backup-*`、7 个旧 `codex/*`、
+  `fix-arch-diagram`)与 2 个旁支 worktree(ai-ppt-2.2.0 / ai-ppt-2.3.0,超长路径
+  用 robocopy /MIR 清理),归档至 `dist/git-bundles/branches-archive-20260814.bundle`
+  (9MB)+ 2.3.0 未提交 diff 存档 patch;仓库收敛为单分支单 worktree。
+- **dist 清理**:删除 2.1.0 与 2026-07 旧发布物(共 10 个文件),仅保留 2.2.0
+  ZIP/EXE/SHA-256/交付说明。
+- **内网 AI 适配准备**:新增 `docs/内网AI适配信息清单.md` —— 13 项信息收集表
+  + 适配步骤 + 验证基线;OpenAI-compatible 仅配置零代码,协议不同则新增 adapter
+  (I3:IR/renderer/lint 零改动)。
+- 文档同步:GIT_WORKFLOW(唯一主线表述、归档恢复方法)、QUESTIONS、README、
+  dist/交付说明;历史审计文档(AUDIT_2.1.0、代码审查报告)保留原样。
+- 回归:分支/产物清理不影响代码;`verify.ps1` C0 仍通过。
+
 ## 2026-08-14 发布冲刺:真实模型链路 + 2.2.0 重建发布物 + 本机验收演练 + UI 缩放
 
 ### 真实模型链路(opencode-go + DeepSeek v4-flash,B9/A4)
