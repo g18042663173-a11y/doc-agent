@@ -2,6 +2,43 @@
 
 > 分步执行清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`（Windows 验收与人工交付清单）。
 
+## 2026-08-13 全量排障后遗留项(需决策或真机验证)
+
+本轮已修复两轮审计报告中绝大多数 HIGH/MEDIUM/LOW 缺陷(主题穿越、UTF-16 DTD、
+md/docx/xlsx/pptx 解析边界、shell 剥壳、模板规划/审计、lint 图表数据、web_api
+竞态、脚本打包、C# 桌面端多项)。以下项**未自动修复**,原因与建议:
+
+### 需产品决策(Track C)
+- **G-N10**: `generators/codex.py` 默认 `gpt-5.6-terra`/`xhigh` 是不存在的模型/推理
+  强度值,真端点必 400。当前默认值仅是占位,正确默认需由内网确认后提供。
+- **W-N2**: JobRunner 严格串行(单 worker),`queue_capacity` 只是接受上限;是否接受
+  串行语义、或需要并发 worker 数上限,属产品决策。
+- **IR-N4**: `TableBlock.rows`/`DeckTable.rows` 导出 Schema 缺 `minItems`(模型侧
+  `validate_rows` 要求 ≥1 行)。修复需升 `ir_version`(WordIR 1.2→1.3、DeckIR
+  2.1→2.2)+ 全量契约仪式;影响面是"模型按提示 Schema 产出空表→repair 重试",非崩溃,
+  收益有限。建议与下一次契约演进合并。
+- **IR-N8**: DocumentIR 表格不要求 rows 非空、image_placeholder 不要求 ref/caption。
+  判定为**有意宽松**(DocumentIR 是源数据表示,空表/无引图占位在源文档中合法),
+  与 WordIR(输出契约)严格性不一致是设计使然。
+
+### 需 Windows 真机验证(C# / PowerShell)
+- C# `BackendProcessHost.cs` 管道排空(A8)、本轮 C-N6(FormatBytes 0)、
+  C-N7(下载临时文件唯一名)、C-N8(bootstrap 保留窗口 10→2 分钟)、C-N10(刷新保留选中)
+  改动均**未在本机编译验证**(无 .NET SDK);需 `dotnet build desktop/DocumentWorkbench.sln`
+  + `DocumentWorkbench.Tests`。
+- C-N9(重试按钮用当前输入)未改:需要后端保留原始输入才能重放,涉及隐私取舍,留待决策。
+- `stop_workbench.ps1` S-N4(子进程不再 throw)需在真实运行(dot/NGA 子进程)下验证。
+
+### 判定为设计/有意保留(不修)
+- #26(运行时兜底改写调用方 plan):磁盘 `template_plan.json` 在渲染后写,与实际一致,
+  改写正是记录 fallback 的既定行为。
+- #52(docx_lint `except Exception`):lint 对任意输入永不崩溃是有意防御,收窄反而引入
+  崩溃风险。
+- L-N15(产物文件句柄)/#27:python-pptx/python-docx 加载即读入内存并关闭 zip,引用计数
+  回收,无长期句柄占用。
+- #3(xlsx 同一 sheet 二次迭代):openpyxl 3.1.5 `ReadOnlyWorksheet.iter_rows` 每次重新
+  解析,数据正确,仅冗余解析(性能)。
+
 ## 2026-08-12 发布候选测试完成(2.1.0 重建产物,待人工终审)
 
 - 已重建发布物(含全部修复与 DeckIR 2.1 契约):`dist/document-workbench-windows-x64-2.1.0.zip`

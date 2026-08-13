@@ -314,11 +314,16 @@ def _insert_before_shading(container, element) -> None:
 
 
 def _render_list(document: Document, block: BulletListBlock | NumberedListBlock, *, numbered: bool) -> None:
+    styles = document.styles
+    primary = "List Number" if numbered else "List Bullet"
+    secondary = f"{primary} 2"
     for item in block.items:
-        if numbered:
-            style = "List Number" if item.level == 1 else "List Number 2"
+        if item.level >= 2 and secondary in styles:
+            style = secondary
+        elif primary in styles:
+            style = primary
         else:
-            style = "List Bullet" if item.level == 1 else "List Bullet 2"
+            style = None
         document.add_paragraph(item.text, style=style)
 
 
@@ -500,15 +505,32 @@ def _theme_hex(theme: dict, color_key: str) -> str:
     return theme["colors"][color_key].lstrip("#").upper()
 
 
+def _decode_xml_part(data: bytes) -> str | None:
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return data.decode("utf-16")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
 def _replace_legacy_word_blue(output_path: Path, theme: dict) -> None:
     replacement = _theme_hex(theme, "hw_red")
     temp_path = output_path.with_suffix(".tmp.docx")
-    with zipfile.ZipFile(output_path, "r") as source, zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED) as target:
-        for info in source.infolist():
-            data = source.read(info.filename)
-            if info.filename.startswith("word/") and info.filename.endswith(".xml"):
-                text = data.decode("utf-8")
-                text = text.replace("4F81BD", replacement).replace("4f81bd", replacement)
-                data = text.encode("utf-8")
-            target.writestr(info, data)
-    temp_path.replace(output_path)
+    try:
+        with zipfile.ZipFile(output_path, "r") as source, zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED) as target:
+            for info in source.infolist():
+                data = source.read(info.filename)
+                if info.filename.startswith("word/") and info.filename.endswith(".xml"):
+                    text = _decode_xml_part(data)
+                    if text is not None:
+                        text = text.replace("4F81BD", replacement).replace("4f81bd", replacement)
+                        data = text.encode("utf-8")
+                target.writestr(info, data)
+        temp_path.replace(output_path)
+    finally:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass

@@ -149,10 +149,11 @@ def _candidate(
     matched = _match_replacements(required, available)
     slots_score = round(25 * len(matched) / max(len(required), 1))
     required_chars = sum(len(text) for _role, _source, text in required)
+    matched_shape_ids = {replacement.shape_id for replacement in matched}
     available_chars = sum(
         shape.capacity.char_capacity
         for shape in available
-        if shape.capacity is not None
+        if shape.capacity is not None and shape.shape_id in matched_shape_ids
     )
     if required_chars == 0:
         capacity_score = 25

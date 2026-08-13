@@ -493,6 +493,7 @@ def test_render_deck_ir_uses_theme_layout_coordinates(tmp_path: Path, monkeypatc
     theme_dir.mkdir()
     (theme_dir / "custom.json").write_text(json.dumps(source_theme), encoding="utf-8")
     monkeypatch.setattr(theme_module, "THEMES_DIR", theme_dir)
+    monkeypatch.setitem(theme_module.THEME_REGISTRY, "custom", "custom")
 
     deck = DeckIR.model_validate(
         {

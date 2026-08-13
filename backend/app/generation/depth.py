@@ -27,6 +27,18 @@ CHUNK_MARKER = "[分段生成范围]"
 DEFAULT_TARGET_PAGES: dict[Depth, int] = {"概览": 8, "标准": 11, "详细": 16}
 CHUNK_SIZE = 4
 FOCUSED_CONTEXT_CHARS = 10000
+
+
+def _coerce_int(value: Any, *, default: int = 1, low: int | None = None, high: int | None = None) -> int:
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        return default
+    if low is not None:
+        result = max(low, result)
+    if high is not None:
+        result = min(high, result)
+    return result
 LayoutName = Literal[
     "cover",
     "agenda",
@@ -267,7 +279,7 @@ def validate_outline_text(raw: str, *, expected_pages: int) -> ValidationResult[
 
 
 def stub_outline_payload(planning: dict[str, Any]) -> dict[str, Any]:
-    total = int(planning.get("target_pages", 8))
+    total = _coerce_int(planning.get("target_pages", 8), default=8, low=3, high=30)
     title = str(planning.get("source_title") or "Stub 技术报告")
     source_outline = [item for item in planning.get("source_outline", []) if isinstance(item, dict)]
     headings = [str(item.get("text")) for item in source_outline if str(item.get("text", "")).strip()]
@@ -388,7 +400,7 @@ def _stub_layout_reason(layout: LayoutName) -> str:
 def stub_chunk_payload(chunk: dict[str, Any]) -> dict[str, Any]:
     pages = chunk.get("outline_pages", [])
     title = str(chunk.get("deck_title") or "Stub 技术报告")
-    slides = [_stub_slide(page, title=title, total_pages=int(chunk.get("global_target_pages", len(pages)))) for page in pages]
+    slides = [_stub_slide(page, title=title, total_pages=_coerce_int(chunk.get("global_target_pages", len(pages)), default=len(pages), low=3, high=30)) for page in pages]
     return {
         "ir_type": "deck",
         "ir_version": "2.1",
@@ -696,11 +708,11 @@ def _section_indexes(blocks: list[dict[str, Any]], requested_heading: str) -> se
     )
     if start is None:
         return set()
-    base_level = int(blocks[start].get("level", 1))
+    base_level = _coerce_int(blocks[start].get("level", 1))
     end = len(blocks)
     for index in range(start + 1, len(blocks)):
         block = blocks[index]
-        if block.get("type") == "heading" and int(block.get("level", 1)) <= base_level:
+        if block.get("type") == "heading" and _coerce_int(block.get("level", 1)) <= base_level:
             end = index
             break
     return set(range(start, end))
@@ -827,7 +839,7 @@ def _stub_slide(page: dict[str, Any], *, title: str, total_pages: int) -> dict[s
     if layout == "agenda":
         return {"layout": "agenda", "items": ["技术背景与目标", "方案与关键数据", "结论与下一步"]}
     if layout == "section":
-        return {"layout": "section", "index": max(1, int(page.get("index", 1)) - 1), "title": page_title}
+        return {"layout": "section", "index": max(1, _coerce_int(page.get("index", 1)) - 1), "title": page_title}
     if layout == "two_column":
         return {
             "layout": "two_column",

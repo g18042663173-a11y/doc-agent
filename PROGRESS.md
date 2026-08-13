@@ -1,5 +1,50 @@
 # Progress
 
+## 2026-08-13 全量排障:两轮审计报告未处理项批量修复(约 45 项)
+- 在上一轮(G-N2 主题穿越、P-N2 UTF-16 DTD)基础上,按"先测试后实现"批量清掉两轮
+  代码审查报告(`代码审查报告_2026-08-12*.md`)中剩余未修缺陷,覆盖:
+  - **解析层**:md 空表头兜底(#7)、表格吸行/第二分隔行/转义管道(#8/P-N7/P-N8)、
+    md UTF-16 编码(P-N11)、docx Word 列表识别(#10)、docx UTF-16 unsupported 扫描
+    (P-N9)、xlsx 隐藏首行 header_guess(#16)、pptx 非连续页 embedding 警告(P-N10)。
+  - **IR/shell**:FENCED_JSON 关闭围栏按行锚定(IR-N5)、正文不平衡花括号不再误判截断
+    (#19)、DocumentIR col_widths 校验(#22)、assets 清单原子写(#50)。
+  - **渲染/模板**:双向箭头 headEnd/tailEnd 顺序(#12)、列表样式存在性兜底(#14)、
+    slide_layouts 空白版式探测(#15)、docx UTF-8 蓝改红容错+临时文件 finally(#17/R-N15)、
+    补充平面宽字符计数(R-N10)、缺 accent2-6 派生色板(R-N13)、mermaid 标签含 `;`(#45)、
+    规划器容量用匹配形状(#23)、审计占位残留用真实语义(#24)。
+  - **lint**:check_pptx 损坏文件 E001 防御(#44)、多序列图表只取首序列(#43)、
+    目录章节号单双位对齐(L-N7)、docx word/*.xml UTF-16 容错(#48/L-N11)。
+  - **generators/web_api/CLI**:analyze 捕获 ValueError(G-N4)、stub/depth 裸 int()
+    防御(G-N9)、M\d+ 里程碑去平台名误判(#49)、markdown 导出转义图片目标(#51)、
+    _truncate_text 小 limit 负 tail(#46/G-N12)、超时设 cancel_event(#33)、
+    _fail_job 用锁内快照 assets(#35)、取消竞态 409(#39)+写失败封套(W-N8)、
+    根路由 `/`(W-N6)、power 脚本 stop_workbench 子进程不再 throw(S-N4)、
+    make_wheelhouse 钉 cp ABI(S-N9)、demo_e2e 先校验后写盘(S-N15)。
+  - **C#**(未编译验证):FormatBytes(0)、下载临时文件唯一名、bootstrap 保留 10→2 分钟、
+    任务列表刷新保留选中。
+- 回归:full pytest **723 passed / 15 skipped**(+6 回归测试);ruff 全绿;
+  `scripts/verify.py` C0 通过(parsers 93.19 / ir 94.10 / lint 94.26 / overall 88.94)。
+- 遗留(见 QUESTIONS.md 新增节):G-N10/W-N2/IR-N4/IR-N8 属产品决策或需契约仪式;
+  C-N9 需后端保留原输入;全部 C# 改动待 Windows 真机 dotnet 验证。未提交(待确认)。
+
+## 2026-08-13 Track B 补修:主题路径穿越 + UTF-16 DTD 绕过(2 项 HIGH 安全)
+- **G-N2/#5 主题路径穿越(library 层)**:`rendering/theme.py::load_theme` 原按
+  `THEMES_DIR / f"{name}.json"` 直接拼路径,未走 `resolve_theme` 白名单;
+  CLI/库调用(render/check/prompt builder)可传 `../../...` 读任意本地 .json 并注入
+  LLM prompt(外带通道)。修复:load_theme 先 `resolve_theme(name)` 再拼文件名
+  (保留 hw_v1→hw_theme.json 特殊映射,呼应 R-N14);`prompting/builder.py::_theme_section`
+  捕获 UnknownThemeError 优雅回落空风格段。回归:`test_theme_presets.py` 5 例路径穿越/
+  未知主题(load_theme 抛 UnknownThemeError、prompt 不注入)、`test_pptx_renderer.py`
+  layout 坐标测试补 registry monkeypatch。
+- **P-N2/#6 UTF-16 DTD/ENTITY 字节扫描绕过**:`security/office_package.py::_scan_xml_safety`
+  原只做 ASCII 子串匹配,UTF-16 编码的 `<!DOCTYPE`/`<!ENTITY`(带空字节)绕过前置防线后
+  直达 stdlib ElementTree 展开内部实体(billion-laughs DoS)。修复:needles 增加
+  UTF-16LE/BE 模式,carry 长度按最长 needle 自适应。回归:`test_office_preflight.py`
+  参数化 utf-16-le/utf-16-be 两例断言 `unsafe_xml_declaration`。
+- 回归:full pytest **717 passed / 15 skipped**;ruff 全绿;`scripts/verify.py` C0 通过
+  (parsers 94.50 / ir 94.16 / lint 94.44 / overall 89.18)。
+- 未提交(待用户确认);未动 Track C(产品决策,见 QUESTIONS.md)。
+
 ## 2026-08-12 发布候选测试(L0-L5 全过 + 2 个发布级修复)
 - 重建发布物: 便携 ZIP 105.8MB / 2257 文件、安装程序 EXE 91.9MB,
   哈希见 dist/*.sha256 与 QUESTIONS.md

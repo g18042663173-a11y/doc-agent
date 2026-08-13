@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path, PurePosixPath
 import posixpath
 import re
@@ -188,8 +187,23 @@ def _detect_office_kind(names: set[str], loc: str) -> OfficeKind:
     return matches[0]
 
 
+# DTD/ENTITY declaration needles in every encoding the OOXML package may use.
+# ECMA-376 allows UTF-16 parts; the declaration is then stored with interleaved
+# null bytes and the ASCII-only scan above would miss it, letting a malicious
+# DTD/ENTITY reach the downstream ElementTree parser.
+_SAFE_SCAN_NEEDLES = (
+    b"<!doctype",  # ASCII / UTF-8
+    b"<!entity",  # ASCII / UTF-8
+    b"<\x00!\x00d\x00o\x00c\x00t\x00y\x00p\x00e\x00",  # UTF-16LE <!doctype
+    b"<\x00!\x00e\x00n\x00t\x00i\x00t\x00y\x00",  # UTF-16LE <!entity
+    b"\x00<\x00!\x00d\x00o\x00c\x00t\x00y\x00p\x00e",  # UTF-16BE <!doctype
+    b"\x00<\x00!\x00e\x00n\x00t\x00i\x00t\x00y",  # UTF-16BE <!entity
+)
+
+
 def _scan_xml_safety(package: ZipFile, infos, loc: str) -> None:
-    needles = (b"<!doctype", b"<!entity")
+    needles = _SAFE_SCAN_NEEDLES
+    carry_len = max(len(needle) for needle in needles) - 1
     for info in infos:
         if not (info.filename.lower().endswith(".xml") or info.filename.lower().endswith(".rels")):
             continue
@@ -203,7 +217,7 @@ def _scan_xml_safety(package: ZipFile, infos, loc: str) -> None:
                         loc,
                         f"Office XML 包含禁止的 DTD/ENTITY 声明: {info.filename}",
                     )
-                carry = lowered[-16:]
+                carry = lowered[-carry_len:]
 
 
 def _relationship_summary(
@@ -261,7 +275,7 @@ def _validate_chart_workbooks(
                 f"PowerPoint 图表数据工作簿不存在: {part}",
             )
         try:
-            with ZipFile(BytesIO(package.read(part))) as workbook:
+            with package.open(part) as stream, ZipFile(stream) as workbook:
                 infos = workbook.infolist()
                 if not infos:
                     raise OfficePackageError(

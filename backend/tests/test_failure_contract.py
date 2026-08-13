@@ -49,3 +49,7 @@ def test_job_state_rejects_absolute_and_parent_paths() -> None:
     assert JobState.model_validate({**base, "artifact_path": "deck.pptx"}).artifact_path == "deck.pptx"
     with pytest.raises(ValidationError):
         JobState.model_validate({**base, "artifact_path": "../outside.pptx"})
+    with pytest.raises(ValidationError):
+        JobState.model_validate({**base, "artifact_path": "C:foo.pptx"})
+    with pytest.raises(ValidationError):
+        JobState.model_validate({**base, "artifact_path": "sub\\file.pptx"})

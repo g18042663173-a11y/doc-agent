@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
                 expected_filename=document.source.filename,
             ),
         )
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         print(format_validation_result(_generator_failure(str(exc))), file=sys.stderr)
         return 1
     if not result.ok or result.value is None:

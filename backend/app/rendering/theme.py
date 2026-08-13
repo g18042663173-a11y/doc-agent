@@ -30,7 +30,8 @@ class UnknownThemeError(ValueError):
 
 
 def load_theme(name: str = "hw_v1") -> dict[str, Any]:
-    filename = "hw_theme.json" if name == "hw_v1" else f"{name}.json"
+    canonical = resolve_theme(name)
+    filename = "hw_theme.json" if canonical == "hw_v1" else f"{canonical}.json"
     path = THEMES_DIR / filename
     if not path.exists():
         raise FileNotFoundError(f"theme not found: {name}")

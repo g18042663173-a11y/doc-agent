@@ -28,7 +28,7 @@ def parse_pptx(path: Path) -> DocumentIR:
 
     for index, slide in enumerate(presentation.slides, start=1):
         shape_warnings: list[str] = []
-        shape_warnings.extend(embedding_warnings.get(index, []))
+        shape_warnings.extend(embedding_warnings.get(_slide_part_number(slide, index), []))
         shapes = list(_iter_shapes(slide.shapes, shape_warnings))
         shape_warnings.extend(_slide_warnings(slide, shapes))
         if shape_warnings:
@@ -247,6 +247,15 @@ def _iter_shapes(shapes: Iterable, shape_warnings: list[str]) -> Iterable:
                 yield from _iter_shapes(child_shapes, shape_warnings)
         except Exception:
             shape_warnings.append("group shape traversal failed; child shapes skipped")
+
+
+def _slide_part_number(slide, fallback: int) -> int:
+    partname = getattr(getattr(slide, "part", None), "partname", None)
+    if partname is not None:
+        match = re.search(r"slide(\d+)\.xml$", str(partname))
+        if match is not None:
+            return int(match.group(1))
+    return fallback
 
 
 def _emu_to_inches(value) -> float:

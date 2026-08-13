@@ -68,7 +68,20 @@ def check_pptx(
 ) -> PptxLintReport:
     theme = build_template_render_theme(theme_name, template_profile) if template_profile is not None else load_theme(theme_name)
     expected_classification = classification or theme["footer"]["default_classification"]
-    prs = Presentation(str(path))
+    try:
+        prs = Presentation(str(path))
+    except Exception as exc:
+        return PptxLintReport(
+            [
+                PptxLintItem(
+                    code="E001",
+                    level="Error",
+                    slide=None,
+                    message=f"PPTX 无法打开: {exc}",
+                    suggestion="确认文件是有效 .pptx，并重新导出后复检。",
+                )
+            ]
+        )
     items: list[PptxLintItem] = []
 
     if len(prs.slides) > theme["constraints"]["max_slides"]:
@@ -365,7 +378,7 @@ def _chart_cached_data(chart) -> tuple[list[str], list[float]]:
             continue
         for child in series:
             local_name = child.tag.rsplit("}", 1)[-1]
-            if local_name == "cat" and not categories:
+            if local_name == "cat":
                 categories = [value.text or "" for value in child.iter() if value.tag.rsplit("}", 1)[-1] == "v"]
             elif local_name == "val":
                 for value in child.iter():
@@ -375,6 +388,7 @@ def _chart_cached_data(chart) -> tuple[list[str], list[float]]:
                         values.append(float(value.text))
                     except ValueError:
                         continue
+        break
     return categories, values
 
 
@@ -1470,7 +1484,7 @@ def _structure_items(prs, theme: dict, expected_classification: str) -> list[Ppt
                 and not _is_footer_shape(shape, theme, expected_classification)
             ]
             agenda_count = len(agenda_items)
-        if any(re.fullmatch(r"\d{2}", _shape_text(shape)) and _max_font_size(shape) >= section_number_min_size for shape in text_shapes):
+        if any(re.fullmatch(r"\d{1,2}", _shape_text(shape)) and _max_font_size(shape) >= section_number_min_size for shape in text_shapes):
             section_count += 1
     if agenda_count is not None and agenda_count != section_count:
         return [

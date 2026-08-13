@@ -154,14 +154,23 @@ def _quote(text: str) -> str:
 
 def _image_placeholder(caption: str | None, ref: str | None) -> str:
     alt = (caption or ref or "图片占位").replace("]", "\\]")
-    destination = ref or "#image-placeholder"
+    destination = _escape_link_destination(ref or "#image-placeholder")
     return f"![{alt}]({destination})"
+
+
+def _escape_link_destination(destination: str) -> str:
+    return (
+        destination.replace("\\", "/")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace(" ", "%20")
+    )
 
 
 def _language_marker(language: str | None) -> str:
     if language is None:
         return ""
-    return re.sub(r"\s+", "", language)
+    return re.sub(r"[\s`]+", "", language)
 
 
 def _code_fence(code: str) -> str:

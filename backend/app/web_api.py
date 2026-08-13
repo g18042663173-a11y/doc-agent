@@ -413,6 +413,7 @@ class JobRunner:
                         item.cancel_event.set()
                         break
                     if time.monotonic() >= deadline:
+                        item.cancel_event.set()
                         _fail_job(
                             current,
                             self.jobs,
@@ -988,16 +989,36 @@ def _cancel_job_response(jobs: JobStore, job_id: str):
             suggestion="请查看现有任务结果，或创建新的任务。",
             retryable=False,
         )
-    _fail_job(
-        job,
-        jobs,
-        code="E009",
-        stage="canceled",
-        retryable=False,
-        message="任务已取消。",
-        suggestion="可修改输入后创建新的任务。",
-        terminal_status="canceled",
-    )
+    try:
+        _fail_job(
+            job,
+            jobs,
+            code="E009",
+            stage="canceled",
+            retryable=False,
+            message="任务已取消。",
+            suggestion="可修改输入后创建新的任务。",
+            terminal_status="canceled",
+        )
+    except OSError:
+        return _error_response(
+            "E002",
+            "取消任务时写入失败报告出错。",
+            status=500,
+            stage="canceling",
+            retryable=True,
+            suggestion="请检查磁盘空间后重试。",
+        )
+    current = jobs.get(job_id)
+    if current is not None and current.status != "canceled":
+        return _error_response(
+            "E001",
+            "任务已结束，无法取消。",
+            status=409,
+            stage="canceling",
+            suggestion="请查看现有任务结果，或创建新的任务。",
+            retryable=False,
+        )
     return jsonify(jobs.payload(job_id)), 200
 
 
@@ -1162,6 +1183,11 @@ def create_api_app(
     _register_generator_routes(app, manager)
     _register_generation_routes(app, root, jobs, runner, manager)
     _register_job_routes(app, jobs)
+
+    @app.get("/")
+    def _index():
+        return app.send_static_file("index.html")
+
     return app
 
 
@@ -1578,7 +1604,7 @@ def _fail_job(
     error = envelope.model_dump(mode="json", exclude_none=True, exclude={"items"} if not envelope.items else set())
 
     failure_path = _write_failure_report(job, error)
-    assets = dict(job.assets)
+    assets = dict(current.assets)
     assets["failure-report"] = failure_path
     _cleanup_sensitive_job_files(job)
     jobs.update(

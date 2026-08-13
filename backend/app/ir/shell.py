@@ -13,7 +13,7 @@ class JsonExtractionError(ValueError):
     pass
 
 
-FENCED_JSON_RE = re.compile(r"```(?:json|JSON)?\s*(.*?)```", re.DOTALL)
+FENCED_JSON_RE = re.compile(r"```(?:json|JSON)?[ \t]*\r?\n(.*?)\r?\n```[ \t]*(?:\r?\n|$)", re.DOTALL)
 
 
 def extract_json_text(raw: str) -> str:
@@ -37,9 +37,11 @@ def extract_json_text(raw: str) -> str:
 
 def _single_json_object(text: str) -> str:
     valid, invalid, truncated = _scan_json_objects(text)
-    if len(valid) > 1 or (valid and truncated):
+    if len(valid) > 1:
         raise JsonExtractionError("multiple JSON objects found")
     if len(valid) == 1:
+        # A single complete object wins over any trailing prose, including an
+        # unbalanced brace in the surrounding explanation.
         return valid[0]
     if truncated:
         raise JsonExtractionError("truncated JSON object")

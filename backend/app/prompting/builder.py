@@ -552,9 +552,13 @@ def _compact_block(block: dict) -> dict:
 def _truncate_text(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
+    separator = "...[truncated]..."
+    if limit <= len(separator) + 1:
+        return text[:limit]
     head_length = limit * 2 // 3
-    tail_length = limit - head_length - len("...[truncated]...")
-    return f"{text[:head_length]}...[truncated]...{text[-tail_length:]}"
+    tail_length = max(0, limit - head_length - len(separator))
+    tail = text[-tail_length:] if tail_length else ""
+    return f"{text[:head_length]}{separator}{tail}"
 
 
 def _evidence_score(block: dict) -> int:
@@ -679,11 +683,11 @@ def _theme_section(theme: str) -> str:
     Mirrors the design-system mechanism of open-kimi-ppt: a named preset is the
     single style source for that run. hw_v1 (legacy default) carries no guide.
     """
-    from app.rendering.theme import load_theme
+    from app.rendering.theme import UnknownThemeError, load_theme
 
     try:
         theme_data = load_theme(theme)
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, UnknownThemeError):
         return ""
     style_guide = theme_data.get("style_guide")
     if not style_guide:

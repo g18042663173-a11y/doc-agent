@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.assets.contracts import AssetManifest, AssetRecord
+from app.generation.layout_policy import detect_sequence_evidence, timeline_parts
 from app.ir.document_ir import DocumentIR
 from app.visual.planner import audit_visual_selection, build_visual_plan
 from app.ir.deck_ir import DeckIR
@@ -33,6 +34,18 @@ def test_visual_plan_uses_fixed_business_rules_and_does_not_force_images() -> No
     assert ("chart", "line") in layouts
     assert any(layout in {"process_flow", "funnel", "cycle"} for layout, _kind in layouts)
     assert all(not item.asset_ids for item in plan.opportunities)
+
+
+def test_milestone_token_does_not_match_platform_names() -> None:
+    # "M1 与 M3 平台" are chip names, not milestones; must not trigger a timeline.
+    document = _document("新一代处理器采用 M1 与 M3 平台架构。")
+    evidence = detect_sequence_evidence(document.model_dump())
+    assert evidence is None or evidence.layout != "timeline"
+
+
+def test_milestone_token_matches_explicit_milestones() -> None:
+    assert timeline_parts("M1 里程碑")[0] == "M1"
+    assert timeline_parts("里程碑 M2")[0] == "里程碑 M2"
 
 
 def test_visual_plan_recommends_image_grid_when_multiple_assets_exist() -> None:

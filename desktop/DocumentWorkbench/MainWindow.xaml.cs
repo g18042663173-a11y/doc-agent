@@ -710,11 +710,16 @@ public partial class MainWindow : Window
 
     private async Task RefreshJobsAsync()
     {
+        var selectedJobId = (JobsDataGrid.SelectedItem as JobInfo)?.JobId;
         var jobs = await _api.GetJobsAsync(_lifetime.Token);
         Jobs.Clear();
         foreach (var job in jobs)
         {
             Jobs.Add(job);
+        }
+        if (selectedJobId is not null)
+        {
+            JobsDataGrid.SelectedItem = Jobs.FirstOrDefault(j => j.JobId == selectedJobId);
         }
     }
 
@@ -1197,6 +1202,10 @@ public partial class MainWindow : Window
 
     private static string FormatBytes(long value)
     {
+        if (value <= 0)
+        {
+            return "0 KB";
+        }
         if (value >= 1024L * 1024 * 1024)
         {
             return $"{value / 1024d / 1024 / 1024:0.0} GB";

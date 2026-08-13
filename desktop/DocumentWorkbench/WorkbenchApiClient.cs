@@ -116,7 +116,7 @@ public sealed class WorkbenchApiClient : IDisposable
     {
         using var response = await _client.GetAsync(relativeUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
-        var temporary = outputPath + ".download";
+        var temporary = $"{outputPath}.{Guid.NewGuid():N}.download";
         try
         {
             await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))

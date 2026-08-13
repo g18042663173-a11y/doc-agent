@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -76,6 +77,13 @@ class JobState(FailureContractModel):
 
 
 def _safe_relative_path(value: str) -> str:
+    if not value or "\x00" in value:
+        raise ValueError("job state paths must stay inside the job directory")
+    # Reject Windows drive-relative (C:foo), UNC (\\host\share), rooted (// or
+    # /foo) and backslash-separated paths — Path("C:foo").is_absolute() is False
+    # on Windows yet still resolves outside the job directory.
+    if re.match(r"^[A-Za-z]:", value) or "\\" in value or value.startswith("//"):
+        raise ValueError("job state paths must stay inside the job directory")
     path = Path(value)
     if path.is_absolute() or ".." in path.parts or not path.parts:
         raise ValueError("job state paths must stay inside the job directory")

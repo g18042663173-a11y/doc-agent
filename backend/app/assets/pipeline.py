@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 from typing import Iterable, Literal
 import warnings
@@ -104,7 +105,9 @@ def normalize_assets(
         seen_original_hashes.add(record.original_sha256)
         records.append(record)
     manifest = AssetManifest(manifest_version="1.0", assets=records)
-    manifest_path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    temporary = manifest_path.with_name(manifest_path.name + ".tmp")
+    temporary.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, manifest_path)
     return manifest
 
 

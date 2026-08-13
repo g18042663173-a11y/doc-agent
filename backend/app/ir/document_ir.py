@@ -102,6 +102,8 @@ class DocumentContent(ContractModel):
             expected_cols = len(block.header)
             if any(len(row) != expected_cols for row in block.rows):
                 raise ValueError(f"blocks[{index}].rows must match header column count")
+            if block.col_widths is not None and len(block.col_widths) != expected_cols:
+                raise ValueError(f"blocks[{index}].col_widths must match header column count")
         return self
 
 

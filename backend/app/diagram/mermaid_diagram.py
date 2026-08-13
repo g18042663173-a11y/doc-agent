@@ -284,11 +284,37 @@ def _source_lines(mermaid_text: str) -> list[tuple[int, str]]:
             raise MermaidDiagramError(f"line {line_number}: Mermaid initialization directives are unsupported")
         if stripped.startswith("%%"):
             continue
-        for statement in stripped.split(";"):
+        for statement in _split_mermaid_statements(stripped):
             text = statement.strip()
             if text:
                 lines.append((line_number, text))
     return lines
+
+
+def _split_mermaid_statements(stripped: str) -> list[str]:
+    """Split on ';' only at bracket/quote depth zero so labels like A["foo;bar"] survive."""
+    statements: list[str] = []
+    current: list[str] = []
+    depth = 0
+    in_quote = False
+    for char in stripped:
+        if char == '"' and not in_quote:
+            in_quote = True
+        elif char == '"' and in_quote:
+            in_quote = False
+        elif not in_quote and char in "[({":
+            depth += 1
+        elif not in_quote and char in "])}":
+            depth = max(0, depth - 1)
+        elif char == ";" and depth == 0 and not in_quote:
+            statements.append("".join(current))
+            current = []
+            continue
+        current.append(char)
+    tail = "".join(current).strip()
+    if tail:
+        statements.append(tail)
+    return statements
 
 
 def _parse_edge_line(

@@ -85,9 +85,10 @@ def render_deck_ir(deck: DeckIR, output_path: Path, *, asset_registry: AssetRegi
     prs.slide_width = Inches(theme["slide"]["width_in"])
     prs.slide_height = Inches(theme["slide"]["height_in"])
     total_slides = len(deck.slides)
+    blank_layout = _blank_layout(prs)
 
     for slide_number, slide_ir in enumerate(deck.slides, start=1):
-        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        slide = prs.slides.add_slide(blank_layout)
         _render_slide_content(slide, slide_ir, theme, asset_registry=asset_registry, slide_number=slide_number)
         _add_footer(slide, deck.meta.classification, slide_number, total_slides, theme)
 
@@ -96,6 +97,17 @@ def render_deck_ir(deck: DeckIR, output_path: Path, *, asset_registry: AssetRegi
     if asset_registry is not None:
         asset_registry.write_usage_audit(output_path.parent / "asset_usage_audit.json")
     return output_path
+
+
+def _blank_layout(prs) -> object:
+    layouts = prs.slide_layouts
+    for layout in layouts:
+        if not getattr(layout, "placeholders", None):
+            return layout
+    for index in (6, 5, 1):
+        if index < len(layouts):
+            return layouts[index]
+    return layouts[0]
 
 
 def _render_slide_content(
@@ -1306,7 +1318,14 @@ def _chart_number_format(chart_ir: ChartSpec) -> str:
 
 
 def _visual_text_length(text: str) -> int:
-    return sum(2 if "\u2e80" <= character <= "\uffff" else 1 for character in text)
+    total = 0
+    for character in text:
+        code = ord(character)
+        if 0x2E80 <= code <= 0xFFFF or code >= 0x1F000:
+            total += 2
+        else:
+            total += 1
+    return total
 
 
 def _set_axis_label_rotation(axis, degrees: int) -> None:
@@ -2444,18 +2463,18 @@ def _set_connector_arrowheads(connector, direction: str) -> None:
         child = line.find(qn(tag))
         if child is not None:
             line.remove(child)
-    if direction in {"forward", "both"}:
-        tail = OxmlElement("a:tailEnd")
-        tail.set("type", "triangle")
-        tail.set("w", "sm")
-        tail.set("len", "sm")
-        line.append(tail)
     if direction in {"backward", "both"}:
         head = OxmlElement("a:headEnd")
         head.set("type", "triangle")
         head.set("w", "sm")
         head.set("len", "sm")
         line.append(head)
+    if direction in {"forward", "both"}:
+        tail = OxmlElement("a:tailEnd")
+        tail.set("type", "triangle")
+        tail.set("w", "sm")
+        tail.set("len", "sm")
+        line.append(tail)
 
 
 def _render_architecture_edge_label(

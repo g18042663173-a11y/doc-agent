@@ -47,6 +47,24 @@ def test_office_preflight_rejects_unsafe_member_paths(tmp_path: Path, unsafe_nam
     assert captured.value.reason == "unsafe_package_path"
 
 
+@pytest.mark.parametrize("encoding", ["utf-16-le", "utf-16-be"])
+def test_office_preflight_rejects_utf16_xml_entities(tmp_path: Path, encoding: str) -> None:
+    """A UTF-16 encoded DTD/ENTITY must be caught, not bypassed by the ASCII-only scan."""
+    source = _docx_bytes(tmp_path)
+
+    def to_utf16(data: bytes) -> bytes:
+        text = "<!DOCTYPE x [<!ENTITY y SYSTEM 'file:///x'>]>" + data.decode("utf-8")
+        return text.encode(encoding)
+
+    package = _rewrite_package(source, transforms={"word/document.xml": to_utf16})
+    path = tmp_path / f"entity-{encoding}.docx"
+    path.write_bytes(package)
+
+    with pytest.raises(OfficePackageError) as captured:
+        preflight_office_package(path, purpose="source")
+    assert captured.value.reason == "unsafe_xml_declaration"
+
+
 def test_office_preflight_rejects_duplicate_casefolded_parts_and_xml_entities(tmp_path: Path) -> None:
     source = _docx_bytes(tmp_path)
     duplicate = _rewrite_package(source, extra={"WORD/DOCUMENT.XML": b"duplicate"})

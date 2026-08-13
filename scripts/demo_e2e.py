@@ -53,17 +53,18 @@ def main(argv: list[str] | None = None) -> int:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if args.target == "word" and (args.pages is not None or args.depth is not None):
+        build_parser().error("--pages/--depth are only supported for --target deck")
+    if args.target == "word" and (args.template is not None or args.asset_manifest is not None):
+        build_parser().error("--template/--asset-manifest are only supported for --target deck")
+    generation_options = GenerationOptions(pages=args.pages, depth=args.depth, theme=args.theme)
+
     document_ir = parse_file(args.input_file)
     document_path = output_dir / "document_ir.json"
     document_path.write_text(document_ir.model_dump_json(indent=2) + "\n", encoding="utf-8")
 
     generator = generator_from_name(args.generator)
     generator_target = "word_ir" if args.target == "word" else "deck_ir"
-    generation_options = GenerationOptions(pages=args.pages, depth=args.depth, theme=args.theme)
-    if args.target == "word" and generation_options.enabled:
-        build_parser().error("--pages/--depth are only supported for --target deck")
-    if args.target == "word" and (args.template is not None or args.asset_manifest is not None):
-        build_parser().error("--template/--asset-manifest are only supported for --target deck")
     asset_registry = load_asset_manifest(args.asset_manifest) if args.asset_manifest is not None else None
     visual_plan = build_visual_plan(document_ir, asset_registry.manifest if asset_registry is not None else None) if args.target == "deck" else None
     if visual_plan is not None:

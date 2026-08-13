@@ -108,7 +108,11 @@ def _parse_xlsx_impl(path: Path) -> DocumentIR:
                 warnings.append(
                     f"W103: xlsx formula count sampled from first {MAX_FORMULA_SCAN_ROWS} rows for sheet {sheet_name}; count is a lower bound"
                 )
-            header_guess = preview_rows[0] if preview_rows else []
+            header_guess = _header_row_strings(sheet, visible_cols, metadata.merge_ranges, limiter, sheet_name)
+            if 1 in metadata.hidden_rows and header_guess:
+                warnings.append(
+                    f"xlsx sheet {sheet_name} header row 1 is hidden; header_guess still uses row 1"
+                )
             optional_cells = (
                 min(nrows, MAX_COLUMN_STATS_ROWS) * len(visible_cols)
                 + min(nrows, MAX_FORMULA_SCAN_ROWS) * len(visible_cols)
@@ -309,6 +313,42 @@ def _preview_rows(
         if len(rows) >= MAX_PREVIEW_ROWS:
             break
     return rows, source_rows, nrows > max_source_rows and len(rows) < MAX_PREVIEW_ROWS
+
+
+def _header_row_strings(
+    sheet,
+    visible_cols: list[int],
+    merge_ranges: list[tuple[int, int, int, int]],
+    limiter: TextLimiter,
+    sheet_name: str,
+) -> list[str]:
+    if not visible_cols:
+        return []
+    row = next(
+        sheet.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max(visible_cols), values_only=True),
+        None,
+    )
+    if row is None:
+        return []
+    values = [
+        _stringify(
+            row[column - 1],
+            limiter=limiter,
+            loc=f"xlsx sheet {sheet_name} header column {column}",
+        )
+        for column in visible_cols
+    ]
+    col_indexes = {source_col: index for index, source_col in enumerate(visible_cols)}
+    for min_col, min_row, max_col, max_row in merge_ranges:
+        if min_row != 1 or min_col not in col_indexes:
+            continue
+        source_index = col_indexes[min_col]
+        source_value = values[source_index]
+        for source_col in range(min_col, max_col + 1):
+            col_index = col_indexes.get(source_col)
+            if col_index is not None and not values[col_index]:
+                values[col_index] = source_value
+    return values
 
 
 def _sheet_dimensions(sheet) -> tuple[int, int]:

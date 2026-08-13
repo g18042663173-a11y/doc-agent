@@ -4,6 +4,7 @@ import re
 import zipfile
 from pathlib import Path
 from typing import Iterator
+from xml.etree import ElementTree
 
 from docx import Document
 from docx.document import Document as DocxDocument
@@ -29,6 +30,7 @@ MONOSPACE_FONT_NAMES = {"consolas", "courier new", "courier", "menlo", "monaco"}
 def parse_docx(path: Path) -> DocumentIR:
     warnings = preflight_source_office(path)
     document = Document(str(path))
+    numbering = _numbering_num_fmt(path)
     blocks: list[dict] = []
     outline: list[dict] = []
     warnings.extend(_unsupported_warnings(path))
@@ -64,7 +66,7 @@ def parse_docx(path: Path) -> DocumentIR:
                 outline.append({"level": heading_level, "text": text})
                 continue
 
-            list_kind = _list_kind(item)
+            list_kind = _list_kind(item, numbering)
             if list_kind is not None:
                 level = _list_level(item)
                 block_type = "numbered_list" if list_kind == "numbered" else "bullet_list"
@@ -150,18 +152,74 @@ def _is_code_paragraph(paragraph: Paragraph) -> bool:
     )
 
 
-def _list_kind(paragraph: Paragraph) -> str | None:
+def _list_kind(paragraph: Paragraph, numbering: dict[str, str] | None = None) -> str | None:
     style_name = paragraph.style.name
     if "List Bullet" in style_name or "项目符号" in style_name:
         return "bullet"
     if "List Number" in style_name or "编号" in style_name:
         return "numbered"
+    num_pr = _num_pr(paragraph)
+    if num_pr is not None:
+        num_id_el = num_pr.find(qn("w:numId"))
+        if num_id_el is not None:
+            num_id = num_id_el.get(qn("w:val"))
+            if num_id is not None and num_id not in ("0",):
+                num_fmt = (numbering or {}).get(num_id, "")
+                return "bullet" if num_fmt in _BULLET_NUM_FMTS else "numbered"
     return None
 
 
+def _num_pr(paragraph: Paragraph):
+    ppr = paragraph._p.pPr
+    if ppr is None:
+        return None
+    return ppr.find(qn("w:numPr"))
+
+
 def _list_level(paragraph: Paragraph) -> int:
+    num_pr = _num_pr(paragraph)
+    if num_pr is not None:
+        ilvl = num_pr.find(qn("w:ilvl"))
+        if ilvl is not None:
+            try:
+                return int(ilvl.get(qn("w:val"))) + 1
+            except (ValueError, TypeError):
+                pass
     style_name = paragraph.style.name
     return 2 if re.search(r"(^|\D)2($|\D)", style_name) else 1
+
+
+_BULLET_NUM_FMTS = {"bullet", "square", "circle", "chicago", "hollowSquare", "hollowsquare", "diamond", "disc"}
+
+
+def _numbering_num_fmt(path: Path) -> dict[str, str]:
+    """Map numId -> numFmt for the document's first list level, so real Word
+    lists (List Paragraph style + w:numPr) are classified bullet vs numbered."""
+    num_fmts: dict[str, str] = {}
+    try:
+        with zipfile.ZipFile(path) as package:
+            if "word/numbering.xml" not in package.namelist():
+                return num_fmts
+            root = ElementTree.fromstring(package.read("word/numbering.xml"))
+    except (zipfile.BadZipFile, ElementTree.ParseError, KeyError):
+        return num_fmts
+    ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    abstract_fmts: dict[str, str] = {}
+    for abstract_num in root.findall(f"{{{ns}}}abstractNum"):
+        abstract_id = abstract_num.get(f"{{{ns}}}abstractNumId")
+        for lvl in abstract_num.findall(f"{{{ns}}}lvl"):
+            num_fmt = lvl.find(f"{{{ns}}}numFmt")
+            if num_fmt is not None and num_fmt.get(f"{{{ns}}}val"):
+                abstract_fmts[abstract_id] = num_fmt.get(f"{{{ns}}}val")
+                break
+    for num in root.findall(f"{{{ns}}}num"):
+        num_id = num.get(f"{{{ns}}}numId")
+        abstract_id_el = num.find(f"{{{ns}}}abstractNumId")
+        if abstract_id_el is not None:
+            abstract_id = abstract_id_el.get(f"{{{ns}}}val")
+            if abstract_id in abstract_fmts:
+                num_fmts[num_id] = abstract_fmts[abstract_id]
+    return num_fmts
 
 
 def _parse_table(
@@ -233,10 +291,14 @@ def _unsupported_warnings(path: Path) -> list[str]:
         for name in names:
             if not name.startswith("word/") or not name.endswith(".xml"):
                 continue
-            xml = package.read(name).decode("utf-8", errors="replace")
+            xml = package.read(name)
+            if xml[:2] in (b"\xff\xfe", b"\xfe\xff"):
+                xml_text = xml.decode("utf-16", errors="replace")
+            else:
+                xml_text = xml.decode("utf-8", errors="replace")
             counts: dict[str, int] = {}
             for pattern, label in patterns:
-                count = len(re.findall(pattern, xml))
+                count = len(re.findall(pattern, xml_text))
                 if count:
                     counts[label] = counts.get(label, 0) + count
             for label, count in counts.items():

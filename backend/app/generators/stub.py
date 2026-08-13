@@ -13,6 +13,18 @@ CONTEXT_MARKER = "[输入 DocumentIR]"
 VISUAL_PLAN_MARKER = "[VisualPlan 1.0]"
 
 
+def _coerce_int(value: Any, *, default: int = 1, low: int | None = None, high: int | None = None) -> int:
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        return default
+    if low is not None:
+        result = max(low, result)
+    if high is not None:
+        result = min(high, result)
+    return result
+
+
 class StubGenerator:
     name = "stub"
 
@@ -137,7 +149,7 @@ def _copy_document_blocks(blocks: Any) -> list[dict[str, Any]]:
         if block_type == "heading":
             text = _text(block.get("text"))
             if text:
-                copied.append({"type": "heading", "level": max(1, min(4, int(block.get("level", 1)))), "text": text})
+                copied.append({"type": "heading", "level": _coerce_int(block.get("level", 1), low=1, high=4), "text": text})
         elif block_type == "paragraph":
             text = _text(block.get("text"), max_chars=1000)
             if text:
@@ -340,7 +352,7 @@ def _document_title(context: dict[str, Any] | None, *, fallback: str) -> str:
         return fallback
     content = context.get("content", {})
     for outline in content.get("outline", []):
-        if isinstance(outline, dict) and int(outline.get("level", 1)) == 1:
+        if isinstance(outline, dict) and _coerce_int(outline.get("level", 1)) == 1:
             value = _text(outline.get("text"))
             if value:
                 return value
@@ -488,7 +500,7 @@ def _list_items(items: Any) -> list[dict[str, Any]]:
             continue
         text = _text(item.get("text"), max_chars=500)
         if text:
-            normalized.append({"text": text, "level": max(1, min(2, int(item.get("level", 1))))})
+            normalized.append({"text": text, "level": _coerce_int(item.get("level", 1), low=1, high=2)})
     return normalized
 
 

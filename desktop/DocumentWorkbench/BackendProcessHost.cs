@@ -306,7 +306,7 @@ public sealed class BackendProcessHost : IDisposable
     {
         foreach (var path in Directory.EnumerateFiles(runtime, "bootstrap-*.json"))
         {
-            if (File.GetLastWriteTimeUtc(path) < DateTime.UtcNow.AddMinutes(-10))
+            if (File.GetLastWriteTimeUtc(path) < DateTime.UtcNow.AddMinutes(-2))
             {
                 TryDelete(path);
             }

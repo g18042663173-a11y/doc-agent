@@ -157,6 +157,8 @@ def _read_markdown_text(path: Path) -> tuple[str, str | None]:
     try:
         return data.decode("utf-8-sig"), None
     except UnicodeDecodeError:
+        if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+            return data.decode("utf-16"), "markdown decoded as UTF-16"
         try:
             return data.decode("gb18030"), "markdown decoded using gb18030 fallback"
         except UnicodeDecodeError as exc:
@@ -175,13 +177,19 @@ def _parse_table(
         loc=f"markdown table line {start_line}",
         warn_truncation=True,
     )
+    header = [cell or f"Column {index}" for index, cell in enumerate(header, start=1)]
     rows: list[list[str]] = []
     consumed = 2
     truncated = False
     malformed_rows = 0
     while consumed < len(lines) and "|" in lines[consumed] and lines[consumed].strip():
+        row_line = lines[consumed]
+        if TABLE_SEPARATOR_RE.match(row_line):
+            break
+        if HEADING_RE.match(row_line) or CODE_FENCE_RE.match(row_line) or UNORDERED_RE.match(row_line) or ORDERED_RE.match(row_line):
+            break
         row = _split_table_row(
-            lines[consumed],
+            row_line,
             limiter=limiter,
             loc=f"markdown table line {start_line + consumed}",
         )
@@ -200,11 +208,13 @@ MAX_TABLE_COLUMNS = 12
 
 
 def _split_table_row(line: str, *, limiter: TextLimiter, loc: str, warn_truncation: bool = False) -> list[str]:
-    cells = line.strip().strip("|").split("|")
+    stripped = line.strip().strip("|")
+    raw_cells = re.split(r"(?<!\\)\|", stripped)
+    cells = [re.sub(r"\\([|\\])", r"\1", cell).strip() for cell in raw_cells]
     if warn_truncation and len(cells) > MAX_TABLE_COLUMNS:
         limiter.warnings.append(f"W103: markdown table {loc} truncated to 12 columns")
     return [
-        limiter.limit(cell.strip(), loc=f"{loc} cell {index}")
+        limiter.limit(cell, loc=f"{loc} cell {index}")
         for index, cell in enumerate(cells[:MAX_TABLE_COLUMNS], start=1)
     ]
 

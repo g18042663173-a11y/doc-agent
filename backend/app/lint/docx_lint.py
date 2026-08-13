@@ -108,14 +108,17 @@ def check_docx(path: Path, *, classification: str | None = None, theme_name: str
 
 
 def _read_word_xml(path: Path) -> str:
+    parts: list[str] = []
     with zipfile.ZipFile(path) as package:
-        return "\n".join(
-            package.read(name).decode("utf-8")
-            for name in package.namelist()
-            if name.startswith("word/")
-            and name.endswith(".xml")
-            and not name.startswith("word/theme/")
-        )
+        for name in package.namelist():
+            if not (name.startswith("word/") and name.endswith(".xml") and not name.startswith("word/theme/")):
+                continue
+            data = package.read(name)
+            if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+                parts.append(data.decode("utf-16", errors="replace"))
+            else:
+                parts.append(data.decode("utf-8", errors="replace"))
+    return "\n".join(parts)
 
 
 def _theme_items(document: Document, package_xml: str, theme: dict) -> list[DocxLintItem]:

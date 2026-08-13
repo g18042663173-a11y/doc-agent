@@ -118,6 +118,14 @@ def test_extract_json_text_ignores_braces_inside_strings() -> None:
     assert extract_json_text(raw) == '{"value":"正文里的 { 与 } 不影响边界"}'
 
 
+def test_extract_json_text_ignores_trailing_prose_unbalanced_brace() -> None:
+    from app.ir.shell import extract_json_text
+
+    raw = '{"value":"x"} 后续说明里有一个未闭合的花括号 {'
+
+    assert extract_json_text(raw) == '{"value":"x"}'
+
+
 class RepairingGenerator:
     name = "repairing"
 

@@ -42,6 +42,23 @@ def test_theme_registry_whitelist() -> None:
         resolve_theme("not-a-theme")
 
 
+@pytest.mark.parametrize(
+    "malicious",
+    [
+        "../secret",
+        "../../etc/passwd",
+        "..\\..\\windows\\win.ini",
+        "themes/../hw_v1",
+        "hw_v1/../../hw-report",
+    ],
+)
+def test_load_theme_rejects_path_traversal(malicious: str) -> None:
+    """Theme names must resolve through the registry, never touch the filesystem
+    outside the themes directory (path-traversal / arbitrary .json read)."""
+    with pytest.raises(UnknownThemeError):
+        load_theme(malicious)
+
+
 @pytest.mark.parametrize("name", NAMED_THEMES)
 def test_generate_deck_overrides_meta_theme(name: str) -> None:
     attempt = generate_deck(
@@ -98,6 +115,13 @@ def test_prompt_injects_theme_style_guide(name: str) -> None:
 def test_default_prompt_has_no_theme_section() -> None:
     prompt = build_prompt(kind="deck", context=_document(), depth="标准", pages=11)
     assert "[主题风格" not in prompt
+
+
+def test_prompt_unknown_theme_has_no_style_guide_section() -> None:
+    """Unknown/traversal theme names must not inject any file content into the prompt."""
+    prompt = build_prompt(kind="deck", context=_document(), depth="标准", pages=11, theme="../secret")
+    assert "[主题风格" not in prompt
+    assert "style_guide" not in prompt
 
 
 def test_generation_options_rejects_bad_theme() -> None:

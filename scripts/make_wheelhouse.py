@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     args.output.mkdir(parents=True, exist_ok=True)
+    abi = "cp" + args.python_version.replace(".", "")
     command = [
         sys.executable,
         "-m",
@@ -30,6 +31,10 @@ def main(argv: list[str] | None = None) -> int:
         str(args.output),
         "--platform",
         args.platform,
+        "--implementation",
+        "cp",
+        "--abi",
+        abi,
         "--python-version",
         args.python_version,
         "--only-binary=:all:",

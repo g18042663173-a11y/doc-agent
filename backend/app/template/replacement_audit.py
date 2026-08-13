@@ -142,9 +142,7 @@ def build_template_replacement_audit(
                     )
                 )
 
-        no_placeholder_residue = not any(
-            "XXXX" in _shape_text(shape) for shape in _iter_shapes(rendered_slide.shapes)
-        )
+        no_placeholder_residue = slide_plan.strategy == "master_redraw" or unused_text_cleared
         audit_slides.append(
             TemplateReplacementAuditSlide(
                 output_index=output_index,

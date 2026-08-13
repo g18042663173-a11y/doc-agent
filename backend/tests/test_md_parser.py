@@ -82,6 +82,40 @@ def test_parse_markdown_warns_for_malformed_table_rows(tmp_path: Path) -> None:
     assert any("malformed table rows" in warning for warning in ir.warnings)
 
 
+def test_parse_markdown_fills_empty_header_cells(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "empty-header.md"
+    path.write_text("|  | 状态 |\n| --- | --- |\n| 甲 | 完成 |\n", encoding="utf-8")
+
+    ir = parse_markdown(path)
+    table = next(block for block in ir.content.blocks if block.type == "table")
+    assert table.header == ["Column 1", "状态"]
+
+
+def test_parse_markdown_handles_escaped_pipe_in_cell(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "escaped-pipe.md"
+    path.write_text("| 项目 | 状态 |\n| --- | --- |\n| A\\|B | 完成 |\n", encoding="utf-8")
+
+    ir = parse_markdown(path)
+    table = next(block for block in ir.content.blocks if block.type == "table")
+    assert table.rows == [["A|B", "完成"]]
+
+
+def test_parse_markdown_stops_table_at_second_separator_row(tmp_path: Path) -> None:
+    from app.parsers.md_parser import parse_markdown
+
+    path = tmp_path / "second-separator.md"
+    path.write_text("| 项目 | 状态 |\n| --- | --- |\n| 甲 | 完成 |\n| --- | --- |\n\n后续正文。\n", encoding="utf-8")
+
+    ir = parse_markdown(path)
+    table = next(block for block in ir.content.blocks if block.type == "table")
+    assert table.rows == [["甲", "完成"]]
+    assert any(block.type == "paragraph" and "后续正文" in block.text for block in ir.content.blocks)
+
+
 def test_parse_markdown_caps_wide_table_at_12_columns_with_warning(tmp_path: Path) -> None:
     from app.parsers.md_parser import parse_markdown
 

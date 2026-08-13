@@ -35,9 +35,10 @@ while ($PendingParents.Count -gt 0) {
         if ([System.IO.Path]::GetFileName($Child.ExecutablePath) -ieq "conhost.exe") {
             continue
         }
-        if ($Child.CommandLine -notmatch "app\.web_api") {
-            throw "Refusing to stop unexpected child process $($Child.ProcessId) of workbench PID $ProcessId."
-        }
+        # Descendants of a verified workbench process are owned by it, even when
+        # they are helper subprocesses (dot.exe, NGA CLI) whose command line does
+        # not contain "app.web_api". Aborting here would leave the tree and PID
+        # file behind, so collect them instead of throwing.
         $OwnedProcesses += $Child
         $PendingParents += $Child.ProcessId
     }

@@ -28,7 +28,10 @@ def build_template_render_theme(theme_name: str, profile: TemplateProfile) -> di
     accent1 = _color(colors, "accent1", "3494BA")
     text = _color(colors, "tx1", _color(colors, "dk1", "000000").lstrip("#"))
     background = _color(colors, "bg1", _color(colors, "lt1", "FFFFFF").lstrip("#"))
-    accents = [accent1] + [_color(colors, f"accent{index}", accent1.lstrip("#")) for index in range(2, 7)]
+    accents = [accent1] + [
+        _color(colors, f"accent{index}", _shade(accent1, 1.0 + (index - 1) * 0.12))
+        for index in range(2, 7)
+    ]
     theme["colors"].update(
         {
             "hw_red": accent1,
@@ -133,3 +136,13 @@ def _usable_font(fonts: list[str]) -> str | None:
 
 def _color(colors: dict[str, str], key: str, fallback: str) -> str:
     return "#" + colors.get(key, fallback.lstrip("#")).lstrip("#").upper()
+
+
+def _shade(hex_color: str, factor: float) -> str:
+    """Lighten a hex color to derive distinct series accents when accent2-6 are absent."""
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    r = min(255, int(r * factor))
+    g = min(255, int(g * factor))
+    b = min(255, int(b * factor))
+    return f"#{r:02X}{g:02X}{b:02X}"
