@@ -227,6 +227,12 @@ public sealed class GeneratorConfigDto
     [JsonPropertyName("transport")]
     public string? Transport { get; set; }
 
+    [JsonPropertyName("cli_path")]
+    public string? CliPath { get; set; }
+
+    [JsonPropertyName("endpoint_path")]
+    public string? EndpointPath { get; set; }
+
     [JsonPropertyName("timeout_seconds")]
     public int? TimeoutSeconds { get; set; }
 

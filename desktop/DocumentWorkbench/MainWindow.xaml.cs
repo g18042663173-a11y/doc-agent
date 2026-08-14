@@ -191,13 +191,13 @@ public partial class MainWindow : Window
                 var activeName = current.Active?.Name ?? "stub";
                 var label = activeName == "nga" ? "NGA" : activeName == "codex" ? "opencode-go" : "stub";
                 GeneratorStateText.Text = $"生成器：{label}";
-                NgaActiveStateText.Text = $"当前生成器：{label}";
-                LoadCodexControls(current);
+                GeneratorActiveStateText.Text = $"当前生成器：{label}";
+                LoadGeneratorControls(current);
             }
             catch (Exception)
             {
                 GeneratorStateText.Text = "生成器：未知";
-                NgaActiveStateText.Text = "当前生成器：未知";
+                GeneratorActiveStateText.Text = "当前生成器：未知";
             }
             return;
         }
@@ -217,8 +217,8 @@ public partial class MainWindow : Window
             _ngaDraftTested = true;
             _generatorBlocked = false;
             GeneratorStateText.Text = "生成器：NGA";
-            NgaActiveStateText.Text = "当前生成器：NGA";
-            NgaOperationStatusText.Text = $"已恢复连接，延迟 {tested.Connection?.LatencyMs ?? 0} ms";
+            GeneratorActiveStateText.Text = "当前生成器：NGA";
+            GeneratorOperationStatusText.Text = $"已恢复连接，延迟 {tested.Connection?.LatencyMs ?? 0} ms";
         }
         catch (Exception ex)
         {
@@ -231,8 +231,8 @@ public partial class MainWindow : Window
         _generatorBlocked = true;
         _ngaDraftTested = false;
         GeneratorStateText.Text = "生成器：NGA 配置异常";
-        NgaActiveStateText.Text = "当前生成器：NGA 未就绪";
-        NgaOperationStatusText.Text = message;
+        GeneratorActiveStateText.Text = "当前生成器：NGA 未就绪";
+        GeneratorOperationStatusText.Text = message;
         GenerateGuardText.Text = message;
     }
 
@@ -244,7 +244,6 @@ public partial class MainWindow : Window
         SelectComboByText(DefaultDepthComboBox, string.IsNullOrWhiteSpace(_settings.DefaultDepth) ? "标准" : _settings.DefaultDepth);
         SelectComboByTag(DefaultThemeComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTheme) ? "hw_v1" : _settings.DefaultTheme);
         SelectComboByTag(GenerateThemeComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTheme) ? "hw_v1" : _settings.DefaultTheme);
-        SelectComboByTag(NgaTransportComboBox, string.IsNullOrWhiteSpace(_settings.Nga.Transport) ? "http" : _settings.Nga.Transport);
         NgaCliPathTextBox.Text = string.IsNullOrWhiteSpace(_settings.Nga.CliPath) ? "nga" : _settings.Nga.CliPath;
         NgaBaseUrlTextBox.Text = _settings.Nga.BaseUrl;
         NgaEndpointTextBox.Text = string.IsNullOrWhiteSpace(_settings.Nga.EndpointPath)
@@ -260,30 +259,65 @@ public partial class MainWindow : Window
         NgaCredentialStateText.Text = CredentialManager.ReadNgaToken() is null
             ? "未保存凭据"
             : "Token 已保存在 Windows 凭据管理器";
-        ApplyNgaTransportVisibility();
+        CodexBaseUrlTextBox.Text = _settings.Codex.BaseUrl;
+        CodexModelTextBox.Text = _settings.Codex.Model;
+        CodexApiModeComboBox.SelectedIndex = _settings.Codex.ApiMode == "chat_completions" ? 1 : 0;
+        CodexTimeoutTextBox.Text = _settings.Codex.TimeoutSeconds.ToString();
+        CodexReasoningComboBox.SelectedIndex = _settings.Codex.ReasoningEffort == "medium" ? 1 : _settings.Codex.ReasoningEffort == "low" ? 2 : 0;
+        CodexCredentialStateText.Text = CredentialManager.ReadCodexToken() is null
+            ? "密钥：未保存（使用环境变量 OPENAI_API_KEY）"
+            : "密钥：已保存在 Windows 凭据管理器";
+        ApplyChannelVisibility();
         UpdateDeckOptionsVisibility();
     }
 
-    private void ApplyNgaTransportVisibility()
+    private void ApplyChannelVisibility()
     {
-        var isCli = ComboTag(NgaTransportComboBox, "http") == "cli";
-        NgaCliPathLabel.Visibility = isCli ? Visibility.Visible : Visibility.Collapsed;
-        NgaCliPathTextBox.Visibility = isCli ? Visibility.Visible : Visibility.Collapsed;
+        var channel = ComboTag(GeneratorChannelComboBox, "stub");
+        var isNgaCli = channel == "nga-cli";
+        var isNgaHttp = channel == "nga-http";
+        var isCodex = channel == "codex";
+        ChannelHintText.Text = channel switch
+        {
+            "stub" => "确定性生成，不调用 AI；适合流程验证与离线环境。",
+            "nga-cli" => "本机已登录 NGA 直接可用：认证、Token 刷新由 NGA 自行管理，无需填写任何凭据。",
+            "nga-http" => "适用于内网 OpenAI 兼容 AI 服务：需服务根地址、接口路径与 Bearer Token。",
+            "codex" => "opencode-go 或任意 OpenAI 兼容网关；API 密钥留空时使用环境变量 OPENAI_API_KEY。",
+            _ => "",
+        };
+        SetVisible(NgaCliPathLabel, isNgaCli);
+        SetVisible(NgaCliPathTextBox, isNgaCli);
+        SetVisible(NgaModelLabel, isNgaCli || isNgaHttp);
+        SetVisible(NgaModelTextBox, isNgaCli || isNgaHttp);
         foreach (var name in new[] { "NgaBaseUrlLabel", "NgaEndpointLabel", "NgaTokenLabel", "NgaResponseFormatLabel", "NgaCaLabel" })
         {
-            var label = FindName(name) as TextBlock;
-            if (label is not null) label.Visibility = isCli ? Visibility.Collapsed : Visibility.Visible;
+            if (FindName(name) is TextBlock label) label.Visibility = isNgaHttp ? Visibility.Visible : Visibility.Collapsed;
         }
         foreach (var name in new[] { "NgaBaseUrlTextBox", "NgaEndpointTextBox", "NgaTokenPasswordBox", "NgaResponseFormatComboBox", "NgaVerifyTlsCheckBox", "NgaAllowHttpCheckBox", "NgaCaPathTextBox", "NgaCaRow" })
         {
-            var control = FindName(name) as UIElement;
-            if (control is not null) control.Visibility = isCli ? Visibility.Collapsed : Visibility.Visible;
+            if (FindName(name) is UIElement control) control.Visibility = isNgaHttp ? Visibility.Visible : Visibility.Collapsed;
         }
+        NgaCredentialStateText.Visibility = isNgaHttp ? Visibility.Visible : Visibility.Collapsed;
+        SetVisible(NgaTimeoutLabel, isNgaCli || isNgaHttp);
+        SetVisible(NgaTimeoutTextBox, isNgaCli || isNgaHttp);
+        SetVisible(NgaRetriesLabel, isNgaCli || isNgaHttp);
+        SetVisible(NgaRetriesComboBox, isNgaCli || isNgaHttp);
+        foreach (var name in new[] { "CodexBaseUrlLabel", "CodexModelLabel", "CodexApiModeLabel", "CodexApiKeyLabel", "CodexHintText" })
+        {
+            if (FindName(name) is TextBlock label) label.Visibility = isCodex ? Visibility.Visible : Visibility.Collapsed;
+        }
+        foreach (var name in new[] { "CodexBaseUrlTextBox", "CodexModelTextBox", "CodexApiModeComboBox", "CodexApiKeyPasswordBox", "CodexCredentialStateText", "CodexTimeoutLabel", "CodexTimeoutTextBox", "CodexReasoningLabel", "CodexReasoningComboBox" })
+        {
+            if (FindName(name) is UIElement control) control.Visibility = isCodex ? Visibility.Visible : Visibility.Collapsed;
+        }
+        DeleteNgaTokenButton.Visibility = isNgaHttp ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void NgaTransport_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private static void SetVisible(UIElement element, bool visible) => element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
+    private void GeneratorChannel_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        ApplyNgaTransportVisibility();
+        ApplyChannelVisibility();
     }
 
     private void SetServiceState(bool connected, string text)
@@ -921,7 +955,7 @@ public partial class MainWindow : Window
         _ = Dispatcher.BeginInvoke(() => ApplyAppearance(_settings.Appearance));
     }
 
-    private NgaStoredConfig ReadNgaControls()
+    private NgaStoredConfig ReadNgaControls(string transport)
     {
         if (!int.TryParse(NgaTimeoutTextBox.Text, out var timeout) || timeout is < 1 or > 900)
         {
@@ -932,7 +966,6 @@ public partial class MainWindow : Window
         {
             throw new InvalidDataException("重试次数必须是 0-5。");
         }
-        var transport = ComboTag(NgaTransportComboBox, "http");
         if (transport == "cli")
         {
             if (string.IsNullOrWhiteSpace(NgaModelTextBox.Text))
@@ -971,97 +1004,149 @@ public partial class MainWindow : Window
         };
     }
 
-    private async Task<GeneratorSettingsResponse> SaveNgaDraftAsync()
+    private string SelectedChannel() => ComboTag(GeneratorChannelComboBox, "stub");
+
+    private async Task<GeneratorSettingsResponse> SaveGeneratorDraftAsync()
     {
-        var config = ReadNgaControls();
-        // A freshly typed token in the password box wins over a stored one; the
-        // box may hold a renewal while an old credential still exists.
-        var token = string.IsNullOrWhiteSpace(NgaTokenPasswordBox.Password)
-            ? CredentialManager.ReadNgaToken()
-            : NgaTokenPasswordBox.Password;
-        if (string.IsNullOrWhiteSpace(token))
+        var channel = SelectedChannel();
+        if (channel == "stub")
         {
-            throw new InvalidDataException("请先输入 NGA Token。");
+            return await _api.ConfigureGeneratorAsync("stub", null, null, false, _settings.GeneratorMode, _lifetime.Token);
         }
-        // Validate on the backend first: a rejected configuration (E010) must
-        // not leave a persisted credential or settings that block startup.
-        var response = await _api.ConfigureGeneratorAsync("nga", config, token, false, _settings.GeneratorMode, _lifetime.Token);
-        if (!string.IsNullOrWhiteSpace(NgaTokenPasswordBox.Password))
+        if (channel == "nga-cli")
         {
-            CredentialManager.WriteNgaToken(NgaTokenPasswordBox.Password);
-            NgaTokenPasswordBox.Clear();
+            var config = ReadNgaControls("cli");
+            var response = await _api.ConfigureGeneratorAsync("nga", config, null, false, _settings.GeneratorMode, _lifetime.Token);
+            _settings.Nga = config;
+            await _settingsStore.SaveAsync(_settings);
+            _ngaDraftTested = false;
+            GeneratorOperationStatusText.Text = "配置已保存，启用前需要测试连接。";
+            return response;
         }
-        _settings.Nga = config;
+        if (channel == "nga-http")
+        {
+            var config = ReadNgaControls("http");
+            // A freshly typed token in the password box wins over a stored one.
+            var token = string.IsNullOrWhiteSpace(NgaTokenPasswordBox.Password)
+                ? CredentialManager.ReadNgaToken()
+                : NgaTokenPasswordBox.Password;
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new InvalidDataException("请先输入 NGA Token。");
+            }
+            // Validate on the backend first: a rejected configuration (E010)
+            // must not leave a persisted credential or settings behind.
+            var response = await _api.ConfigureGeneratorAsync("nga", config, token, false, _settings.GeneratorMode, _lifetime.Token);
+            if (!string.IsNullOrWhiteSpace(NgaTokenPasswordBox.Password))
+            {
+                CredentialManager.WriteNgaToken(NgaTokenPasswordBox.Password);
+                NgaTokenPasswordBox.Clear();
+            }
+            _settings.Nga = config;
+            await _settingsStore.SaveAsync(_settings);
+            _ngaDraftTested = false;
+            NgaCredentialStateText.Text = "Token 已保存在 Windows 凭据管理器";
+            GeneratorOperationStatusText.Text = "配置已保存，启用前需要测试连接。";
+            return response;
+        }
+        var codexConfig = ReadCodexControls();
+        var codexToken = string.IsNullOrWhiteSpace(CodexApiKeyPasswordBox.Password)
+            ? CredentialManager.ReadCodexToken()
+            : CodexApiKeyPasswordBox.Password;
+        var codexResponse = await _api.ConfigureGeneratorAsync("codex", codexConfig, codexToken, false, _settings.GeneratorMode, _lifetime.Token);
+        if (!string.IsNullOrWhiteSpace(CodexApiKeyPasswordBox.Password))
+        {
+            CredentialManager.WriteCodexToken(CodexApiKeyPasswordBox.Password);
+            CodexApiKeyPasswordBox.Clear();
+        }
+        _settings.Codex = codexConfig;
         await _settingsStore.SaveAsync(_settings);
-        _ngaDraftTested = false;
-        NgaCredentialStateText.Text = "Token 已保存在 Windows 凭据管理器";
-        NgaOperationStatusText.Text = "配置已保存，启用前需要测试连接。";
-        return response;
+        CodexCredentialStateText.Text = CredentialManager.ReadCodexToken() is null
+            ? "密钥：未保存（使用环境变量 OPENAI_API_KEY）"
+            : "密钥：已保存在 Windows 凭据管理器";
+        GeneratorOperationStatusText.Text = "配置已保存，启用前需要测试连接。";
+        return codexResponse;
     }
 
-    private async void SaveNga_Click(object sender, RoutedEventArgs e)
+    private async void SaveGenerator_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            SetNgaControlsEnabled(false);
-            await SaveNgaDraftAsync();
+            SetGeneratorControlsEnabled(false);
+            await SaveGeneratorDraftAsync();
         }
         catch (Exception ex)
         {
-            ShowNgaError(ex);
+            ShowGeneratorError(ex);
         }
         finally
         {
-            SetNgaControlsEnabled(true);
+            SetGeneratorControlsEnabled(true);
         }
     }
 
-    private async void TestNga_Click(object sender, RoutedEventArgs e)
+    private async void TestGenerator_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            SetNgaControlsEnabled(false);
-            await SaveNgaDraftAsync();
+            SetGeneratorControlsEnabled(false);
+            await SaveGeneratorDraftAsync();
             var response = await _api.TestGeneratorAsync(_lifetime.Token);
             _ngaDraftTested = true;
-            NgaOperationStatusText.Text = $"连接测试成功 · {response.Connection?.LatencyMs ?? 0} ms";
+            GeneratorOperationStatusText.Text = $"连接测试成功 · {response.Connection?.LatencyMs ?? 0} ms";
         }
         catch (Exception ex)
         {
             _ngaDraftTested = false;
-            ShowNgaError(ex);
+            ShowGeneratorError(ex);
         }
         finally
         {
-            SetNgaControlsEnabled(true);
+            SetGeneratorControlsEnabled(true);
         }
     }
 
-    private async void ActivateNga_Click(object sender, RoutedEventArgs e)
+    private async void ActivateGenerator_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            SetNgaControlsEnabled(false);
-            if (!_ngaDraftTested)
+            SetGeneratorControlsEnabled(false);
+            if (!_ngaDraftTested && SelectedChannel() != "stub")
             {
                 throw new InvalidOperationException("请先保存配置并通过连接测试。");
             }
             var response = await _api.ActivateGeneratorAsync(_lifetime.Token);
-            _settings.NgaEnabled = true;
+            var name = response.Active.Name;
+            _settings.NgaEnabled = name == "nga";
             await _settingsStore.SaveAsync(_settings);
             _generatorBlocked = false;
-            GeneratorStateText.Text = "生成器：NGA";
-            NgaActiveStateText.Text = $"当前生成器：NGA · 配置版本 {response.Active.Revision}";
-            NgaOperationStatusText.Text = "NGA 已启用。新任务将固定使用当前配置快照。";
+            GeneratorStateText.Text = name switch
+            {
+                "nga" => "生成器：NGA",
+                "codex" => "生成器：opencode-go",
+                _ => "生成器：stub",
+            };
+            GeneratorActiveStateText.Text = name switch
+            {
+                "nga" => $"当前生成器：NGA · 配置版本 {response.Active.Revision}",
+                "codex" => $"当前生成器：opencode-go（{response.Active.Config?.Model ?? "?"} · Base URL：{response.Active.Config?.BaseUrl ?? "?"} · 密钥：{(response.Active.CredentialConfigured ? "已配置" : "未配置")}）",
+                _ => "当前生成器：stub",
+            };
+            GeneratorOperationStatusText.Text = name switch
+            {
+                "nga" => "NGA 已启用。新任务将固定使用当前配置快照。",
+                "codex" => "已启用 opencode-go 生成器。",
+                _ => "已启用 Stub。",
+            };
             UpdateActionState();
         }
         catch (Exception ex)
         {
-            ShowNgaError(ex);
+            ShowGeneratorError(ex);
         }
         finally
         {
-            SetNgaControlsEnabled(true);
+            SetGeneratorControlsEnabled(true);
         }
     }
 
@@ -1069,7 +1154,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            SetNgaControlsEnabled(false);
+            SetGeneratorControlsEnabled(false);
             await _api.ConfigureGeneratorAsync("stub", null, null, false, _settings.GeneratorMode, _lifetime.Token);
             await _api.ActivateGeneratorAsync(_lifetime.Token);
             _settings.NgaEnabled = false;
@@ -1077,17 +1162,17 @@ public partial class MainWindow : Window
             _generatorBlocked = false;
             _ngaDraftTested = false;
             GeneratorStateText.Text = "生成器：stub";
-            NgaActiveStateText.Text = "当前生成器：stub";
-            NgaOperationStatusText.Text = "已切换到离线 Stub。";
+            GeneratorActiveStateText.Text = "当前生成器：stub";
+            GeneratorOperationStatusText.Text = "已切换到离线 Stub。";
             UpdateActionState();
         }
         catch (Exception ex)
         {
-            ShowNgaError(ex);
+            ShowGeneratorError(ex);
         }
         finally
         {
-            SetNgaControlsEnabled(true);
+            SetGeneratorControlsEnabled(true);
         }
     }
 
@@ -1106,37 +1191,83 @@ public partial class MainWindow : Window
             _settings.NgaEnabled = false;
             await _settingsStore.SaveAsync(_settings);
             NgaCredentialStateText.Text = "未保存凭据";
-            NgaOperationStatusText.Text = "Token 已删除，当前生成器为 Stub。";
+            GeneratorOperationStatusText.Text = "Token 已删除，当前生成器为 Stub。";
             GeneratorStateText.Text = "生成器：stub";
-            NgaActiveStateText.Text = "当前生成器：stub";
+            GeneratorActiveStateText.Text = "当前生成器：stub";
             _generatorBlocked = false;
             _ngaDraftTested = false;
             UpdateActionState();
         }
         catch (Exception ex)
         {
-            ShowNgaError(ex);
+            ShowGeneratorError(ex);
         }
     }
 
-    private void SetNgaControlsEnabled(bool enabled)
+    private void SetGeneratorControlsEnabled(bool enabled)
     {
-        SaveNgaButton.IsEnabled = enabled;
-        TestNgaButton.IsEnabled = enabled;
-        ActivateNgaButton.IsEnabled = enabled;
+        SaveGeneratorButton.IsEnabled = enabled;
+        TestGeneratorButton.IsEnabled = enabled;
+        ActivateGeneratorButton.IsEnabled = enabled;
     }
 
-    private void LoadCodexControls(GeneratorSettingsResponse settings)
+    private void LoadGeneratorControls(GeneratorSettingsResponse settings)
     {
         var active = settings.Active;
-        var config = active?.Name == "codex" ? active.Config : settings.Draft?.Name == "codex" ? settings.Draft.Config : null;
-        if (config is not null)
+        // Reflect the backend's active generator in the channel selector.
+        GeneratorChannelComboBox.SelectedIndex = active?.Name switch
         {
-            CodexBaseUrlTextBox.Text = string.IsNullOrWhiteSpace(config.BaseUrl) ? "https://opencode.ai/zen/go/v1" : config.BaseUrl;
-            CodexModelTextBox.Text = config.Model ?? "";
-            CodexApiModeComboBox.SelectedIndex = config.ApiMode == "chat_completions" ? 1 : 0;
-            CodexTimeoutTextBox.Text = (config.TimeoutSeconds ?? 300).ToString();
-            CodexReasoningComboBox.SelectedIndex = config.ReasoningEffort == "medium" ? 1 : config.ReasoningEffort == "low" ? 2 : 0;
+            "nga" => active.Config?.Transport == "cli" ? 1 : 2,
+            "codex" => 3,
+            _ => 0,
+        };
+        ApplyChannelVisibility();
+
+        // Pre-fill every channel form from its saved draft/active config so a
+        // switch never loses previously saved values.
+        var ngaConfig = active?.Name == "nga" && active.Config is not null
+            ? active.Config
+            : settings.Draft?.Name == "nga" ? settings.Draft.Config : null;
+        if (ngaConfig is not null)
+        {
+            var isCli = ngaConfig.Transport == "cli";
+            NgaCliPathTextBox.Text = string.IsNullOrWhiteSpace(ngaConfig.CliPath) ? "nga" : ngaConfig.CliPath;
+            NgaBaseUrlTextBox.Text = ngaConfig.BaseUrl ?? "";
+            NgaEndpointTextBox.Text = string.IsNullOrWhiteSpace(ngaConfig.EndpointPath)
+                ? "/v1/chat/completions"
+                : ngaConfig.EndpointPath;
+            NgaModelTextBox.Text = ngaConfig.Model ?? "";
+            NgaTimeoutTextBox.Text = (ngaConfig.TimeoutSeconds ?? (isCli ? 300 : 120)).ToString(CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            NgaCliPathTextBox.Text = string.IsNullOrWhiteSpace(_settings.Nga.CliPath) ? "nga" : _settings.Nga.CliPath;
+            NgaBaseUrlTextBox.Text = _settings.Nga.BaseUrl;
+            NgaEndpointTextBox.Text = string.IsNullOrWhiteSpace(_settings.Nga.EndpointPath)
+                ? "/v1/chat/completions"
+                : _settings.Nga.EndpointPath;
+            NgaModelTextBox.Text = _settings.Nga.Model;
+            NgaTimeoutTextBox.Text = _settings.Nga.TimeoutSeconds.ToString(CultureInfo.InvariantCulture);
+        }
+        SelectComboByText(NgaRetriesComboBox, _settings.Nga.MaxRetries.ToString(CultureInfo.InvariantCulture));
+        SelectComboByTag(NgaResponseFormatComboBox, _settings.Nga.ResponseFormat);
+        NgaVerifyTlsCheckBox.IsChecked = _settings.Nga.VerifyTls;
+        NgaAllowHttpCheckBox.IsChecked = _settings.Nga.AllowInsecureHttp;
+        NgaCaPathTextBox.Text = _settings.Nga.CaBundlePath ?? "";
+        NgaCredentialStateText.Text = CredentialManager.ReadNgaToken() is null
+            ? "未保存凭据"
+            : "Token 已保存在 Windows 凭据管理器";
+
+        var codexConfig = active?.Name == "codex" && active.Config is not null
+            ? active.Config
+            : settings.Draft?.Name == "codex" ? settings.Draft.Config : null;
+        if (codexConfig is not null)
+        {
+            CodexBaseUrlTextBox.Text = string.IsNullOrWhiteSpace(codexConfig.BaseUrl) ? "https://opencode.ai/zen/go/v1" : codexConfig.BaseUrl;
+            CodexModelTextBox.Text = codexConfig.Model ?? "";
+            CodexApiModeComboBox.SelectedIndex = codexConfig.ApiMode == "chat_completions" ? 1 : 0;
+            CodexTimeoutTextBox.Text = (codexConfig.TimeoutSeconds ?? 300).ToString();
+            CodexReasoningComboBox.SelectedIndex = codexConfig.ReasoningEffort == "medium" ? 1 : codexConfig.ReasoningEffort == "low" ? 2 : 0;
         }
         else
         {
@@ -1149,15 +1280,22 @@ public partial class MainWindow : Window
         CodexCredentialStateText.Text = CredentialManager.ReadCodexToken() is null
             ? "密钥：未保存（使用环境变量 OPENAI_API_KEY）"
             : "密钥：已保存在 Windows 凭据管理器";
+
         if (active is { Name: "codex" })
         {
-            CodexActiveStateText.Text =
+            GeneratorActiveStateText.Text =
                 $"当前生成器：opencode-go（{active.Config?.Model ?? "?"} · Base URL：{active.Config?.BaseUrl ?? "?"} · 密钥：{(active.CredentialConfigured ? "已配置" : "未配置")}）";
         }
         else
         {
-            CodexActiveStateText.Text = $"当前生成器：{(active?.Name == "nga" ? "NGA" : active?.Name == "codex" ? "opencode-go" : "stub")}";
+            GeneratorActiveStateText.Text = active?.Name switch
+            {
+                "nga" => $"当前生成器：NGA（{active.Config?.Model ?? "?"}）",
+                "codex" => "当前生成器：opencode-go",
+                _ => "当前生成器：stub",
+            };
         }
+        UpdateDeckOptionsVisibility();
     }
 
     private CodexStoredConfig ReadCodexControls()
@@ -1180,78 +1318,10 @@ public partial class MainWindow : Window
         };
     }
 
-    private async Task<GeneratorSettingsResponse> SaveCodexDraftAsync()
-    {
-        var config = ReadCodexControls();
-        var token = string.IsNullOrWhiteSpace(CodexApiKeyPasswordBox.Password)
-            ? CredentialManager.ReadCodexToken()
-            : CodexApiKeyPasswordBox.Password;
-        // Validate on the backend first: a rejected configuration (E010) must
-        // not leave a persisted credential or settings that block startup.
-        var response = await _api.ConfigureGeneratorAsync("codex", config, token, false, _settings.GeneratorMode, _lifetime.Token);
-        if (!string.IsNullOrWhiteSpace(CodexApiKeyPasswordBox.Password))
-        {
-            CredentialManager.WriteCodexToken(CodexApiKeyPasswordBox.Password);
-            CodexApiKeyPasswordBox.Clear();
-        }
-        _settings.Codex = config;
-        await _settingsStore.SaveAsync(_settings);
-        CodexCredentialStateText.Text = CredentialManager.ReadCodexToken() is null
-            ? "密钥：未保存（使用环境变量 OPENAI_API_KEY）"
-            : "密钥：已保存在 Windows 凭据管理器";
-        CodexOperationStatusText.Text = "配置已保存，启用前需要测试连接。";
-        return response;
-    }
-
-    private async void SaveCodex_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            await SaveCodexDraftAsync();
-        }
-        catch (Exception ex)
-        {
-            CodexOperationStatusText.Text = SafeFailureText(ex);
-        }
-    }
-
-    private async void TestCodex_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            await SaveCodexDraftAsync();
-            var result = await _api.TestGeneratorAsync(_lifetime.Token);
-            CodexOperationStatusText.Text = result.Connection?.Ok == true
-                ? $"连接成功（{result.Connection.LatencyMs}ms）。"
-                : "连接测试未通过。";
-        }
-        catch (Exception ex)
-        {
-            CodexOperationStatusText.Text = SafeFailureText(ex);
-        }
-    }
-
-    private async void ActivateCodex_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var response = await _api.ActivateGeneratorAsync(_lifetime.Token);
-            GeneratorStateText.Text = response.Active.Name == "codex" ? "生成器：opencode-go" : "生成器：stub";
-            CodexActiveStateText.Text = response.Active.Name == "codex"
-                ? $"当前生成器：opencode-go（{response.Active.Config?.Model ?? "?"} · Base URL：{response.Active.Config?.BaseUrl ?? "?"} · 密钥：{(response.Active.CredentialConfigured ? "已配置" : "未配置")}）"
-                : "当前生成器：stub";
-            CodexOperationStatusText.Text = response.Active.Name == "codex" ? "已启用 opencode-go 生成器。" : "启用失败。";
-        }
-        catch (Exception ex)
-        {
-            CodexOperationStatusText.Text = SafeFailureText(ex);
-        }
-    }
-
-    private void ShowNgaError(Exception exception)
+    private void ShowGeneratorError(Exception exception)
     {
         var message = SafeFailureText(exception);
-        NgaOperationStatusText.Text = message;
+        GeneratorOperationStatusText.Text = message;
         ShowMessage(message, true);
     }
 
@@ -1454,8 +1524,7 @@ public partial class MainWindow : Window
     }
 
     private void GeneralSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("general");
-    private void NgaSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("nga");
-    private void CodexSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("codex");
+    private void GeneratorSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("generator");
     private void StorageSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("storage");
     private void PrivacySettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("privacy");
     private void SettingsAbout_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("about");
@@ -1463,14 +1532,12 @@ public partial class MainWindow : Window
     private void SelectSettingsPage(string page)
     {
         GeneralSettingsPanel.Visibility = page == "general" ? Visibility.Visible : Visibility.Collapsed;
-        NgaSettingsPanel.Visibility = page == "nga" ? Visibility.Visible : Visibility.Collapsed;
-        CodexSettingsPanel.Visibility = page == "codex" ? Visibility.Visible : Visibility.Collapsed;
+        GeneratorSettingsPanel.Visibility = page == "generator" ? Visibility.Visible : Visibility.Collapsed;
         StorageSettingsPanel.Visibility = page == "storage" ? Visibility.Visible : Visibility.Collapsed;
         PrivacySettingsPanel.Visibility = page == "privacy" ? Visibility.Visible : Visibility.Collapsed;
         SettingsAboutPanel.Visibility = page == "about" ? Visibility.Visible : Visibility.Collapsed;
         GeneralSettingsButton.Tag = page == "general" ? "selected" : null;
-        NgaSettingsButton.Tag = page == "nga" ? "selected" : null;
-        CodexSettingsButton.Tag = page == "codex" ? "selected" : null;
+        GeneratorSettingsButton.Tag = page == "generator" ? "selected" : null;
         StorageSettingsButton.Tag = page == "storage" ? "selected" : null;
         PrivacySettingsButton.Tag = page == "privacy" ? "selected" : null;
         SettingsAboutButton.Tag = page == "about" ? "selected" : null;

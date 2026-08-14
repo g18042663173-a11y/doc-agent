@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-08-14 AI 通道统一管理界面(用户指令:NGA 与 opencode-go 整合)
+
+- **概念统一**:NGA(CLI/HTTP)与 opencode-go 归并为"AI 通道",同一个设置界面
+  选择/配置/切换;未来新增 AI(中转站/NGA 变体)只需加 generator + 配置表单。
+- **浏览器工作台**:生成设置面板重构为「通道选择(Stub / NGA CLI / NGA HTTP /
+  opencode-go)+ 动态表单 + 共用按钮(保存/测试/启用)」;各通道配置独立保存,
+  启用后生效;状态卡/引擎栏显示当前通道、模型、Base URL、密钥状态。
+- **WPF 桌面端**:设置页"NGA"+"opencode-go"两个子页合并为**「AI 通道」**一个页面:
+  通道下拉 + 按通道显隐字段 + 共用保存/测试/启用;密钥仍存 Windows Credential
+  Manager,非敏感配置存 settings.json。
+- 修复:作者样式覆盖 `hidden` 属性(CSS 加 `[hidden]{display:none!important}`);
+  NGA 模型输入按通道拆分为 ngaModelCli/ngaModelHttp 避免 id 冲突。
+- 测试:UI 测试更新为统一通道面板断言(desktop+mobile 全绿);pytest **798 passed /
+  15 skipped**;ruff 全绿;WPF Release 0 警告 0 错误,xUnit 17/17。
+- 发布物重建:ZIP `5410a1bf…` / EXE `5d590405…`;桌面便携版已更新运行中
+  (active=codex,设置页可见模型/Base URL/密钥状态)。
+
 ## 2026-08-14 设置页 AI 通道可视化 + opencode-go 可配置(用户指令)
 
 - **后端 GeneratorManager 支持 codex 通道配置**:新增 `CodexConfig`(base_url/model/

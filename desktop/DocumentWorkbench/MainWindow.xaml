@@ -824,8 +824,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <Button x:Name="GeneralSettingsButton" Content="常规" Style="{StaticResource SubNavButton}" Tag="selected" Click="GeneralSettings_Click" />
-                            <Button x:Name="NgaSettingsButton" Content="NGA" Style="{StaticResource SubNavButton}" Click="NgaSettings_Click" />
-                            <Button x:Name="CodexSettingsButton" Content="opencode-go" Style="{StaticResource SubNavButton}" Click="CodexSettings_Click" />
+                            <Button x:Name="GeneratorSettingsButton" Content="AI 通道" Style="{StaticResource SubNavButton}" Click="GeneratorSettings_Click" />
                             <Button x:Name="StorageSettingsButton" Content="存储" Style="{StaticResource SubNavButton}" Click="StorageSettings_Click" />
                             <Button x:Name="PrivacySettingsButton" Content="隐私" Style="{StaticResource SubNavButton}" Click="PrivacySettings_Click" />
                             <Button x:Name="SettingsAboutButton" Content="关于" Style="{StaticResource SubNavButton}" Click="SettingsAbout_Click" />
@@ -902,117 +901,90 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border x:Name="NgaSettingsPanel" Style="{StaticResource GroupPanel}" Visibility="Collapsed" VerticalAlignment="Top">
-                                    <StackPanel>
-                                        <TextBlock Text="NGA" Style="{StaticResource SectionTitle}" />
-                                        <TextBlock x:Name="NgaActiveStateText" Text="当前生成器：stub" Style="{StaticResource MutedText}" Margin="0,0,0,14" />
-                                        <TextBlock Text="调用方式" Style="{StaticResource FieldLabel}" />
-                                        <ComboBox x:Name="NgaTransportComboBox" Width="260" HorizontalAlignment="Left" Margin="0,0,0,12"
-                                                  SelectionChanged="NgaTransport_SelectionChanged" automation:AutomationProperties.AutomationId="nga-transport">
-                                            <ComboBoxItem Tag="http">HTTP 服务（OpenAI 兼容接口）</ComboBoxItem>
-                                            <ComboBoxItem Tag="cli">本机 NGA 命令行（nga run）</ComboBoxItem>
+                                <Border x:Name="GeneratorSettingsPanel" Style="{StaticResource GroupPanel}" Visibility="Collapsed" VerticalAlignment="Top">
+                                    <StackPanel MaxWidth="640" HorizontalAlignment="Left">
+                                        <TextBlock Text="AI 通道" Style="{StaticResource SectionTitle}" />
+                                        <TextBlock x:Name="GeneratorActiveStateText" Text="当前生成器：读取中…" Style="{StaticResource MutedText}" Margin="0,0,0,14" />
+                                        <TextBlock Text="通道" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox x:Name="GeneratorChannelComboBox" Width="300" HorizontalAlignment="Left" Margin="0,0,0,4"
+                                                  SelectionChanged="GeneratorChannel_SelectionChanged" automation:AutomationProperties.AutomationId="generator-channel">
+                                            <ComboBoxItem Tag="stub">Stub（确定性生成，无 AI）</ComboBoxItem>
+                                            <ComboBoxItem Tag="nga-cli">NGA 本机命令行（内网首选）</ComboBoxItem>
+                                            <ComboBoxItem Tag="nga-http">NGA HTTP（OpenAI 兼容服务）</ComboBoxItem>
+                                            <ComboBoxItem Tag="codex">opencode-go（默认 AI）</ComboBoxItem>
                                         </ComboBox>
-                                        <TextBlock x:Name="NgaCliPathLabel" Text="NGA 命令行路径" Style="{StaticResource FieldLabel}" Visibility="Collapsed" />
-                                        <TextBox x:Name="NgaCliPathTextBox" Margin="0,0,0,12" Visibility="Collapsed"
-                                                 automation:AutomationProperties.AutomationId="nga-cli-path" />
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="16" />
-                                                <ColumnDefinition Width="220" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0">
-                                                <TextBlock x:Name="NgaBaseUrlLabel" Text="服务地址" Style="{StaticResource FieldLabel}" />
-                                                <TextBox x:Name="NgaBaseUrlTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="nga-base-url" />
-                                                <TextBlock x:Name="NgaEndpointLabel" Text="接口路径" Style="{StaticResource FieldLabel}" />
-                                                <TextBox x:Name="NgaEndpointTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="nga-endpoint" />
-                                                <TextBlock Text="模型" Style="{StaticResource FieldLabel}" />
-                                                <TextBox x:Name="NgaModelTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="nga-model" />
-                                                <TextBlock x:Name="NgaTokenLabel" Text="Bearer Token" Style="{StaticResource FieldLabel}" />
-                                                <PasswordBox x:Name="NgaTokenPasswordBox" Margin="0,0,0,4" automation:AutomationProperties.AutomationId="nga-token" />
-                                                <TextBlock x:Name="NgaCredentialStateText" Text="未保存凭据" Style="{StaticResource MutedText}" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <TextBlock Text="超时（秒）" Style="{StaticResource FieldLabel}" />
-                                                <TextBox x:Name="NgaTimeoutTextBox" Margin="0,0,0,12" />
-                                                <TextBlock Text="重试次数" Style="{StaticResource FieldLabel}" />
-                                                <ComboBox x:Name="NgaRetriesComboBox" Margin="0,0,0,12">
-                                                    <ComboBoxItem>0</ComboBoxItem><ComboBoxItem>1</ComboBoxItem><ComboBoxItem>2</ComboBoxItem>
-                                                    <ComboBoxItem>3</ComboBoxItem><ComboBoxItem>4</ComboBoxItem><ComboBoxItem>5</ComboBoxItem>
-                                                </ComboBox>
-                                                <TextBlock x:Name="NgaResponseFormatLabel" Text="响应格式" Style="{StaticResource FieldLabel}" />
-                                                <ComboBox x:Name="NgaResponseFormatComboBox" Margin="0,0,0,12">
-                                                    <ComboBoxItem Tag="json_object">JSON Object</ComboBoxItem>
-                                                    <ComboBoxItem Tag="none">不声明</ComboBoxItem>
-                                                </ComboBox>
-                                                <CheckBox x:Name="NgaVerifyTlsCheckBox" Content="验证 TLS 证书" />
-                                                <CheckBox x:Name="NgaAllowHttpCheckBox" Content="允许明文 HTTP（仅隔离测试）" />
-                                            </StackPanel>
-                                        </Grid>
-                                        <TextBlock x:Name="NgaCaLabel" Text="自定义 CA 文件" Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
-                                        <Grid x:Name="NgaCaRow" Margin="0,0,0,16">
+                                        <TextBlock x:Name="ChannelHintText" Text="选择要配置和启用的 AI 通道；不同通道可分别保存，启用后生效。"
+                                                   Style="{StaticResource MutedText}" Margin="0,0,0,14" />
+
+                                        <TextBlock x:Name="NgaCliPathLabel" Text="NGA 命令行路径" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="NgaCliPathTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="nga-cli-path" />
+                                        <TextBlock x:Name="NgaModelLabel" Text="模型" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="NgaModelTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="nga-model" />
+
+                                        <TextBlock x:Name="NgaBaseUrlLabel" Text="服务地址" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="NgaBaseUrlTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="nga-base-url" />
+                                        <TextBlock x:Name="NgaEndpointLabel" Text="接口路径" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="NgaEndpointTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="nga-endpoint" />
+                                        <TextBlock x:Name="NgaTokenLabel" Text="Bearer Token" Style="{StaticResource FieldLabel}" />
+                                        <PasswordBox x:Name="NgaTokenPasswordBox" Margin="0,0,0,4" automation:AutomationProperties.AutomationId="nga-token" />
+                                        <TextBlock x:Name="NgaCredentialStateText" Text="未保存凭据" Style="{StaticResource MutedText}" Margin="0,0,0,12" />
+                                        <TextBlock x:Name="NgaResponseFormatLabel" Text="响应格式" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox x:Name="NgaResponseFormatComboBox" Width="200" HorizontalAlignment="Left" Margin="0,0,0,12">
+                                            <ComboBoxItem Tag="json_object">JSON Object</ComboBoxItem>
+                                            <ComboBoxItem Tag="none">不声明</ComboBoxItem>
+                                        </ComboBox>
+                                        <CheckBox x:Name="NgaVerifyTlsCheckBox" Content="验证 TLS 证书" Margin="0,0,0,4" />
+                                        <CheckBox x:Name="NgaAllowHttpCheckBox" Content="允许明文 HTTP（仅隔离测试）" Margin="0,0,0,4" />
+                                        <TextBlock x:Name="NgaCaLabel" Text="自定义 CA 文件" Style="{StaticResource FieldLabel}" Margin="0,10,0,5" />
+                                        <Grid x:Name="NgaCaRow" Margin="0,0,0,12">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                             <TextBox x:Name="NgaCaPathTextBox" IsReadOnly="True" />
                                             <Button Grid.Column="1" Content="选择 CA" Margin="8,0,0,0" Click="BrowseCa_Click" />
                                         </Grid>
-                                        <WrapPanel>
-                                            <Button x:Name="SaveNgaButton" Content="保存配置" Click="SaveNga_Click" />
-                                            <Button x:Name="TestNgaButton" Content="测试连接" Click="TestNga_Click" Margin="8,0,0,0"
-                                                    automation:AutomationProperties.AutomationId="test-nga" />
-                                            <Button x:Name="ActivateNgaButton" Content="启用 NGA" Style="{StaticResource PrimaryButton}"
-                                                    Click="ActivateNga_Click" Margin="8,0,0,0" automation:AutomationProperties.AutomationId="activate-nga" />
-                                            <Button Content="切换到 Stub" Click="ActivateStub_Click" Margin="8,0,0,0" />
-                                            <Button Content="删除 Token" Style="{StaticResource DangerButton}" Click="DeleteToken_Click" Margin="8,0,0,0" />
-                                        </WrapPanel>
-                                        <TextBlock x:Name="NgaOperationStatusText" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
-                                    </StackPanel>
-                                </Border>
 
-                                <Border x:Name="CodexSettingsPanel" Style="{StaticResource GroupPanel}" Visibility="Collapsed" VerticalAlignment="Top">
-                                    <StackPanel>
-                                        <TextBlock Text="opencode-go（默认 AI 通道）" Style="{StaticResource SectionTitle}" />
-                                        <TextBlock x:Name="CodexActiveStateText" Text="当前生成器：读取中…" Style="{StaticResource MutedText}" Margin="0,0,0,14" />
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="16" />
-                                                <ColumnDefinition Width="220" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0">
-                                                <TextBlock Text="服务地址（Base URL）" Style="{StaticResource FieldLabel}" />
-                                                <TextBox x:Name="CodexBaseUrlTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-base-url" />
-                                                <TextBlock Text="模型" Style="{StaticResource FieldLabel}" />
-                                                <TextBox x:Name="CodexModelTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-model" />
-                                                <TextBlock Text="API 密钥" Style="{StaticResource FieldLabel}" />
-                                                <PasswordBox x:Name="CodexApiKeyPasswordBox" Margin="0,0,0,4" automation:AutomationProperties.AutomationId="codex-api-key" />
-                                                <TextBlock x:Name="CodexCredentialStateText" Text="密钥：读取中…" Style="{StaticResource MutedText}" />
-                                                <TextBlock Text="留空使用环境变量 OPENAI_API_KEY；填写后保存在 Windows 凭据管理器。" Style="{StaticResource MutedText}" Margin="0,6,0,0" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <TextBlock Text="接口模式" Style="{StaticResource FieldLabel}" />
-                                                <ComboBox x:Name="CodexApiModeComboBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-api-mode">
-                                                    <ComboBoxItem Tag="responses">responses（默认）</ComboBoxItem>
-                                                    <ComboBoxItem Tag="chat_completions">chat/completions</ComboBoxItem>
-                                                </ComboBox>
-                                                <TextBlock Text="超时（秒）" Style="{StaticResource FieldLabel}" />
-                                                <TextBox x:Name="CodexTimeoutTextBox" Margin="0,0,0,12" />
-                                                <TextBlock Text="推理强度" Style="{StaticResource FieldLabel}" />
-                                                <ComboBox x:Name="CodexReasoningComboBox" Margin="0,0,0,12">
-                                                    <ComboBoxItem Tag="high">high（默认）</ComboBoxItem>
-                                                    <ComboBoxItem Tag="medium">medium</ComboBoxItem>
-                                                    <ComboBoxItem Tag="low">low</ComboBoxItem>
-                                                </ComboBox>
-                                            </StackPanel>
-                                        </Grid>
-                                        <WrapPanel>
-                                            <Button x:Name="SaveCodexButton" Content="保存配置" Click="SaveCodex_Click" />
-                                            <Button x:Name="TestCodexButton" Content="测试连接" Click="TestCodex_Click" Margin="8,0,0,0"
-                                                    automation:AutomationProperties.AutomationId="test-codex" />
-                                            <Button x:Name="ActivateCodexButton" Content="启用 opencode-go" Style="{StaticResource PrimaryButton}"
-                                                    Click="ActivateCodex_Click" Margin="8,0,0,0" automation:AutomationProperties.AutomationId="activate-codex" />
+                                        <TextBlock x:Name="CodexBaseUrlLabel" Text="服务地址（Base URL）" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="CodexBaseUrlTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-base-url" />
+                                        <TextBlock x:Name="CodexModelLabel" Text="模型" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="CodexModelTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-model" />
+                                        <TextBlock x:Name="CodexApiModeLabel" Text="接口模式" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox x:Name="CodexApiModeComboBox" Width="200" HorizontalAlignment="Left" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-api-mode">
+                                            <ComboBoxItem Tag="responses">responses（默认）</ComboBoxItem>
+                                            <ComboBoxItem Tag="chat_completions">chat/completions</ComboBoxItem>
+                                        </ComboBox>
+                                        <TextBlock x:Name="CodexApiKeyLabel" Text="API 密钥" Style="{StaticResource FieldLabel}" />
+                                        <PasswordBox x:Name="CodexApiKeyPasswordBox" Margin="0,0,0,4" automation:AutomationProperties.AutomationId="codex-api-key" />
+                                        <TextBlock x:Name="CodexCredentialStateText" Text="密钥：读取中…" Style="{StaticResource MutedText}" Margin="0,0,0,12" />
+                                        <TextBlock x:Name="CodexHintText" Text="API 密钥留空时使用环境变量 OPENAI_API_KEY；填写后保存在 Windows 凭据管理器。"
+                                                   Style="{StaticResource MutedText}" Margin="0,0,0,14" />
+
+                                        <TextBlock x:Name="NgaTimeoutLabel" Text="超时（秒）" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="NgaTimeoutTextBox" Margin="0,0,0,12" />
+                                        <TextBlock x:Name="NgaRetriesLabel" Text="重试次数" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox x:Name="NgaRetriesComboBox" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12">
+                                            <ComboBoxItem>0</ComboBoxItem><ComboBoxItem>1</ComboBoxItem><ComboBoxItem>2</ComboBoxItem>
+                                            <ComboBoxItem>3</ComboBoxItem><ComboBoxItem>4</ComboBoxItem><ComboBoxItem>5</ComboBoxItem>
+                                        </ComboBox>
+                                        <TextBlock x:Name="CodexTimeoutLabel" Text="超时（秒）" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="CodexTimeoutTextBox" Margin="0,0,0,12" />
+                                        <TextBlock x:Name="CodexReasoningLabel" Text="推理强度" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox x:Name="CodexReasoningComboBox" Width="160" HorizontalAlignment="Left" Margin="0,0,0,12">
+                                            <ComboBoxItem Tag="high">high（默认）</ComboBoxItem>
+                                            <ComboBoxItem Tag="medium">medium</ComboBoxItem>
+                                            <ComboBoxItem Tag="low">low</ComboBoxItem>
+                                        </ComboBox>
+
+                                        <WrapPanel Margin="0,6,0,0">
+                                            <Button x:Name="SaveGeneratorButton" Content="保存配置" Click="SaveGenerator_Click"
+                                                    automation:AutomationProperties.AutomationId="save-generator" />
+                                            <Button x:Name="TestGeneratorButton" Content="测试连接" Click="TestGenerator_Click" Margin="8,0,0,0"
+                                                    automation:AutomationProperties.AutomationId="test-generator" />
+                                            <Button x:Name="ActivateGeneratorButton" Content="启用生成器" Style="{StaticResource PrimaryButton}"
+                                                    Click="ActivateGenerator_Click" Margin="8,0,0,0" automation:AutomationProperties.AutomationId="activate-generator" />
                                             <Button Content="切换到 Stub" Click="ActivateStub_Click" Margin="8,0,0,0" />
+                                            <Button x:Name="DeleteNgaTokenButton" Content="删除 NGA Token" Style="{StaticResource DangerButton}"
+                                                    Click="DeleteToken_Click" Margin="8,0,0,0" />
                                         </WrapPanel>
-                                        <TextBlock x:Name="CodexOperationStatusText" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
+                                        <TextBlock x:Name="GeneratorOperationStatusText" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
                                     </StackPanel>
                                 </Border>
 

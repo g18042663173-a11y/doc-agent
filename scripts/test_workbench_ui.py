@@ -171,23 +171,26 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             page.get_by_test_id("nav-generate").click()
             page.locator("#generateView").wait_for(state="visible")
 
-            # 生成设置回归：CLI 模式字段显隐与按传输方式校验（曾误要求 base_url 导致 CLI 无法保存）
+            # 生成设置回归：统一 AI 通道面板（Stub / NGA CLI / NGA HTTP / opencode-go）
             page.get_by_test_id("generator-settings").locator("summary").click()
-            if page.locator("#ngaBaseUrlField").is_visible():
-                raise AssertionError("CLI transport must hide HTTP-only fields on load")
+            if page.locator("#ngaHttpFields").is_visible():
+                raise AssertionError("stub channel must hide HTTP-only fields on load")
+            page.get_by_test_id("generator-channel").select_option("nga-cli")
+            if not page.locator("#ngaCliFields").is_visible():
+                raise AssertionError("NGA CLI channel must show the CLI form")
             page.get_by_test_id("save-generator-settings").click()
             if page.locator("#generatorOperationStatus").inner_text() != "请填写模型名。":
                 raise AssertionError("CLI mode must ask for the model name, not base URL")
-            page.locator("#ngaModel").fill("w3/GLM-5.1-WX-Auto")
+            page.locator("#ngaModelCli").fill("w3/GLM-5.1-WX-Auto")
             page.get_by_test_id("save-generator-settings").click()
             page.locator("#generatorOperationStatus").get_by_text("配置已保存").wait_for(timeout=5_000)
-            page.get_by_test_id("nga-transport").select_option("http")
-            if not page.locator("#ngaBaseUrlField").is_visible():
-                raise AssertionError("HTTP transport must show the base URL field")
+            page.get_by_test_id("generator-channel").select_option("nga-http")
+            if not page.locator("#ngaHttpFields").is_visible():
+                raise AssertionError("NGA HTTP channel must show the HTTP form")
             page.get_by_test_id("save-generator-settings").click()
             if page.locator("#generatorOperationStatus").inner_text() != "请填写服务地址和模型。":
                 raise AssertionError("HTTP mode must require base URL and model")
-            page.get_by_test_id("nga-transport").select_option("cli")
+            page.get_by_test_id("generator-channel").select_option("nga-cli")
 
             page.get_by_test_id("input-file").set_input_files(str(source))
             page.get_by_test_id("type-word").click()

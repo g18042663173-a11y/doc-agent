@@ -59,6 +59,9 @@
     }
 
     * { box-sizing: border-box; }
+    /* Author styles (e.g. .generator-settings__grid { display: grid }) must not
+       override the hidden attribute; class rules beat the UA [hidden] rule. */
+    [hidden] { display: none !important; }
     html { background: var(--canvas); zoom: var(--ui-zoom); }
     body {
       margin: 0;
@@ -715,44 +718,14 @@
               </div>
               <div class="generator-settings__grid">
                 <div class="generator-settings__field">
-                  <span class="field-label">调用方式 <b class="required-mark">*</b></span>
-                  <select id="ngaTransport" class="text-input" data-testid="nga-transport">
-                    <option value="cli">本机 NGA 命令行（推荐，内网首选）</option>
-                    <option value="http">HTTP 服务（OpenAI 兼容接口）</option>
+                  <span class="field-label">AI 通道 <b class="required-mark">*</b></span>
+                  <select id="generatorChannel" class="text-input" data-testid="generator-channel">
+                    <option value="stub">Stub（确定性生成，无 AI）</option>
+                    <option value="nga-cli">NGA 本机命令行（内网首选）</option>
+                    <option value="nga-http">NGA HTTP（OpenAI 兼容服务）</option>
+                    <option value="codex">opencode-go（默认 AI）</option>
                   </select>
-                  <span id="transportHint" class="field-hint">本机已登录 NGA 直接可用：认证、Token 刷新由 NGA 自行管理，无需填写任何凭据。</span>
-                </div>
-                <div id="ngaCliPathField" class="generator-settings__field">
-                  <span class="field-label">NGA 命令行路径</span>
-                  <input id="ngaCliPath" class="text-input" type="text" value="nga" placeholder="nga 或完整路径" data-testid="nga-cli-path">
-                  <span class="field-hint">安装 NGA（codeagent）后的命令名；已加入 PATH 时保持默认 "nga"。</span>
-                </div>
-                <div id="ngaBaseUrlField" class="generator-settings__field">
-                  <span class="field-label">服务地址（Base URL）<b class="required-mark">*</b></span>
-                  <input id="ngaBaseUrl" class="text-input" type="text" placeholder="https://your-nga.example/v1" data-testid="nga-base-url">
-                  <span class="field-hint">内网 OpenAI 兼容服务的根地址，不含接口路径。</span>
-                </div>
-                <div id="ngaEndpointField" class="generator-settings__field">
-                  <span class="field-label">接口路径</span>
-                  <input id="ngaEndpoint" class="text-input" type="text" value="/v1/chat/completions" data-testid="nga-endpoint">
-                </div>
-                <div class="generator-settings__field">
-                  <span class="field-label">模型 <b class="required-mark">*</b></span>
-                  <input id="ngaModel" class="text-input" type="text" placeholder="w3/GLM-5.1-WX-Auto" data-testid="nga-model">
-                  <span class="field-hint">两种调用方式都需要指定模型名。</span>
-                </div>
-                <div id="ngaTokenField" class="generator-settings__field">
-                  <span class="field-label">Bearer Token <b class="required-mark">*</b></span>
-                  <input id="ngaToken" class="text-input" type="password" placeholder="sk-..." data-testid="nga-token">
-                  <span class="field-hint">仅保存在内存中，刷新页面后需重新输入。</span>
-                </div>
-                <div class="generator-settings__field">
-                  <span class="field-label">超时（秒）</span>
-                  <input id="ngaTimeout" class="text-input" type="number" min="1" max="900" value="300" data-testid="nga-timeout">
-                </div>
-                <div class="generator-settings__field">
-                  <span class="field-label">重试次数</span>
-                  <input id="ngaRetries" class="text-input" type="number" min="0" max="5" value="2" data-testid="nga-retries">
+                  <span id="channelHint" class="field-hint">选择要配置和启用的 AI 通道；不同通道可分别保存，启用后生效。</span>
                 </div>
                 <div class="generator-settings__field">
                   <span class="field-label">生成模式</span>
@@ -763,52 +736,93 @@
                   <span class="field-hint">auto 降级后结果会标注「已自动使用确定性生成器完成」；strict 保持严格失败。</span>
                 </div>
               </div>
-              <div class="codex-settings" data-testid="codex-settings">
-                <div class="codex-settings__head">
-                  <strong>opencode-go 通道（默认 AI）</strong>
-                  <span class="field-hint">API 密钥留空时使用环境变量 OPENAI_API_KEY；修改后需「测试连接」再「启用」。</span>
+
+              <div id="ngaCliFields" class="generator-settings__grid" hidden>
+                <div class="generator-settings__field">
+                  <span class="field-label">NGA 命令行路径</span>
+                  <input id="ngaCliPath" class="text-input" type="text" value="nga" placeholder="nga 或完整路径" data-testid="nga-cli-path">
+                  <span class="field-hint">安装 NGA（codeagent）后的命令名；已加入 PATH 时保持默认 "nga"。</span>
                 </div>
-                <div class="generator-settings__grid">
-                  <div class="generator-settings__field">
-                    <span class="field-label">服务地址（Base URL）<b class="required-mark">*</b></span>
-                    <input id="codexBaseUrl" class="text-input" type="text" placeholder="https://opencode.ai/zen/go/v1" data-testid="codex-base-url">
-                  </div>
-                  <div class="generator-settings__field">
-                    <span class="field-label">模型 <b class="required-mark">*</b></span>
-                    <input id="codexModel" class="text-input" type="text" placeholder="deepseek-v4-flash" data-testid="codex-model">
-                  </div>
-                  <div class="generator-settings__field">
-                    <span class="field-label">接口模式</span>
-                    <select id="codexApiMode" class="text-input" data-testid="codex-api-mode">
-                      <option value="responses">responses（默认）</option>
-                      <option value="chat_completions">chat/completions</option>
-                    </select>
-                  </div>
-                  <div class="generator-settings__field">
-                    <span class="field-label">API 密钥</span>
-                    <input id="codexApiKey" class="text-input" type="password" placeholder="sk-...（留空使用环境变量）" data-testid="codex-api-key">
-                    <span class="field-hint">仅保存在内存中，刷新页面后需重新输入；留空则用环境变量。</span>
-                  </div>
-                  <div class="generator-settings__field">
-                    <span class="field-label">超时（秒）</span>
-                    <input id="codexTimeout" class="text-input" type="number" min="1" max="1800" value="300" data-testid="codex-timeout">
-                  </div>
-                  <div class="generator-settings__field">
-                    <span class="field-label">推理强度</span>
-                    <select id="codexReasoning" class="text-input" data-testid="codex-reasoning">
-                      <option value="high">high（默认）</option>
-                      <option value="medium">medium</option>
-                      <option value="low">low</option>
-                    </select>
-                  </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">模型 <b class="required-mark">*</b></span>
+                  <input id="ngaModelCli" class="text-input" type="text" placeholder="w3/GLM-5.1-WX-Auto" data-testid="nga-model">
+                  <span class="field-hint">NGA CLI 由本机登录态认证，无需填写凭据。</span>
                 </div>
-                <div class="generator-settings__actions">
-                  <button id="saveCodexSettings" class="button button--secondary" type="button" data-testid="save-codex-settings">保存 codex 配置</button>
-                  <button id="testCodexConnection" class="button button--secondary" type="button" data-testid="test-codex-connection">测试连接</button>
-                  <button id="activateCodex" class="button button--primary" type="button" data-testid="activate-codex">启用 codex 生成</button>
-                  <span id="codexOperationStatus" class="action-note"></span>
+                <div class="generator-settings__field">
+                  <span class="field-label">超时（秒）</span>
+                  <input id="ngaTimeout" class="text-input" type="number" min="1" max="900" value="300" data-testid="nga-timeout">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">重试次数</span>
+                  <input id="ngaRetries" class="text-input" type="number" min="0" max="5" value="2" data-testid="nga-retries">
                 </div>
               </div>
+
+              <div id="ngaHttpFields" class="generator-settings__grid" hidden>
+                <div class="generator-settings__field">
+                  <span class="field-label">服务地址（Base URL）<b class="required-mark">*</b></span>
+                  <input id="ngaBaseUrl" class="text-input" type="text" placeholder="https://your-nga.example/v1" data-testid="nga-base-url">
+                  <span class="field-hint">内网 OpenAI 兼容服务的根地址，不含接口路径。</span>
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">接口路径</span>
+                  <input id="ngaEndpoint" class="text-input" type="text" value="/v1/chat/completions" data-testid="nga-endpoint">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">模型 <b class="required-mark">*</b></span>
+                  <input id="ngaModelHttp" class="text-input" type="text" placeholder="w3/GLM-5.1-WX-Auto" data-testid="nga-model-http">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">Bearer Token <b class="required-mark">*</b></span>
+                  <input id="ngaToken" class="text-input" type="password" placeholder="sk-..." data-testid="nga-token">
+                  <span class="field-hint">仅保存在内存中，刷新页面后需重新输入。</span>
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">超时（秒）</span>
+                  <input id="ngaTimeout" class="text-input" type="number" min="1" max="900" value="120" data-testid="nga-timeout">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">重试次数</span>
+                  <input id="ngaRetries" class="text-input" type="number" min="0" max="5" value="2" data-testid="nga-retries">
+                </div>
+              </div>
+
+              <div id="codexFields" class="generator-settings__grid" hidden>
+                <div class="generator-settings__field">
+                  <span class="field-label">服务地址（Base URL）<b class="required-mark">*</b></span>
+                  <input id="codexBaseUrl" class="text-input" type="text" placeholder="https://opencode.ai/zen/go/v1" data-testid="codex-base-url">
+                  <span class="field-hint">opencode-go 或任意 OpenAI 兼容网关根地址。</span>
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">模型 <b class="required-mark">*</b></span>
+                  <input id="codexModel" class="text-input" type="text" placeholder="deepseek-v4-flash" data-testid="codex-model">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">接口模式</span>
+                  <select id="codexApiMode" class="text-input" data-testid="codex-api-mode">
+                    <option value="responses">responses（默认）</option>
+                    <option value="chat_completions">chat/completions</option>
+                  </select>
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">API 密钥</span>
+                  <input id="codexApiKey" class="text-input" type="password" placeholder="sk-...（留空使用环境变量）" data-testid="codex-api-key">
+                  <span class="field-hint">仅保存在内存中，刷新页面后需重新输入；留空则用环境变量。</span>
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">超时（秒）</span>
+                  <input id="codexTimeout" class="text-input" type="number" min="1" max="1800" value="300" data-testid="codex-timeout">
+                </div>
+                <div class="generator-settings__field">
+                  <span class="field-label">推理强度</span>
+                  <select id="codexReasoning" class="text-input" data-testid="codex-reasoning">
+                    <option value="high">high（默认）</option>
+                    <option value="medium">medium</option>
+                    <option value="low">low</option>
+                  </select>
+                </div>
+              </div>
+
               <div class="generator-settings__actions">
                 <button id="saveGeneratorSettings" class="button button--secondary" type="button" data-testid="save-generator-settings">保存配置</button>
                 <button id="testGeneratorConnection" class="button button--secondary" type="button" data-testid="test-generator-connection">测试连接</button>
@@ -1108,6 +1122,26 @@
         }
       };
 
+      const channelForActive = (active) => {
+        if (active.name === "nga") return active.config?.transport === "cli" ? "nga-cli" : "nga-http";
+        if (active.name === "codex") return "codex";
+        return "stub";
+      };
+      const channelHintText = {
+        stub: "确定性生成，不调用 AI；适合流程验证与离线环境。",
+        "nga-cli": "本机已登录 NGA 直接可用：认证、Token 刷新由 NGA 自行管理，无需填写任何凭据。",
+        "nga-http": "适用于内网 OpenAI 兼容 AI 服务：需服务根地址、接口路径与 Bearer Token。",
+        codex: "opencode-go 或任意 OpenAI 兼容网关；API 密钥留空时使用环境变量 OPENAI_API_KEY。",
+      };
+      const applyChannelVisibility = () => {
+        const channel = el("generatorChannel").value;
+        el("channelHint").textContent = channelHintText[channel] || "";
+        el("ngaCliFields").hidden = channel !== "nga-cli";
+        el("ngaHttpFields").hidden = channel !== "nga-http";
+        el("codexFields").hidden = channel !== "codex";
+      };
+      el("generatorChannel").addEventListener("change", applyChannelVisibility);
+
       const loadGeneratorSettings = async () => {
         try {
           const response = await sessionFetch("/api/settings/generator", { cache: "no-store" });
@@ -1116,25 +1150,26 @@
           renderGeneratorStatusCard(settings);
           renderEngineBar(settings);
           const active = settings.active || {};
-          if (active.name === "nga" && active.config) {
-            const config = active.config;
-            const isCli = config.transport === "cli";
-            el("ngaTransport").value = isCli ? "cli" : "http";
-            applyTransportVisibility();
+          const draft = settings.draft || {};
+          el("generatorChannel").value = channelForActive(active);
+          el("generatorMode").value = active.mode === "strict" ? "strict" : "auto";
+          // Pre-fill every channel form from its saved draft/active config so a
+          // switch never loses previously saved values.
+          const ngaConfig = active.name === "nga" && active.config ? active.config : draft.name === "nga" ? draft.config : null;
+          if (ngaConfig) {
+            const isCli = ngaConfig.transport === "cli";
             if (isCli) {
-              el("ngaCliPath").value = config.cli_path || "nga";
+              el("ngaCliPath").value = ngaConfig.cli_path || "nga";
             } else {
-              el("ngaBaseUrl").value = config.base_url || "";
-              el("ngaEndpoint").value = config.endpoint_path || "/v1/chat/completions";
+              el("ngaBaseUrl").value = ngaConfig.base_url || "";
+              el("ngaEndpoint").value = ngaConfig.endpoint_path || "/v1/chat/completions";
             }
-            el("ngaModel").value = config.model || "";
-            el("ngaTimeout").value = String(config.timeout_seconds ?? (isCli ? 300 : 120));
-            el("ngaRetries").value = String(config.max_retries ?? 2);
-            el("generatorMode").value = active.mode === "strict" ? "strict" : "auto";
+            el("ngaModelCli").value = ngaConfig.model || "";
+            el("ngaModelHttp").value = ngaConfig.model || "";
+            el("ngaTimeout").value = String(ngaConfig.timeout_seconds ?? (isCli ? 300 : 120));
+            el("ngaRetries").value = String(ngaConfig.max_retries ?? 2);
           }
-          const codexDraft = settings.draft?.name === "codex" ? settings.draft.config : null;
-          const codexActive = active.name === "codex" ? active.config : null;
-          const codexConfig = codexActive || codexDraft;
+          const codexConfig = active.name === "codex" && active.config ? active.config : draft.name === "codex" ? draft.config : null;
           if (codexConfig) {
             el("codexBaseUrl").value = codexConfig.base_url || "https://opencode.ai/zen/go/v1";
             el("codexModel").value = codexConfig.model || "";
@@ -1142,62 +1177,78 @@
             el("codexTimeout").value = String(codexConfig.timeout_seconds ?? 300);
             el("codexReasoning").value = codexConfig.reasoning_effort || "high";
           }
-          applyTransportVisibility();
+          applyChannelVisibility();
         } catch (_error) {
           el("generatorStateText").textContent = "当前：无法读取生成器状态";
         }
       };
 
-      const applyTransportVisibility = () => {
-        const isCli = el("ngaTransport").value === "cli";
-        el("transportHint").textContent = isCli
-          ? "本机已登录 NGA 直接可用：认证、Token 刷新由 NGA 自行管理，无需填写任何凭据。"
-          : "适用于内网 OpenAI 兼容 AI 服务：需服务根地址、接口路径与 Bearer Token。";
-        for (const id of ["ngaCliPathField"]) el(id).style.display = isCli ? "" : "none";
-        for (const id of ["ngaBaseUrlField", "ngaEndpointField", "ngaTokenField"]) el(id).style.display = isCli ? "none" : "";
-      };
-      el("ngaTransport").addEventListener("change", applyTransportVisibility);
-
       const readGeneratorForm = () => {
-        const transport = el("ngaTransport").value;
-        const common = {
-          generator: "nga",
-          mode: el("generatorMode").value === "strict" ? "strict" : "auto",
-        };
-        if (transport === "cli") {
+        const channel = el("generatorChannel").value;
+        const mode = el("generatorMode").value === "strict" ? "strict" : "auto";
+        if (channel === "stub") {
+          return { generator: "stub", mode };
+        }
+        if (channel === "nga-cli") {
           return {
-            ...common,
+            generator: "nga",
             credential: null,
+            mode,
             config: {
               config_version: "1.0",
               transport: "cli",
-              model: el("ngaModel").value.trim(),
+              model: el("ngaModelCli").value.trim(),
               cli_path: el("ngaCliPath").value.trim() || "nga",
               timeout_seconds: Number(el("ngaTimeout").value) || 300,
               max_retries: Number(el("ngaRetries").value) || 2,
             },
           };
         }
+        if (channel === "nga-http") {
+          return {
+            generator: "nga",
+            credential: el("ngaToken").value || null,
+            mode,
+            config: {
+              config_version: "1.0",
+              base_url: el("ngaBaseUrl").value.trim(),
+              endpoint_path: el("ngaEndpoint").value.trim(),
+              model: el("ngaModelHttp").value.trim(),
+              timeout_seconds: Number(el("ngaTimeout").value) || 120,
+              max_retries: Number(el("ngaRetries").value) || 2,
+              verify_tls: true,
+              response_format: "json_object",
+              allow_insecure_http: false,
+            },
+          };
+        }
         return {
-          ...common,
-          credential: el("ngaToken").value || null,
+          generator: "codex",
+          credential: el("codexApiKey").value || null,
+          mode,
           config: {
             config_version: "1.0",
-            base_url: el("ngaBaseUrl").value.trim(),
-            endpoint_path: el("ngaEndpoint").value.trim(),
-            model: el("ngaModel").value.trim(),
-            timeout_seconds: Number(el("ngaTimeout").value) || 120,
-            max_retries: Number(el("ngaRetries").value) || 2,
-            verify_tls: true,
-            response_format: "json_object",
-            allow_insecure_http: false,
+            base_url: el("codexBaseUrl").value.trim(),
+            model: el("codexModel").value.trim(),
+            api_mode: el("codexApiMode").value,
+            timeout_seconds: Number(el("codexTimeout").value) || 300,
+            reasoning_effort: el("codexReasoning").value,
           },
         };
       };
 
       const validateGeneratorForm = (payload) => {
-        if (payload.config.transport === "cli") {
-          return payload.config.model ? null : "请填写模型名。";
+        const channel = el("generatorChannel").value;
+        if (channel === "stub") return null;
+        if (channel === "nga-cli") {
+          const model = el("ngaModelCli").value.trim();
+          if (!model) return "请填写模型名。";
+          return null;
+        }
+        if (channel === "nga-http") {
+          const payloadConfig = payload.config || {};
+          if (!payloadConfig.base_url || !payloadConfig.model) return "请填写服务地址和模型。";
+          return null;
         }
         if (!payload.config.base_url || !payload.config.model) return "请填写服务地址和模型。";
         return null;
@@ -1261,7 +1312,8 @@
           el("generatorStateText").textContent = generatorStatusText(settings);
           renderGeneratorStatusCard(settings);
           renderEngineBar(settings);
-          setGeneratorStatus(settings.active?.name === "nga" ? "已启用 NGA 生成器。" : "已启用 Stub。");
+          const name = settings.active?.name;
+          setGeneratorStatus(name === "nga" ? "已启用 NGA 生成器。" : name === "codex" ? "已启用 opencode-go 生成器。" : "已启用 Stub。");
         } catch (error) {
           setGeneratorStatus(error.payload?.error?.message || "启用失败（可能未测试连接）。", true);
         }
@@ -1283,82 +1335,6 @@
           setGeneratorStatus("已切换回 Stub。");
         } catch (error) {
           setGeneratorStatus(error.payload?.error?.message || "切换失败。", true);
-        }
-      });
-
-      const readCodexForm = () => ({
-        generator: "codex",
-        credential: el("codexApiKey").value || null,
-        config: {
-          config_version: "1.0",
-          base_url: el("codexBaseUrl").value.trim(),
-          model: el("codexModel").value.trim(),
-          api_mode: el("codexApiMode").value,
-          timeout_seconds: Number(el("codexTimeout").value) || 300,
-          reasoning_effort: el("codexReasoning").value,
-        },
-      });
-      const validateCodexForm = (payload) => {
-        if (!payload.config.base_url || !payload.config.model) return "请填写服务地址和模型。";
-        return null;
-      };
-      const setCodexStatus = (message, isError = false) => {
-        const status = el("codexOperationStatus");
-        status.textContent = message;
-        status.style.color = isError ? "var(--danger)" : "var(--muted)";
-      };
-      const refreshGeneratorStatus = async () => {
-        const response = await sessionFetch("/api/settings/generator", { cache: "no-store" });
-        const settings = await readJson(response);
-        el("generatorStateText").textContent = generatorStatusText(settings);
-        renderGeneratorStatusCard(settings);
-        renderEngineBar(settings);
-        return settings;
-      };
-      el("saveCodexSettings").addEventListener("click", async () => {
-        try {
-          const payload = readCodexForm();
-          const invalid = validateCodexForm(payload);
-          if (invalid) { setCodexStatus(invalid, true); return; }
-          const response = await sessionFetch("/api/settings/generator", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          await readJson(response);
-          setCodexStatus("配置已保存，启用前需测试连接。");
-        } catch (error) {
-          setCodexStatus(error.payload?.error?.message || "配置保存失败。", true);
-        }
-      });
-      el("testCodexConnection").addEventListener("click", async () => {
-        try {
-          const payload = readCodexForm();
-          const invalid = validateCodexForm(payload);
-          if (invalid) { setCodexStatus(invalid, true); return; }
-          const saved = await sessionFetch("/api/settings/generator", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          await readJson(saved);
-          const tested = await sessionFetch("/api/settings/generator/test", { method: "POST" });
-          const result = await readJson(tested);
-          setCodexStatus(result.connection?.ok ? `连接成功（${result.connection.latency_ms ?? "?"}ms）。` : "连接测试未通过。", !result.connection?.ok);
-        } catch (error) {
-          setCodexStatus(error.payload?.error?.message || "连接测试失败。", true);
-        }
-      });
-      el("activateCodex").addEventListener("click", async () => {
-        try {
-          const response = await sessionFetch("/api/settings/generator/activate", { method: "POST" });
-          const settings = await readJson(response);
-          el("generatorStateText").textContent = generatorStatusText(settings);
-          renderGeneratorStatusCard(settings);
-          renderEngineBar(settings);
-          setCodexStatus(settings.active?.name === "codex" ? "已启用 opencode-go 生成器。" : "启用失败。", settings.active?.name !== "codex");
-        } catch (error) {
-          setCodexStatus(error.payload?.error?.message || "启用失败（可能未测试连接）。", true);
         }
       });
 
