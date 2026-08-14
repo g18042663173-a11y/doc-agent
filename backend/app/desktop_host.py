@@ -13,6 +13,7 @@ from typing import Any
 from waitress import create_server
 
 from app.diagnostics import configure_graphviz_path
+from app.generators.interface import default_ir_generator
 from app.web_api import APP_VERSION, create_api_app
 
 
@@ -40,9 +41,12 @@ def main(argv: list[str] | None = None) -> int:
     configure_graphviz_path(repo_root)
     bootstrap.jobs_path.mkdir(parents=True, exist_ok=True)
 
+    # Resolve once so the state file and the API app report the same generator.
+    generator = default_ir_generator()
     app = create_api_app(
         work_dir=bootstrap.jobs_path,
         session_token=bootstrap.session_token,
+        generator=generator,
     )
     server = create_server(app, host="127.0.0.1", port=0, threads=4)
     port = int(server.effective_port)
@@ -54,6 +58,11 @@ def main(argv: list[str] | None = None) -> int:
             "parent_pid": bootstrap.parent_pid,
             "port": port,
             "app_version": APP_VERSION,
+            "generator_name": generator.name,
+            # Runtime diagnostics: which generator the API app actually activated
+            # and where the app package was imported from (debug aid).
+            "manager_generator": app.config["API_GENERATOR_MANAGER"].snapshot().name,
+            "backend_package": Path(app.root_path).resolve().as_posix(),
             "started_at_unix": int(time.time()),
         },
     )

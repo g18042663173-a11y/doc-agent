@@ -197,11 +197,12 @@ NGA 采用 OpenAI-compatible Chat Completions，默认路径 `/v1/chat/completio
 的 `HuaweiDocumentGenerator/NGA`，非敏感配置保存在
 `%LOCALAPPDATA%\HuaweiDocumentGenerator\settings.json`。
 
-真实模型开发冒烟可用 `--generator codex` 走 opencode-go 网关（默认
-`https://opencode.ai/zen/go/v1`，模型 `deepseek-v4-flash`，responses 协议）：
-设置 `OPENAI_API_KEY`（网关 Token，仅环境变量，不落盘）后执行
-`scripts/demo_e2e.py <input> --target word|deck --generator codex`；Stub 仍是默认生成器，
-显式启用失败不会静默回退。
+**默认生成器为 AI 优先**:启动时若检测到 `OPENAI_API_KEY` 环境变量,工作台默认使用
+opencode-go 网关（`https://opencode.ai/zen/go/v1`，模型 `deepseek-v4-flash`，
+responses 协议）真实生成；未配置密钥时自动回退离线 Stub（确定性生成），显式
+`IR_GENERATOR=stub|codex|nga` 可强制指定。真实模型开发冒烟可用
+`--generator codex` 显式指定：设置 `OPENAI_API_KEY`（仅环境变量，不落盘）后执行
+`scripts/demo_e2e.py <input> --target word|deck --generator codex`。
 
 构建原生测试和便携包：
 

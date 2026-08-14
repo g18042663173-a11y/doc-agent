@@ -180,11 +180,24 @@ public partial class MainWindow : Window
 
         if (!_settings.NgaEnabled)
         {
-            await _api.ConfigureGeneratorAsync("stub", null, null, false, _settings.GeneratorMode, _lifetime.Token);
-            await _api.ActivateGeneratorAsync(_lifetime.Token);
+            // Do not force the stub generator here: the backend defaults to
+            // real AI generation (codex/opencode-go) when OPENAI_API_KEY is
+            // configured and falls back to the deterministic stub otherwise.
+            // Forcing stub would override that AI-first default on every start.
             _generatorBlocked = false;
-            GeneratorStateText.Text = "生成器：stub";
-            NgaActiveStateText.Text = "当前生成器：stub";
+            try
+            {
+                var current = await _api.GetGeneratorSettingsAsync(_lifetime.Token);
+                var activeName = current.Active?.Name ?? "stub";
+                var label = activeName == "nga" ? "NGA" : activeName == "codex" ? "opencode-go" : "stub";
+                GeneratorStateText.Text = $"生成器：{label}";
+                NgaActiveStateText.Text = $"当前生成器：{label}";
+            }
+            catch (Exception)
+            {
+                GeneratorStateText.Text = "生成器：未知";
+                NgaActiveStateText.Text = "当前生成器：未知";
+            }
             return;
         }
 

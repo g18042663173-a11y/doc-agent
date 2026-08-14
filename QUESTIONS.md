@@ -3,6 +3,17 @@
 > 分步执行清单见 `docs/WINDOWS_ACCEPTANCE_20260806.md`（Windows 验收与人工交付清单）。
 > 内网 AI 调用适配所需信息见 `docs/内网AI适配信息清单.md`（拿清单找内网平台方填写即可）。
 
+## 2026-08-14 AI 优先默认(用户指令)已完成
+
+- **默认生成器 = AI**:检测到 `OPENAI_API_KEY`(用户级环境变量)时,工作台默认使用
+  codex/opencode-go(`https://opencode.ai/zen/go/v1` + `deepseek-v4-flash`);无凭据
+  时回退 stub;`IR_GENERATOR` 可强制指定。NGA 仍未接入(按用户决定,进内网再说)。
+- **密钥**:仅存于本机用户环境变量(setx 持久化),不进代码、不进 git、不落盘。
+  换机器/换密钥:重新 `setx OPENAI_API_KEY <新密钥>` 后重启工作台。
+- **进内网时**:默认仍走 AI——只需把 `OPENAI_API_KEY` 换成内网网关凭据,并按
+  `docs/内网AI适配信息清单.md` 提供的信息调整 `OPENAI_BASE_URL`/`OPENAI_MODEL`
+  (或接入 NGA)。离线不再作为主要目的,但无凭据时仍可 stub 运行。
+
 ## 2026-08-14 代码收敛(用户指令)与内网适配准备
 
 - **分支收敛**:主线重命名为 `codex/release-2.2.0`(与 VERSION 对齐);删除全部

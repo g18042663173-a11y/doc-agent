@@ -47,6 +47,18 @@ def generator_from_name(name: str) -> IRTextGenerator:
 
 
 def default_ir_generator() -> IRTextGenerator:
-    """Resolve an explicitly configured adapter while preserving stub as the unset default."""
+    """Resolve the workbench's default generator at startup.
 
-    return generator_from_name(os.environ.get("IR_GENERATOR", "stub"))
+    Priority: explicit ``IR_GENERATOR`` override > configured AI credentials
+    (``OPENAI_API_KEY`` enables the opencode-go codex adapter) > stub. A machine
+    with credentials therefore defaults to real AI generation; an unconfigured
+    machine still works offline via the deterministic stub. The per-job
+    GeneratorManager may later switch to an explicitly enabled NGA config.
+    """
+
+    explicit = os.environ.get("IR_GENERATOR")
+    if explicit:
+        return generator_from_name(explicit)
+    if os.environ.get("OPENAI_API_KEY"):
+        return generator_from_name("codex")
+    return generator_from_name("stub")

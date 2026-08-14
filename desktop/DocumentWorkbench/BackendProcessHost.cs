@@ -91,6 +91,14 @@ public sealed class BackendProcessHost : IDisposable
         start.Environment["PYTHONUTF8"] = "1";
         start.Environment["PYTHONIOENCODING"] = "utf-8";
         start.Environment["PYTHONDONTWRITEBYTECODE"] = "1";
+        // Explicitly forward the gateway credential so the backend defaults to
+        // real AI generation (codex/opencode-go) even if the inherited
+        // environment were ever filtered; never logs or persists the value.
+        var gatewayApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        if (!string.IsNullOrWhiteSpace(gatewayApiKey))
+        {
+            start.Environment["OPENAI_API_KEY"] = gatewayApiKey;
+        }
 
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
         if (!process.Start())

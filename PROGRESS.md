@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-08-14 AI 优先默认配置(用户指令)+ 三个启动链路修复
+
+- **AI 优先默认**:`default_ir_generator()` 优先级改为 显式 `IR_GENERATOR` > 检测到
+  `OPENAI_API_KEY`(用户级环境变量,setx 持久化,不进 git)时默认 **codex/opencode-go**
+  (`deepseek-v4-flash`) > 无凭据回退 stub;`desktop_host.main` 与 `web_api.main`
+  启动入口应用该默认(create_api_app 默认仍 stub,测试契约不变)。
+- **修复 1(环境变量显式传递)**:BackendProcessHost 显式把 `OPENAI_API_KEY` 写入
+  后端子进程环境(不依赖隐式继承,不落盘不记录)。
+- **修复 2(WPF 启动覆盖默认)**:`MainWindow.InitializeServiceAsync` 原来在 NGA
+  未启用时强制 `configure(stub)+activate`,每次都把后端默认覆盖回 stub;改为
+  只读后端当前生成器并显示(opencode-go / stub),不再强制切换。
+- **修复 3(诊断可见)**:desktop_host 的 state 文件新增 `generator_name` /
+  `manager_generator` / `backend_package`,启动后可读证据。
+- **真实端到端验证**(带 key 模拟用户双击):WPF 启动 → 后端 API active=**codex** →
+  提交 word 任务 → **done,生成器=codex**,lint 0 错误 0 警告。
+- 回归:pytest **796 passed / 15 skipped**;ruff 全绿;WPF Release 0 警告 0 错误,
+  xUnit 17/17。
+- 发布物重建:ZIP `33d3a169…` / EXE `721b7ff8…`(含以上全部修复),桌面便携版已更新
+  并运行中。
+
 ## 2026-08-14 代码收敛(用户指令)+ 内网 AI 适配清单
 
 - **分支收敛**:主线重命名 `codex/audit-2.1.0` → **`codex/release-2.2.0`**(与

@@ -313,9 +313,17 @@ def test_generator_factory_keeps_stub_default_and_allows_explicit_codex(monkeypa
     from app.generators.stub import StubGenerator
 
     monkeypatch.delenv("IR_GENERATOR", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
+    # No credentials -> deterministic stub (offline default preserved).
     assert isinstance(default_ir_generator(), StubGenerator)
     assert isinstance(generator_from_name("codex"), CodexGenerator)
+    # Credentials present -> real AI generation becomes the default (B9/AI-first).
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    assert isinstance(default_ir_generator(), CodexGenerator)
+    # Explicit IR_GENERATOR override still wins over credentials.
+    monkeypatch.setenv("IR_GENERATOR", "stub")
+    assert isinstance(default_ir_generator(), StubGenerator)
     monkeypatch.setenv("IR_GENERATOR", "codex")
     assert isinstance(default_ir_generator(), CodexGenerator)
     with pytest.raises(ValueError, match="unsupported IR generator"):

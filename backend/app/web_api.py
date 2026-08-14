@@ -29,7 +29,7 @@ from app.cli.parse import parse_file
 from app.diagnostics import build_runtime_diagnostics
 from app.generation.analysis import build_analysis_prompt, measure_document, validate_analysis_text
 from app.generation.depth import GenerationOptions, generate_deck
-from app.generators.interface import GeneratorCanceled, IRTextGenerator
+from app.generators.interface import GeneratorCanceled, IRTextGenerator, default_ir_generator
 from app.generators.manager import GeneratorManager
 from app.generators.nga import (
     NgaCliConfig,
@@ -2399,7 +2399,11 @@ def main(argv: list[str] | None = None) -> int:
     # Browser mode now requires a session token like desktop mode; the frontend
     # adopts it from /api/session-token (same-origin only).
     session_token = None if args.no_auth else secrets.token_hex(32)
-    app = create_api_app(work_dir=args.work_dir, session_token=session_token)
+    app = create_api_app(
+        work_dir=args.work_dir,
+        session_token=session_token,
+        generator=default_ir_generator(),
+    )
     from waitress import serve
 
     serve(app, host=args.host, port=args.port, threads=4, clear_untrusted_proxy_headers=True)
