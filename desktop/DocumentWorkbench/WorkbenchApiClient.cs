@@ -84,7 +84,7 @@ public sealed class WorkbenchApiClient : IDisposable
 
     public Task<GeneratorSettingsResponse> ConfigureGeneratorAsync(
         string generator,
-        NgaStoredConfig? config,
+        object? config,
         string? credential,
         bool clearCredential,
         string? mode = null,
@@ -94,7 +94,7 @@ public sealed class WorkbenchApiClient : IDisposable
             ? new { generator = "stub", mode }
             : new
             {
-                generator = "nga",
+                generator,
                 config,
                 credential,
                 clear_credential = clearCredential,

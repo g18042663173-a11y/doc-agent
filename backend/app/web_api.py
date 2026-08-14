@@ -29,6 +29,7 @@ from app.cli.parse import parse_file
 from app.diagnostics import build_runtime_diagnostics
 from app.generation.analysis import build_analysis_prompt, measure_document, validate_analysis_text
 from app.generation.depth import GenerationOptions, generate_deck
+from app.generators.codex import CodexConfig
 from app.generators.interface import GeneratorCanceled, IRTextGenerator, default_ir_generator
 from app.generators.manager import GeneratorManager
 from app.generators.nga import (
@@ -651,10 +652,10 @@ def _update_generator_settings(app: Flask, manager: GeneratorManager):
                 retryable=False,
             )
         generator_name = payload.get("generator")
-        if generator_name not in {"stub", "nga"}:
+        if generator_name not in {"stub", "nga", "codex"}:
             raise ApiRequestError(
                 "E010",
-                "generator 只支持 stub 或 nga。",
+                "generator 只支持 stub、nga 或 codex。",
                 status=400,
                 stage="configuring_generator",
                 loc="generator",
@@ -682,6 +683,17 @@ def _update_generator_settings(app: Flask, manager: GeneratorManager):
                     retryable=False,
                 )
             config = _nga_config_from_payload(config_payload)
+        elif generator_name == "codex":
+            if not isinstance(config_payload, dict):
+                raise ApiRequestError(
+                    "E010",
+                    "codex 配置必须是 JSON 对象。",
+                    status=400,
+                    stage="configuring_generator",
+                    loc="config",
+                    retryable=False,
+                )
+            config = CodexConfig.model_validate(config_payload)
         else:
             config = None
         credential = payload.get("credential")

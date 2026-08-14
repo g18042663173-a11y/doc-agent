@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-08-14 设置页 AI 通道可视化 + opencode-go 可配置(用户指令)
+
+- **后端 GeneratorManager 支持 codex 通道配置**:新增 `CodexConfig`(base_url/model/
+  api_mode/timeout/reasoning_effort,非敏感);configure/test/activate 三阶段与 NGA
+  一致;status 输出 active 的 base_url/model/`credential_configured`(绝不返回密钥);
+  initial=CodexGenerator(环境变量)时 draft 自动预填,表单可直接看到/修改当前通道。
+- **浏览器工作台**:AI 生成设置面板新增"opencode-go 通道(默认 AI)"配置区
+  (Base URL/模型/接口模式/API 密钥/超时/推理强度 + 保存/测试/启用);状态卡与
+  引擎栏显示通道名、Base URL、模型、密钥状态。
+- **WPF 桌面端**:设置页新增"opencode-go"导航页,展示当前生成器
+  (通道/Base URL/模型/密钥状态)并支持编辑保存(密钥存 Windows Credential
+  Manager `HuaweiDocumentGenerator/OpenCodeGo`,非敏感配置存 settings.json,
+  留空密钥回退环境变量 OPENAI_API_KEY)。
+- 测试 +2(codex 配置保存/测试/启用、环境预填与凭据状态);pytest **798 passed /
+  15 skipped**;ruff 全绿;WPF Release 0 警告 0 错误,xUnit 17/17。
+- 发布物重建:ZIP `fa8f00a5…` / EXE `14ec8db6…`;桌面便携版已更新运行中,
+  后端实测 active=codex,设置页展示 Base URL/模型/密钥状态。
+
 ## 2026-08-14 AI 优先默认配置(用户指令)+ 三个启动链路修复
 
 - **AI 优先默认**:`default_ir_generator()` 优先级改为 显式 `IR_GENERATOR` > 检测到

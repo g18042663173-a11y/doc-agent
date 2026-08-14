@@ -9,6 +9,8 @@ from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from app.generation.layout_policy import LAYOUT_SELECTION_RULES
 
 GeneratorTarget = Literal["word_ir", "deck_ir", "analysis"]
@@ -24,6 +26,19 @@ DEFAULT_REASONING_EFFORT = "high"
 DEFAULT_TIMEOUT_SECONDS = 300
 API_MODES = {"responses", "chat_completions"}
 TRANSPORTS = {"http", "cli"}
+
+
+class CodexConfig(BaseModel):
+    """Non-sensitive opencode-go channel configuration (credential never stored here)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    config_version: Literal["1.0"] = "1.0"
+    base_url: str = Field(default=API_BASE_URL, min_length=1)
+    model: str = Field(default=DEFAULT_MODEL, min_length=1)
+    api_mode: Literal["responses", "chat_completions"] = "responses"
+    timeout_seconds: int = Field(default=DEFAULT_TIMEOUT_SECONDS, gt=0, le=1800)
+    reasoning_effort: Literal["low", "medium", "high"] = DEFAULT_REASONING_EFFORT
 
 
 class CodexGeneratorError(RuntimeError):

@@ -41,6 +41,7 @@ public sealed class SettingsStore
             // A hand-edited settings.json may contain "nga": null or
             // "recent_job_ids": null; normalize so no consumer sees a null.
             value.Nga ??= new NgaStoredConfig();
+            value.Codex ??= new CodexStoredConfig();
             value.RecentJobIds ??= [];
             return value;
         }
@@ -90,6 +91,7 @@ public sealed class WorkbenchSettings
     public string GeneratorMode { get; set; } = "auto";
     public bool NgaEnabled { get; set; }
     public NgaStoredConfig Nga { get; set; } = new();
+    public CodexStoredConfig Codex { get; set; } = new();
     public List<string> RecentJobIds { get; set; } = [];
 }
 
@@ -107,4 +109,16 @@ public sealed class NgaStoredConfig
     public string? CaBundlePath { get; set; }
     public string ResponseFormat { get; set; } = "json_object";
     public bool AllowInsecureHttp { get; set; }
+}
+
+/// <summary>Non-sensitive opencode-go channel settings (the API key lives in
+/// Windows Credential Manager, never in settings.json).</summary>
+public sealed class CodexStoredConfig
+{
+    public string ConfigVersion { get; set; } = "1.0";
+    public string BaseUrl { get; set; } = "https://opencode.ai/zen/go/v1";
+    public string Model { get; set; } = "deepseek-v4-flash";
+    public string ApiMode { get; set; } = "responses";
+    public int TimeoutSeconds { get; set; } = 300;
+    public string ReasoningEffort { get; set; } = "high";
 }

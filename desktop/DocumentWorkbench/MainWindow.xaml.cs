@@ -192,6 +192,7 @@ public partial class MainWindow : Window
                 var label = activeName == "nga" ? "NGA" : activeName == "codex" ? "opencode-go" : "stub";
                 GeneratorStateText.Text = $"生成器：{label}";
                 NgaActiveStateText.Text = $"当前生成器：{label}";
+                LoadCodexControls(current);
             }
             catch (Exception)
             {
@@ -1125,6 +1126,128 @@ public partial class MainWindow : Window
         ActivateNgaButton.IsEnabled = enabled;
     }
 
+    private void LoadCodexControls(GeneratorSettingsResponse settings)
+    {
+        var active = settings.Active;
+        var config = active?.Name == "codex" ? active.Config : settings.Draft?.Name == "codex" ? settings.Draft.Config : null;
+        if (config is not null)
+        {
+            CodexBaseUrlTextBox.Text = string.IsNullOrWhiteSpace(config.BaseUrl) ? "https://opencode.ai/zen/go/v1" : config.BaseUrl;
+            CodexModelTextBox.Text = config.Model ?? "";
+            CodexApiModeComboBox.SelectedIndex = config.ApiMode == "chat_completions" ? 1 : 0;
+            CodexTimeoutTextBox.Text = (config.TimeoutSeconds ?? 300).ToString();
+            CodexReasoningComboBox.SelectedIndex = config.ReasoningEffort == "medium" ? 1 : config.ReasoningEffort == "low" ? 2 : 0;
+        }
+        else
+        {
+            CodexBaseUrlTextBox.Text = _settings.Codex.BaseUrl;
+            CodexModelTextBox.Text = _settings.Codex.Model;
+            CodexApiModeComboBox.SelectedIndex = _settings.Codex.ApiMode == "chat_completions" ? 1 : 0;
+            CodexTimeoutTextBox.Text = _settings.Codex.TimeoutSeconds.ToString();
+            CodexReasoningComboBox.SelectedIndex = _settings.Codex.ReasoningEffort == "medium" ? 1 : _settings.Codex.ReasoningEffort == "low" ? 2 : 0;
+        }
+        CodexCredentialStateText.Text = CredentialManager.ReadCodexToken() is null
+            ? "密钥：未保存（使用环境变量 OPENAI_API_KEY）"
+            : "密钥：已保存在 Windows 凭据管理器";
+        if (active is { Name: "codex" })
+        {
+            CodexActiveStateText.Text =
+                $"当前生成器：opencode-go（{active.Config?.Model ?? "?"} · Base URL：{active.Config?.BaseUrl ?? "?"} · 密钥：{(active.CredentialConfigured ? "已配置" : "未配置")}）";
+        }
+        else
+        {
+            CodexActiveStateText.Text = $"当前生成器：{(active?.Name == "nga" ? "NGA" : active?.Name == "codex" ? "opencode-go" : "stub")}";
+        }
+    }
+
+    private CodexStoredConfig ReadCodexControls()
+    {
+        if (string.IsNullOrWhiteSpace(CodexBaseUrlTextBox.Text) || string.IsNullOrWhiteSpace(CodexModelTextBox.Text))
+        {
+            throw new InvalidDataException("服务地址和模型不能为空。");
+        }
+        if (!int.TryParse(CodexTimeoutTextBox.Text, out var timeout) || timeout is < 1 or > 1800)
+        {
+            throw new InvalidDataException("超时必须是 1-1800 秒。");
+        }
+        return new CodexStoredConfig
+        {
+            BaseUrl = CodexBaseUrlTextBox.Text.Trim(),
+            Model = CodexModelTextBox.Text.Trim(),
+            ApiMode = ComboTag(CodexApiModeComboBox, "responses"),
+            TimeoutSeconds = timeout,
+            ReasoningEffort = ComboTag(CodexReasoningComboBox, "high"),
+        };
+    }
+
+    private async Task<GeneratorSettingsResponse> SaveCodexDraftAsync()
+    {
+        var config = ReadCodexControls();
+        var token = string.IsNullOrWhiteSpace(CodexApiKeyPasswordBox.Password)
+            ? CredentialManager.ReadCodexToken()
+            : CodexApiKeyPasswordBox.Password;
+        // Validate on the backend first: a rejected configuration (E010) must
+        // not leave a persisted credential or settings that block startup.
+        var response = await _api.ConfigureGeneratorAsync("codex", config, token, false, _settings.GeneratorMode, _lifetime.Token);
+        if (!string.IsNullOrWhiteSpace(CodexApiKeyPasswordBox.Password))
+        {
+            CredentialManager.WriteCodexToken(CodexApiKeyPasswordBox.Password);
+            CodexApiKeyPasswordBox.Clear();
+        }
+        _settings.Codex = config;
+        await _settingsStore.SaveAsync(_settings);
+        CodexCredentialStateText.Text = CredentialManager.ReadCodexToken() is null
+            ? "密钥：未保存（使用环境变量 OPENAI_API_KEY）"
+            : "密钥：已保存在 Windows 凭据管理器";
+        CodexOperationStatusText.Text = "配置已保存，启用前需要测试连接。";
+        return response;
+    }
+
+    private async void SaveCodex_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await SaveCodexDraftAsync();
+        }
+        catch (Exception ex)
+        {
+            CodexOperationStatusText.Text = SafeFailureText(ex);
+        }
+    }
+
+    private async void TestCodex_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await SaveCodexDraftAsync();
+            var result = await _api.TestGeneratorAsync(_lifetime.Token);
+            CodexOperationStatusText.Text = result.Connection?.Ok == true
+                ? $"连接成功（{result.Connection.LatencyMs}ms）。"
+                : "连接测试未通过。";
+        }
+        catch (Exception ex)
+        {
+            CodexOperationStatusText.Text = SafeFailureText(ex);
+        }
+    }
+
+    private async void ActivateCodex_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var response = await _api.ActivateGeneratorAsync(_lifetime.Token);
+            GeneratorStateText.Text = response.Active.Name == "codex" ? "生成器：opencode-go" : "生成器：stub";
+            CodexActiveStateText.Text = response.Active.Name == "codex"
+                ? $"当前生成器：opencode-go（{response.Active.Config?.Model ?? "?"} · Base URL：{response.Active.Config?.BaseUrl ?? "?"} · 密钥：{(response.Active.CredentialConfigured ? "已配置" : "未配置")}）"
+                : "当前生成器：stub";
+            CodexOperationStatusText.Text = response.Active.Name == "codex" ? "已启用 opencode-go 生成器。" : "启用失败。";
+        }
+        catch (Exception ex)
+        {
+            CodexOperationStatusText.Text = SafeFailureText(ex);
+        }
+    }
+
     private void ShowNgaError(Exception exception)
     {
         var message = SafeFailureText(exception);
@@ -1332,6 +1455,7 @@ public partial class MainWindow : Window
 
     private void GeneralSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("general");
     private void NgaSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("nga");
+    private void CodexSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("codex");
     private void StorageSettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("storage");
     private void PrivacySettings_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("privacy");
     private void SettingsAbout_Click(object sender, RoutedEventArgs e) => SelectSettingsPage("about");
@@ -1340,11 +1464,13 @@ public partial class MainWindow : Window
     {
         GeneralSettingsPanel.Visibility = page == "general" ? Visibility.Visible : Visibility.Collapsed;
         NgaSettingsPanel.Visibility = page == "nga" ? Visibility.Visible : Visibility.Collapsed;
+        CodexSettingsPanel.Visibility = page == "codex" ? Visibility.Visible : Visibility.Collapsed;
         StorageSettingsPanel.Visibility = page == "storage" ? Visibility.Visible : Visibility.Collapsed;
         PrivacySettingsPanel.Visibility = page == "privacy" ? Visibility.Visible : Visibility.Collapsed;
         SettingsAboutPanel.Visibility = page == "about" ? Visibility.Visible : Visibility.Collapsed;
         GeneralSettingsButton.Tag = page == "general" ? "selected" : null;
         NgaSettingsButton.Tag = page == "nga" ? "selected" : null;
+        CodexSettingsButton.Tag = page == "codex" ? "selected" : null;
         StorageSettingsButton.Tag = page == "storage" ? "selected" : null;
         PrivacySettingsButton.Tag = page == "privacy" ? "selected" : null;
         SettingsAboutButton.Tag = page == "about" ? "selected" : null;

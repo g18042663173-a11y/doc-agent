@@ -267,6 +267,10 @@
     .generator-settings summary { padding: 12px 14px; cursor: pointer; font-weight: 700; font-size: 13px; color: var(--ink); border-radius: var(--radius-sm); transition: background var(--ease); }
     .generator-settings summary:hover { background: var(--surface-soft); }
     .generator-settings summary::-webkit-details-marker { color: var(--muted); }
+    .codex-settings { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .codex-settings__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; margin-bottom: 4px; }
+    .codex-settings__head strong { font-size: 13px; }
+    .codex-settings__head .field-hint { margin: 0; }
     .generator-state { display: inline-block; margin-left: 8px; padding: 3px 10px; border-radius: 999px; color: var(--muted); background: var(--surface-muted); border: 1px solid var(--line); font-size: 11px; font-weight: 400; }
     .generator-settings__body { padding: 0 14px 14px; border-top: 1px solid var(--line); }
     .generator-status-card { margin: 14px 0 4px; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--hw-red); border-radius: var(--radius-sm); background: var(--surface-soft); }
@@ -759,6 +763,52 @@
                   <span class="field-hint">auto 降级后结果会标注「已自动使用确定性生成器完成」；strict 保持严格失败。</span>
                 </div>
               </div>
+              <div class="codex-settings" data-testid="codex-settings">
+                <div class="codex-settings__head">
+                  <strong>opencode-go 通道（默认 AI）</strong>
+                  <span class="field-hint">API 密钥留空时使用环境变量 OPENAI_API_KEY；修改后需「测试连接」再「启用」。</span>
+                </div>
+                <div class="generator-settings__grid">
+                  <div class="generator-settings__field">
+                    <span class="field-label">服务地址（Base URL）<b class="required-mark">*</b></span>
+                    <input id="codexBaseUrl" class="text-input" type="text" placeholder="https://opencode.ai/zen/go/v1" data-testid="codex-base-url">
+                  </div>
+                  <div class="generator-settings__field">
+                    <span class="field-label">模型 <b class="required-mark">*</b></span>
+                    <input id="codexModel" class="text-input" type="text" placeholder="deepseek-v4-flash" data-testid="codex-model">
+                  </div>
+                  <div class="generator-settings__field">
+                    <span class="field-label">接口模式</span>
+                    <select id="codexApiMode" class="text-input" data-testid="codex-api-mode">
+                      <option value="responses">responses（默认）</option>
+                      <option value="chat_completions">chat/completions</option>
+                    </select>
+                  </div>
+                  <div class="generator-settings__field">
+                    <span class="field-label">API 密钥</span>
+                    <input id="codexApiKey" class="text-input" type="password" placeholder="sk-...（留空使用环境变量）" data-testid="codex-api-key">
+                    <span class="field-hint">仅保存在内存中，刷新页面后需重新输入；留空则用环境变量。</span>
+                  </div>
+                  <div class="generator-settings__field">
+                    <span class="field-label">超时（秒）</span>
+                    <input id="codexTimeout" class="text-input" type="number" min="1" max="1800" value="300" data-testid="codex-timeout">
+                  </div>
+                  <div class="generator-settings__field">
+                    <span class="field-label">推理强度</span>
+                    <select id="codexReasoning" class="text-input" data-testid="codex-reasoning">
+                      <option value="high">high（默认）</option>
+                      <option value="medium">medium</option>
+                      <option value="low">low</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="generator-settings__actions">
+                  <button id="saveCodexSettings" class="button button--secondary" type="button" data-testid="save-codex-settings">保存 codex 配置</button>
+                  <button id="testCodexConnection" class="button button--secondary" type="button" data-testid="test-codex-connection">测试连接</button>
+                  <button id="activateCodex" class="button button--primary" type="button" data-testid="activate-codex">启用 codex 生成</button>
+                  <span id="codexOperationStatus" class="action-note"></span>
+                </div>
+              </div>
               <div class="generator-settings__actions">
                 <button id="saveGeneratorSettings" class="button button--secondary" type="button" data-testid="save-generator-settings">保存配置</button>
                 <button id="testGeneratorConnection" class="button button--secondary" type="button" data-testid="test-generator-connection">测试连接</button>
@@ -998,6 +1048,10 @@
         if (!settings?.active) return "当前：未知";
         const active = settings.active;
         const mode = active.mode === "strict" ? "strict" : "auto";
+        if (active.name === "codex") {
+          const config = active.config || {};
+          return `当前：opencode-go（${config.model || "?"}，${active.credential_configured ? "密钥已配置" : "密钥未配置"}，${mode} 模式）`;
+        }
         if (active.name !== "nga") return `当前：Stub（确定性生成，${mode} 模式）`;
         const config = active.config || {};
         const transport = config.transport === "cli" ? "本机 CLI" : "HTTP";
@@ -1008,7 +1062,12 @@
         const bar = el("engineBar");
         if (!bar) return;
         const active = settings?.active || {};
-        if (active.name === "nga") {
+        if (active.name === "codex") {
+          const config = active.config || {};
+          bar.className = "engine-bar is-nga";
+          el("engineBarText").textContent =
+            `生成引擎：opencode-go AI（${config.model || "?"} · ${active.credential_configured ? "密钥已配置" : "密钥未配置"}）`;
+        } else if (active.name === "nga") {
           const config = active.config || {};
           const isCli = config.transport === "cli";
           const mode = active.mode === "strict" ? "strict" : "auto";
@@ -1028,7 +1087,13 @@
         const dot = el("generatorStatusDot");
         const title = el("generatorStatusTitle");
         const detail = el("generatorStatusDetail");
-        if (active.name === "nga") {
+        if (active.name === "codex") {
+          const config = active.config || {};
+          dot.className = "generator-status-card__dot is-active";
+          title.textContent = `当前使用：opencode-go AI 通道（${config.model || "?"}）`;
+          detail.textContent =
+            `Base URL：${config.base_url || "?"} · 密钥：${active.credential_configured ? "已配置" : "未配置（将使用环境变量）"} · ${config.api_mode || "responses"} 协议`;
+        } else if (active.name === "nga") {
           const config = active.config || {};
           const isCli = config.transport === "cli";
           dot.className = "generator-status-card__dot is-active";
@@ -1039,7 +1104,7 @@
         } else {
           dot.className = "generator-status-card__dot is-warn";
           title.textContent = "当前使用：Stub 生成器";
-          detail.textContent = "确定性生成，无需 AI 服务，适合流程验证与离线环境。配置 NGA 后可切换到 AI 生成。";
+          detail.textContent = "确定性生成，无需 AI 服务，适合流程验证与离线环境。配置 opencode-go 或 NGA 后可切换到 AI 生成。";
         }
       };
 
@@ -1066,6 +1131,16 @@
             el("ngaTimeout").value = String(config.timeout_seconds ?? (isCli ? 300 : 120));
             el("ngaRetries").value = String(config.max_retries ?? 2);
             el("generatorMode").value = active.mode === "strict" ? "strict" : "auto";
+          }
+          const codexDraft = settings.draft?.name === "codex" ? settings.draft.config : null;
+          const codexActive = active.name === "codex" ? active.config : null;
+          const codexConfig = codexActive || codexDraft;
+          if (codexConfig) {
+            el("codexBaseUrl").value = codexConfig.base_url || "https://opencode.ai/zen/go/v1";
+            el("codexModel").value = codexConfig.model || "";
+            el("codexApiMode").value = codexConfig.api_mode || "responses";
+            el("codexTimeout").value = String(codexConfig.timeout_seconds ?? 300);
+            el("codexReasoning").value = codexConfig.reasoning_effort || "high";
           }
           applyTransportVisibility();
         } catch (_error) {
@@ -1208,6 +1283,82 @@
           setGeneratorStatus("已切换回 Stub。");
         } catch (error) {
           setGeneratorStatus(error.payload?.error?.message || "切换失败。", true);
+        }
+      });
+
+      const readCodexForm = () => ({
+        generator: "codex",
+        credential: el("codexApiKey").value || null,
+        config: {
+          config_version: "1.0",
+          base_url: el("codexBaseUrl").value.trim(),
+          model: el("codexModel").value.trim(),
+          api_mode: el("codexApiMode").value,
+          timeout_seconds: Number(el("codexTimeout").value) || 300,
+          reasoning_effort: el("codexReasoning").value,
+        },
+      });
+      const validateCodexForm = (payload) => {
+        if (!payload.config.base_url || !payload.config.model) return "请填写服务地址和模型。";
+        return null;
+      };
+      const setCodexStatus = (message, isError = false) => {
+        const status = el("codexOperationStatus");
+        status.textContent = message;
+        status.style.color = isError ? "var(--danger)" : "var(--muted)";
+      };
+      const refreshGeneratorStatus = async () => {
+        const response = await sessionFetch("/api/settings/generator", { cache: "no-store" });
+        const settings = await readJson(response);
+        el("generatorStateText").textContent = generatorStatusText(settings);
+        renderGeneratorStatusCard(settings);
+        renderEngineBar(settings);
+        return settings;
+      };
+      el("saveCodexSettings").addEventListener("click", async () => {
+        try {
+          const payload = readCodexForm();
+          const invalid = validateCodexForm(payload);
+          if (invalid) { setCodexStatus(invalid, true); return; }
+          const response = await sessionFetch("/api/settings/generator", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          await readJson(response);
+          setCodexStatus("配置已保存，启用前需测试连接。");
+        } catch (error) {
+          setCodexStatus(error.payload?.error?.message || "配置保存失败。", true);
+        }
+      });
+      el("testCodexConnection").addEventListener("click", async () => {
+        try {
+          const payload = readCodexForm();
+          const invalid = validateCodexForm(payload);
+          if (invalid) { setCodexStatus(invalid, true); return; }
+          const saved = await sessionFetch("/api/settings/generator", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          await readJson(saved);
+          const tested = await sessionFetch("/api/settings/generator/test", { method: "POST" });
+          const result = await readJson(tested);
+          setCodexStatus(result.connection?.ok ? `连接成功（${result.connection.latency_ms ?? "?"}ms）。` : "连接测试未通过。", !result.connection?.ok);
+        } catch (error) {
+          setCodexStatus(error.payload?.error?.message || "连接测试失败。", true);
+        }
+      });
+      el("activateCodex").addEventListener("click", async () => {
+        try {
+          const response = await sessionFetch("/api/settings/generator/activate", { method: "POST" });
+          const settings = await readJson(response);
+          el("generatorStateText").textContent = generatorStatusText(settings);
+          renderGeneratorStatusCard(settings);
+          renderEngineBar(settings);
+          setCodexStatus(settings.active?.name === "codex" ? "已启用 opencode-go 生成器。" : "启用失败。", settings.active?.name !== "codex");
+        } catch (error) {
+          setCodexStatus(error.payload?.error?.message || "启用失败（可能未测试连接）。", true);
         }
       });
 

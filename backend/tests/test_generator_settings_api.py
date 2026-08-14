@@ -273,3 +273,95 @@ def test_cli_transport_config_can_be_saved_tested_and_activated(tmp_path) -> Non
     assert activated.status_code == 200
     assert activated.get_json()["active"]["name"] == "nga"
     assert activated.get_json()["active"]["config"]["transport"] == "cli"
+
+
+@dataclass
+class CodexLabelGenerator:
+    config: object
+    name: str = "codex"
+    _api_key: str | None = None
+
+    def generate(self, prompt: str, *, target: str) -> str:
+        if prompt.startswith("NGA_CONNECTION_TEST"):
+            return '{"ok":true}'
+        return f"codex:{getattr(self.config, 'model', '?' )}:{target}"
+
+
+def test_codex_settings_can_be_configured_tested_and_activated(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    manager = GeneratorManager(
+        codex_factory=lambda config, credential: CodexLabelGenerator(config, _api_key=credential)
+    )
+    client = create_api_app(work_dir=tmp_path, generator_manager=manager).test_client()
+
+    payload = {
+        "generator": "codex",
+        "credential": "sk-secret-123",
+        "config": {
+            "config_version": "1.0",
+            "base_url": "https://opencode.ai/zen/go/v1",
+            "model": "deepseek-v4-flash",
+            "api_mode": "responses",
+            "timeout_seconds": 120,
+            "reasoning_effort": "high",
+        },
+    }
+    configured = client.put("/api/settings/generator", json=payload)
+    assert configured.status_code == 200
+    configured_text = configured.get_data(as_text=True)
+    assert "sk-secret-123" not in configured_text
+    draft = configured.get_json()["draft"]
+    assert draft["name"] == "codex"
+    assert draft["credential_configured"] is True
+    assert draft["tested"] is False
+    assert draft["config"]["base_url"] == "https://opencode.ai/zen/go/v1"
+    assert draft["config"]["model"] == "deepseek-v4-flash"
+    assert draft["config"]["api_mode"] == "responses"
+
+    blocked = client.post("/api/settings/generator/activate")
+    assert blocked.status_code == 409
+    assert blocked.get_json()["error"]["code"] == "E010"
+
+    tested = client.post("/api/settings/generator/test")
+    assert tested.status_code == 200
+    assert tested.get_json()["connection"]["ok"] is True
+
+    activated = client.post("/api/settings/generator/activate")
+    assert activated.status_code == 200
+    activated_text = activated.get_data(as_text=True)
+    assert "sk-secret-123" not in activated_text
+    active = activated.get_json()["active"]
+    assert active["name"] == "codex"
+    assert active["credential_configured"] is True
+    assert active["config"]["model"] == "deepseek-v4-flash"
+    assert active["config"]["base_url"] == "https://opencode.ai/zen/go/v1"
+    assert client.get("/api/health").get_json()["generator"] == "codex"
+
+
+def test_codex_initial_from_environment_prefills_draft_and_reports_credential_state(
+    tmp_path, monkeypatch
+) -> None:
+    from app.generators.codex import CodexGenerator
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env-key")
+    manager = GeneratorManager(initial_generator=CodexGenerator())
+    client = create_api_app(work_dir=tmp_path, generator_manager=manager).test_client()
+
+    status = client.get("/api/settings/generator").get_json()
+    active = status["active"]
+    assert active["name"] == "codex"
+    assert active["credential_configured"] is True
+    assert active["config"]["base_url"] == "https://opencode.ai/zen/go/v1"
+    assert active["config"]["model"] == "deepseek-v4-flash"
+    # The draft is pre-filled from the active codex instance so the settings
+    # form can show and edit the endpoint/model without re-typing them.
+    assert status["draft"]["name"] == "codex"
+    assert status["draft"]["config"]["model"] == "deepseek-v4-flash"
+    assert "sk-env-key" not in status
+    assert "sk-env-key" not in client.get("/api/settings/generator").get_data(as_text=True)
+
+    monkeypatch.delenv("OPENAI_API_KEY")
+    # A freshly constructed generator without a credential reports the env state.
+    fresh = GeneratorManager(initial_generator=CodexGenerator())
+    fresh_client = create_api_app(work_dir=tmp_path, generator_manager=fresh).test_client()
+    assert fresh_client.get("/api/settings/generator").get_json()["active"]["credential_configured"] is False

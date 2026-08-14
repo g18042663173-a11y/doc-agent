@@ -206,6 +206,32 @@ public sealed class GeneratorState
 
     [JsonPropertyName("latency_ms")]
     public int? LatencyMs { get; set; }
+
+    [JsonPropertyName("config")]
+    public GeneratorConfigDto? Config { get; set; }
+}
+
+/// <summary>Non-sensitive subset of the active/draft generator configuration
+/// (never includes credentials).</summary>
+public sealed class GeneratorConfigDto
+{
+    [JsonPropertyName("base_url")]
+    public string? BaseUrl { get; set; }
+
+    [JsonPropertyName("model")]
+    public string? Model { get; set; }
+
+    [JsonPropertyName("api_mode")]
+    public string? ApiMode { get; set; }
+
+    [JsonPropertyName("transport")]
+    public string? Transport { get; set; }
+
+    [JsonPropertyName("timeout_seconds")]
+    public int? TimeoutSeconds { get; set; }
+
+    [JsonPropertyName("reasoning_effort")]
+    public string? ReasoningEffort { get; set; }
 }
 
 public sealed class GeneratorConnection

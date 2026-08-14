@@ -825,6 +825,7 @@
                         <StackPanel Grid.Column="0">
                             <Button x:Name="GeneralSettingsButton" Content="常规" Style="{StaticResource SubNavButton}" Tag="selected" Click="GeneralSettings_Click" />
                             <Button x:Name="NgaSettingsButton" Content="NGA" Style="{StaticResource SubNavButton}" Click="NgaSettings_Click" />
+                            <Button x:Name="CodexSettingsButton" Content="opencode-go" Style="{StaticResource SubNavButton}" Click="CodexSettings_Click" />
                             <Button x:Name="StorageSettingsButton" Content="存储" Style="{StaticResource SubNavButton}" Click="StorageSettings_Click" />
                             <Button x:Name="PrivacySettingsButton" Content="隐私" Style="{StaticResource SubNavButton}" Click="PrivacySettings_Click" />
                             <Button x:Name="SettingsAboutButton" Content="关于" Style="{StaticResource SubNavButton}" Click="SettingsAbout_Click" />
@@ -964,6 +965,54 @@
                                             <Button Content="删除 Token" Style="{StaticResource DangerButton}" Click="DeleteToken_Click" Margin="8,0,0,0" />
                                         </WrapPanel>
                                         <TextBlock x:Name="NgaOperationStatusText" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border x:Name="CodexSettingsPanel" Style="{StaticResource GroupPanel}" Visibility="Collapsed" VerticalAlignment="Top">
+                                    <StackPanel>
+                                        <TextBlock Text="opencode-go（默认 AI 通道）" Style="{StaticResource SectionTitle}" />
+                                        <TextBlock x:Name="CodexActiveStateText" Text="当前生成器：读取中…" Style="{StaticResource MutedText}" Margin="0,0,0,14" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="16" />
+                                                <ColumnDefinition Width="220" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="服务地址（Base URL）" Style="{StaticResource FieldLabel}" />
+                                                <TextBox x:Name="CodexBaseUrlTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-base-url" />
+                                                <TextBlock Text="模型" Style="{StaticResource FieldLabel}" />
+                                                <TextBox x:Name="CodexModelTextBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-model" />
+                                                <TextBlock Text="API 密钥" Style="{StaticResource FieldLabel}" />
+                                                <PasswordBox x:Name="CodexApiKeyPasswordBox" Margin="0,0,0,4" automation:AutomationProperties.AutomationId="codex-api-key" />
+                                                <TextBlock x:Name="CodexCredentialStateText" Text="密钥：读取中…" Style="{StaticResource MutedText}" />
+                                                <TextBlock Text="留空使用环境变量 OPENAI_API_KEY；填写后保存在 Windows 凭据管理器。" Style="{StaticResource MutedText}" Margin="0,6,0,0" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="接口模式" Style="{StaticResource FieldLabel}" />
+                                                <ComboBox x:Name="CodexApiModeComboBox" Margin="0,0,0,12" automation:AutomationProperties.AutomationId="codex-api-mode">
+                                                    <ComboBoxItem Tag="responses">responses（默认）</ComboBoxItem>
+                                                    <ComboBoxItem Tag="chat_completions">chat/completions</ComboBoxItem>
+                                                </ComboBox>
+                                                <TextBlock Text="超时（秒）" Style="{StaticResource FieldLabel}" />
+                                                <TextBox x:Name="CodexTimeoutTextBox" Margin="0,0,0,12" />
+                                                <TextBlock Text="推理强度" Style="{StaticResource FieldLabel}" />
+                                                <ComboBox x:Name="CodexReasoningComboBox" Margin="0,0,0,12">
+                                                    <ComboBoxItem Tag="high">high（默认）</ComboBoxItem>
+                                                    <ComboBoxItem Tag="medium">medium</ComboBoxItem>
+                                                    <ComboBoxItem Tag="low">low</ComboBoxItem>
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </Grid>
+                                        <WrapPanel>
+                                            <Button x:Name="SaveCodexButton" Content="保存配置" Click="SaveCodex_Click" />
+                                            <Button x:Name="TestCodexButton" Content="测试连接" Click="TestCodex_Click" Margin="8,0,0,0"
+                                                    automation:AutomationProperties.AutomationId="test-codex" />
+                                            <Button x:Name="ActivateCodexButton" Content="启用 opencode-go" Style="{StaticResource PrimaryButton}"
+                                                    Click="ActivateCodex_Click" Margin="8,0,0,0" automation:AutomationProperties.AutomationId="activate-codex" />
+                                            <Button Content="切换到 Stub" Click="ActivateStub_Click" Margin="8,0,0,0" />
+                                        </WrapPanel>
+                                        <TextBlock x:Name="CodexOperationStatusText" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
                                     </StackPanel>
                                 </Border>
 

@@ -7,6 +7,7 @@ namespace DocumentWorkbench;
 public static class CredentialManager
 {
     public const string NgaCredentialTarget = "HuaweiDocumentGenerator/NGA";
+    public const string CodexCredentialTarget = "HuaweiDocumentGenerator/OpenCodeGo";
 
     public static string? ReadNgaToken() => Read(NgaCredentialTarget);
 
@@ -20,6 +21,19 @@ public static class CredentialManager
     }
 
     public static void DeleteNgaToken() => Delete(NgaCredentialTarget);
+
+    public static string? ReadCodexToken() => Read(CodexCredentialTarget);
+
+    public static void WriteCodexToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 1280)
+        {
+            throw new ArgumentException("opencode-go API 密钥长度无效。", nameof(token));
+        }
+        Write(CodexCredentialTarget, token);
+    }
+
+    public static void DeleteCodexToken() => Delete(CodexCredentialTarget);
 
     private static string? Read(string target)
     {
