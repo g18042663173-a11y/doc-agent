@@ -176,6 +176,7 @@ Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)
 
 ---
 
-*配套材料:本仓库 `docs/内网AI适配信息清单.md`(面向内网平台方的 13 项信息收集表)、
+*配套材料:本仓库 `docs/AI调用速查表.md`(一页速查,可直接转发)、
+`docs/内网AI适配信息清单.md`(面向内网平台方的 13 项信息收集表)、
 `backend/app/generators/codex.py`(可参考的完整适配器实现)、
 `backend/tests/test_codex_generator.py`(覆盖成功/截断/限流/鉴权/解析边界的测试样例)。*
