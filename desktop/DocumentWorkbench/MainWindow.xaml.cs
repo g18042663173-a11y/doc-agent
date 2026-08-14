@@ -30,9 +30,9 @@ public partial class MainWindow : Window
         ["deck-ir"] = "结构化内容（DeckIR，可改后重渲染）",
     };
 
-    private readonly BackendProcessHost _backend;
+    private BackendProcessHost _backend;
     private readonly SettingsStore _settingsStore;
-    private readonly WorkbenchApiClient _api;
+    private WorkbenchApiClient _api;
     private readonly CancellationTokenSource _lifetime = new();
     private WorkbenchSettings _settings = new();
     private string? _inputPath;
@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private bool _generatorBlocked;
     private bool _busy;
     private bool _ngaDraftTested;
+    private int _backendRestarts;
 
     public MainWindow(BackendProcessHost backend, SettingsStore settingsStore)
     {
@@ -625,9 +626,31 @@ public partial class MainWindow : Window
 
     private async Task StopPollingForDeadBackendAsync()
     {
-        // The backend process is gone and desktop_host has no auto-restart, so
-        // retrying is futile. Stop the poll, surface a terminal message and
-        // release the busy state so the user is not stuck on a spinner forever.
+        // The backend pythonw process died (crash or external kill). Instead of
+        // a terminal "restart the app" message, try to restart the backend in
+        // place (bounded attempts) and re-initialize; only give up after the
+        // retries are exhausted.
+        try
+        {
+            if (_backendRestarts < 2)
+            {
+                _backendRestarts++;
+                ProgressTitleText.Text = "本地服务已停止，正在自动重启…";
+                SetServiceState(false, "本地服务已停止，正在自动重启…");
+                var restarted = await _backend.RestartAsync(_lifetime.Token);
+                var previous = _backend;
+                _backend = restarted;
+                previous.Dispose();
+                _api = new WorkbenchApiClient(restarted.CreateHttpClient());
+                await InitializeServiceAsync();
+                await RefreshJobsAsync();
+                return;
+            }
+        }
+        catch (Exception)
+        {
+            // Fall through to the terminal message when the restart fails.
+        }
         SetBusy(false);
         ProgressTitleText.Text = "本地服务已停止";
         SetServiceState(false, "本地服务已停止，请重启工作台");

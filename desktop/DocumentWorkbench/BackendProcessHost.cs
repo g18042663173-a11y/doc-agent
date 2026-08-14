@@ -53,6 +53,24 @@ public sealed class BackendProcessHost : IDisposable
         var appData = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HuaweiDocumentGenerator");
+        return await StartCoreAsync(appData, cancellationToken);
+    }
+
+    /// <summary>
+    /// Restart the backend in place after the pythonw process died unexpectedly
+    /// (crash, external kill, ...). The old process is stopped and its state
+    /// files cleaned, then a fresh backend is started and health-checked.
+    /// </summary>
+    public async Task<BackendProcessHost> RestartAsync(CancellationToken cancellationToken)
+    {
+        TryStopOwnedProcess(_process);
+        _process.Dispose();
+        TryDelete(_statePath);
+        return await StartCoreAsync(ApplicationDataDirectory, cancellationToken);
+    }
+
+    private static async Task<BackendProcessHost> StartCoreAsync(string appData, CancellationToken cancellationToken)
+    {
         var runtime = Path.Combine(appData, "runtime");
         var jobs = Path.Combine(appData, "jobs");
         Directory.CreateDirectory(runtime);
