@@ -130,6 +130,56 @@ def test_codex_generator_adds_deck_content_rules_to_system_prompt(monkeypatch: p
     assert "不得自造 Schema 外字段" in system
 
 
+def test_codex_generator_retries_with_doubled_budget_when_reasoning_truncates_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reasoning-capable model can burn the whole output budget before any
+    message text is produced (incomplete max_output_tokens); the adapter must
+    retry once with a doubled budget instead of failing the job."""
+    from app.generators import codex
+
+    requests: list[dict] = []
+
+    def fake_urlopen(request, *, timeout: int):
+        payload = json.loads(request.data.decode("utf-8"))
+        requests.append(payload)
+        if payload["max_output_tokens"] == 512:
+            # Reasoning-only truncation: no message, no usable text.
+            return FakeResponse(
+                {
+                    "status": "incomplete",
+                    "incomplete_details": {"reason": "max_output_tokens"},
+                    "output": [{"type": "reasoning", "content": [{"type": "reasoning_text", "text": "thinking..."}]}],
+                }
+            )
+        return FakeResponse({"output_text": _word_ir()})
+
+    monkeypatch.setattr(codex, "urlopen", fake_urlopen)
+    generator = codex.CodexGenerator(api_key="test-key", max_tokens=512)
+
+    raw = generator.generate("[完整目标 Schema]\n{}", target="word_ir")
+
+    assert raw == _word_ir()
+    assert [payload["max_output_tokens"] for payload in requests] == [512, 1024]
+
+
+def test_codex_generator_does_not_retry_when_response_is_not_truncated(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.generators import codex
+
+    calls = 0
+
+    def fake_urlopen(request, *, timeout: int):
+        nonlocal calls
+        calls += 1
+        return FakeResponse({"output_text": _word_ir()})
+
+    monkeypatch.setattr(codex, "urlopen", fake_urlopen)
+    generator = codex.CodexGenerator(api_key="test-key", max_tokens=512)
+
+    assert generator.generate("x", target="word_ir") == _word_ir()
+    assert calls == 1
+
+
 def test_codex_generator_supports_lightweight_analysis_json_target(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.generators import codex
 
