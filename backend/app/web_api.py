@@ -817,6 +817,16 @@ def _test_generator_settings(app: Flask, manager: GeneratorManager):
         return jsonify({"connection": connection, **manager.status()})
     except NgaGeneratorError as exc:
         return _generator_error_response(exc, stage="testing_generator")
+    except CodexApiError as exc:
+        return _error_response(
+            "E010",
+            f"AI 通道调用失败：{exc}。",
+            status=502,
+            stage="testing_generator",
+            retryable=True,
+            suggestion="请检查 AI 通道配置、网络与模型服务状态后重试。",
+            loc="generator",
+        )
 
 
 def _activate_generator_settings(app: Flask, manager: GeneratorManager):
@@ -825,6 +835,16 @@ def _activate_generator_settings(app: Flask, manager: GeneratorManager):
         return jsonify(manager.activate())
     except NgaGeneratorError as exc:
         return _generator_error_response(exc, stage="activating_generator", conflict=True)
+    except CodexApiError as exc:
+        return _error_response(
+            "E010",
+            f"AI 通道启用失败：{exc}。",
+            status=502,
+            stage="activating_generator",
+            retryable=True,
+            suggestion="请检查 AI 通道配置、网络与模型服务状态后重试。",
+            loc="generator",
+        )
 
 
 def _analyze_request(app: Flask, root: Path, manager: GeneratorManager):

@@ -141,13 +141,19 @@ class CodexGenerator:
                     transient_failures += 1
                     time.sleep(1.5 * transient_failures)
                     continue
-                raise CodexApiError(f"OpenAI-compatible API request failed with HTTP {exc.code}.") from exc
+                if exc.code in {401, 403}:
+                    raise CodexApiError(
+                        f"AI 服务鉴权失败（HTTP {exc.code}），请检查 API 密钥与网关地址。"
+                    ) from exc
+                raise CodexApiError(f"AI 服务请求失败（HTTP {exc.code}）。") from exc
             except (URLError, TimeoutError, OSError) as exc:
                 if transient_failures < MAX_TRANSIENT_RETRIES:
                     transient_failures += 1
                     time.sleep(1.5 * transient_failures)
                     continue
-                raise CodexApiError("OpenAI-compatible API request could not be completed.") from exc
+                raise CodexApiError(
+                    f"无法连接到 AI 服务 {self.base_url}，请检查网络连接后重试。"
+                ) from exc
 
     def _post(self, api_key: str, prompt: str, *, target: GeneratorTarget, budget: int) -> dict[str, Any]:
         request_payload = self._request_payload(prompt, target=target, max_tokens=budget)
@@ -171,7 +177,7 @@ class CodexGenerator:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise CodexApiError("OpenAI-compatible API returned an unreadable JSON response.") from exc
+            raise CodexApiError("AI 服务返回了无法解析的 JSON 响应。") from exc
 
     def _generate_cli(self, prompt: str) -> str:
         """Invoke an already-authenticated Codex CLI without persisting model output or logs."""
@@ -300,7 +306,7 @@ def _extract_text_response(payload: Any, *, api_mode: str) -> str:
             text = "".join(part for part in text_parts if isinstance(part, str))
         text = text.strip()
     if not text:
-        raise CodexApiError("OpenAI-compatible API response did not include usable text content.")
+        raise CodexApiError("AI 服务响应不完整（可能被输出上限截断），重试后仍无可用内容。")
     return text
 
 
