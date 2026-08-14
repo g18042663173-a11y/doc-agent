@@ -29,7 +29,7 @@ from app.cli.parse import parse_file
 from app.diagnostics import build_runtime_diagnostics
 from app.generation.analysis import build_analysis_prompt, measure_document, validate_analysis_text
 from app.generation.depth import GenerationOptions, generate_deck
-from app.generators.codex import CodexConfig
+from app.generators.codex import CodexApiError, CodexConfig
 from app.generators.interface import GeneratorCanceled, IRTextGenerator, default_ir_generator
 from app.generators.manager import GeneratorManager
 from app.generators.nga import (
@@ -1616,6 +1616,21 @@ def _handle_job_failure(job: ApiJob, jobs: JobStore, exc: Exception) -> None:
             retryable=exc.retryable,
             message=_generator_error_message(exc),
             suggestion=_generator_error_suggestion(exc),
+            loc="generator",
+        )
+    elif isinstance(exc, CodexApiError):
+        # The opencode-go adapter failed at the transport/parse layer; its
+        # message is static and sanitized (no prompt, key or input content).
+        # Transient gateway failures are retried inside the adapter, so any
+        # error reaching here is either exhausted retries or a hard failure.
+        _fail_job(
+            job,
+            jobs,
+            code="E010",
+            stage="generating",
+            retryable=True,
+            message=f"AI 通道调用失败：{exc}。",
+            suggestion="请检查 AI 通道配置、网络与模型服务状态后重试；若持续失败，请下载失败报告并提供支持编号。",
             loc="generator",
         )
     elif isinstance(exc, TimeoutError):

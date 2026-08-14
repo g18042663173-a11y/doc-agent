@@ -180,6 +180,66 @@ def test_codex_generator_does_not_retry_when_response_is_not_truncated(monkeypat
     assert calls == 1
 
 
+def test_codex_generator_retries_truncation_in_chat_completions_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """chat_completions signals truncation via finish_reason=length; the
+    adapter must retry with a doubled budget there too (same risk as the
+    responses-mode reasoning truncation)."""
+    from app.generators import codex
+
+    requests: list[dict] = []
+
+    def fake_urlopen(request, *, timeout: int):
+        payload = json.loads(request.data.decode("utf-8"))
+        requests.append(payload)
+        if payload["max_tokens"] == 512:
+            return FakeResponse({"choices": [{"finish_reason": "length", "message": {"content": "{\"o"}}]})
+        return FakeResponse({"choices": [{"finish_reason": "stop", "message": {"content": _word_ir()}}]})
+
+    monkeypatch.setattr(codex, "urlopen", fake_urlopen)
+    generator = codex.CodexGenerator(api_key="test-key", max_tokens=512, api_mode="chat_completions")
+
+    assert generator.generate("x", target="word_ir") == _word_ir()
+    assert [payload["max_tokens"] for payload in requests] == [512, 1024]
+
+
+def test_codex_generator_retries_transient_http_errors_with_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.generators import codex
+
+    responses = [HTTPError("https://opencode.ai/zen/go/v1/responses", 429, "Too Many Requests", None, None), None]
+
+    def fake_urlopen(request, *, timeout: int):
+        error = responses.pop(0)
+        if error is not None:
+            raise error
+        return FakeResponse({"output_text": _word_ir()})
+
+    monkeypatch.setattr(codex, "urlopen", fake_urlopen)
+    monkeypatch.setattr(codex.time, "sleep", lambda _seconds: None)
+    generator = codex.CodexGenerator(api_key="test-key", max_tokens=512)
+
+    assert generator.generate("x", target="word_ir") == _word_ir()
+    assert responses == []
+
+
+def test_codex_generator_does_not_retry_authentication_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.generators import codex
+    from app.generators.codex import CodexApiError
+
+    calls = 0
+
+    def fake_urlopen(request, *, timeout: int):
+        nonlocal calls
+        calls += 1
+        raise HTTPError("https://opencode.ai/zen/go/v1/responses", 401, "Unauthorized", None, None)
+
+    monkeypatch.setattr(codex, "urlopen", fake_urlopen)
+    generator = codex.CodexGenerator(api_key="bad-key", max_tokens=512)
+
+    with pytest.raises(CodexApiError, match="HTTP 401"):
+        generator.generate("x", target="word_ir")
+    assert calls == 1
+
+
 def test_codex_generator_supports_lightweight_analysis_json_target(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.generators import codex
 

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -28,6 +29,10 @@ DEFAULT_REASONING_EFFORT = "high"
 DEFAULT_TIMEOUT_SECONDS = 300
 API_MODES = {"responses", "chat_completions"}
 TRANSPORTS = {"http", "cli"}
+# Transient gateway failures worth retrying with a short backoff (rate limit
+# and upstream 5xx); auth/model errors must fail immediately.
+RETRYABLE_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
+MAX_TRANSIENT_RETRIES = 2
 
 
 class CodexConfig(BaseModel):
@@ -109,44 +114,64 @@ class CodexGenerator:
 
     def _generate_http(self, prompt: str, *, target: GeneratorTarget) -> str:
         api_key = self._require_api_key()
-        # Reasoning-capable models can consume the whole output budget on
-        # reasoning (e.g. deepseek-v4-flash burning 4096 tokens) and then get
-        # truncated before any message text is produced. Retry once with a
-        # doubled budget when the response was truncated without usable text.
-        for attempt in range(2):
-            budget = self.max_tokens * (2 if attempt else 1)
-            request_payload = self._request_payload(prompt, target=target, max_tokens=budget)
-            request = Request(
-                f"{self.base_url}/{self._endpoint_path()}",
-                data=json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    # The opencode-go gateway sits behind Cloudflare bot protection
-                    # that rejects the bare "Python-urllib/3.x" User-Agent with
-                    # HTTP 403 error code 1010; a browser signature passes.
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-                    ),
-                },
-                method="POST",
-            )
+        transient_failures = 0
+        while True:
             try:
-                with urlopen(request, timeout=self.timeout_seconds) as response:
-                    response_payload = json.loads(response.read().decode("utf-8"))
+                # Reasoning-capable models can consume the whole output budget
+                # on reasoning (e.g. deepseek-v4-flash burning 4096 tokens) and
+                # then get truncated before any message text is produced.
+                # Retry once with a doubled budget on truncation.
+                for attempt in range(2):
+                    budget = self.max_tokens * (2 if attempt else 1)
+                    response_payload = self._post(api_key, prompt, target=target, budget=budget)
+                    try:
+                        text = _extract_text_response(response_payload, api_mode=self.api_mode)
+                    except CodexApiError as exc:
+                        if attempt == 0 and _response_was_truncated(response_payload):
+                            continue
+                        raise
+                    # chat_completions may return partial text with
+                    # finish_reason=length: extraction succeeds but the output
+                    # is incomplete, so retry once for the full result.
+                    if attempt == 0 and _response_was_truncated(response_payload):
+                        continue
+                    return text
             except HTTPError as exc:
+                if exc.code in RETRYABLE_HTTP_STATUSES and transient_failures < MAX_TRANSIENT_RETRIES:
+                    transient_failures += 1
+                    time.sleep(1.5 * transient_failures)
+                    continue
                 raise CodexApiError(f"OpenAI-compatible API request failed with HTTP {exc.code}.") from exc
             except (URLError, TimeoutError, OSError) as exc:
-                raise CodexApiError("OpenAI-compatible API request could not be completed.") from exc
-            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                raise CodexApiError("OpenAI-compatible API returned an unreadable JSON response.") from exc
-            try:
-                return _extract_text_response(response_payload, api_mode=self.api_mode)
-            except CodexApiError as exc:
-                if attempt == 0 and _response_was_truncated(response_payload):
+                if transient_failures < MAX_TRANSIENT_RETRIES:
+                    transient_failures += 1
+                    time.sleep(1.5 * transient_failures)
                     continue
-                raise
+                raise CodexApiError("OpenAI-compatible API request could not be completed.") from exc
+
+    def _post(self, api_key: str, prompt: str, *, target: GeneratorTarget, budget: int) -> dict[str, Any]:
+        request_payload = self._request_payload(prompt, target=target, max_tokens=budget)
+        request = Request(
+            f"{self.base_url}/{self._endpoint_path()}",
+            data=json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                # The opencode-go gateway sits behind Cloudflare bot protection
+                # that rejects the bare "Python-urllib/3.x" User-Agent with
+                # HTTP 403 error code 1010; a browser signature passes.
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+                ),
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise CodexApiError("OpenAI-compatible API returned an unreadable JSON response.") from exc
 
     def _generate_cli(self, prompt: str) -> str:
         """Invoke an already-authenticated Codex CLI without persisting model output or logs."""
@@ -231,7 +256,9 @@ class CodexGenerator:
 
 def _response_was_truncated(payload: Any) -> bool:
     """True when the gateway reports the response was cut off by the output
-    budget (reasoning-only truncation produces no usable text at all)."""
+    budget (reasoning-only truncation produces no usable text at all).
+    Responses API reports `incomplete_details.reason == max_output_tokens`;
+    chat_completions reports `choices[0].finish_reason == length`."""
     if not isinstance(payload, dict):
         return False
     incomplete = payload.get("incomplete_details")
@@ -239,6 +266,10 @@ def _response_was_truncated(payload: Any) -> bool:
         return True
     if payload.get("status") == "incomplete":
         return True
+    choices = payload.get("choices")
+    if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+        if choices[0].get("finish_reason") == "length":
+            return True
     return False
 
 
