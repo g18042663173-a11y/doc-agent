@@ -193,7 +193,7 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             page.get_by_test_id("generator-channel").select_option("nga-cli")
 
             page.get_by_test_id("input-file").set_input_files(str(source))
-            page.get_by_test_id("type-word").click()
+            page.get_by_test_id("target-select").select_option("word")
             page.get_by_test_id("generate-button").click()
             page.get_by_test_id("failure-diagnostic").wait_for(state="visible", timeout=15_000)
             if page.get_by_test_id("failure-code").inner_text() != "E001":
@@ -202,7 +202,7 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             if not failure_href or not failure_href.endswith("/failure-report"):
                 raise AssertionError("failure report link was not rendered")
 
-            page.get_by_test_id("type-deck").click()
+            page.get_by_test_id("target-select").select_option("deck")
             page.get_by_test_id("template-file").set_input_files(str(template))
             page.get_by_test_id("remove-template").wait_for(state="visible")
             page.get_by_test_id("remove-template").click()
@@ -225,7 +225,7 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
                 raise AssertionError("template audit links were not restored after refresh")
 
             page.get_by_test_id("input-file").set_input_files(str(source))
-            page.get_by_test_id("type-deck").click()
+            page.get_by_test_id("target-select").select_option("deck")
 
             console_count_before_ole = len(console_errors)
             page.get_by_test_id("template-file").set_input_files(str(unsafe_template))

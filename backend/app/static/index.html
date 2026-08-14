@@ -682,10 +682,10 @@
           <div class="options-grid">
             <div>
               <span class="field-label">生成类型</span>
-              <div class="segment" role="group" aria-label="生成类型">
-                <button class="type-option" type="button" data-type="word" data-testid="type-word">Word 详设</button>
-                <button class="type-option is-selected" type="button" data-type="deck" data-testid="type-deck">PPT 汇报</button>
-              </div>
+              <select id="targetSelect" class="text-input" data-testid="target-select" aria-label="生成类型">
+                <option value="deck" selected>PPT 汇报（默认）</option>
+                <option value="word">Word 详设</option>
+              </select>
             </div>
             <div>
               <span class="field-label">PPT 生成深度</span>
@@ -1011,7 +1011,7 @@
       const templateBrowse = el("templateBrowse");
       const assetInput = el("assetInput");
       const assetBrowse = el("assetBrowse");
-      const typeOptions = [...document.querySelectorAll(".type-option")];
+      const targetSelect = el("targetSelect");
       const depthOptions = [...document.querySelectorAll(".depth-option")];
 
       const setBusy = (busy) => {
@@ -1021,7 +1021,7 @@
         templateBrowse.disabled = busy;
         assetInput.disabled = busy;
         assetBrowse.disabled = busy;
-        typeOptions.forEach((button) => button.disabled = busy);
+        targetSelect.disabled = busy;
         depthOptions.forEach((button) => button.disabled = busy);
         el("cancelButton").hidden = !state.jobRunning || !state.jobId;
         el("cancelButton").disabled = !state.jobRunning;
@@ -1418,7 +1418,7 @@
       ["dragleave", "drop"].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); dropzone.classList.remove("is-dragover"); }));
       dropzone.addEventListener("drop", (event) => { if (!state.busy) selectFile(event.dataTransfer.files?.[0]); });
 
-      typeOptions.forEach((button) => button.addEventListener("click", () => { state.type = button.dataset.type; typeOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); el("depthSegment").classList.toggle("is-disabled", state.type !== "deck"); el("themeField").classList.toggle("is-disabled", state.type !== "deck"); el("templatePicker").classList.toggle("is-disabled", state.type !== "deck"); el("assetPicker").classList.toggle("is-disabled", state.type !== "deck"); if (state.type !== "deck") { clearTemplate(); clearAssets(); } updateActions(); }));
+      targetSelect.addEventListener("change", () => { state.type = targetSelect.value; el("depthSegment").classList.toggle("is-disabled", state.type !== "deck"); el("themeField").classList.toggle("is-disabled", state.type !== "deck"); el("templatePicker").classList.toggle("is-disabled", state.type !== "deck"); el("assetPicker").classList.toggle("is-disabled", state.type !== "deck"); if (state.type !== "deck") { clearTemplate(); clearAssets(); } updateActions(); });
       depthOptions.forEach((button) => button.addEventListener("click", () => { state.depth = button.dataset.depth; depthOptions.forEach((item) => item.classList.toggle("is-selected", item === button)); }));
 
       const themeSwatches = {
