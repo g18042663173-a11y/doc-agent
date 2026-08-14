@@ -35,8 +35,50 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point with crash logging: a pythonw backend has no console, so an
+    uncaught exception would otherwise vanish silently and leave the desktop
+    client with connection-refused errors. Any failure is written to
+    backend-crash.log next to the state file before re-raising."""
+    try:
+        return _main(argv)
+    except BaseException as exc:
+        _write_crash_log(exc)
+        raise
+
+
+def _write_crash_log(exc: BaseException) -> None:
+    import traceback
+
+    try:
+        runtime_dir = _bootstrap_runtime_dir() or (
+            Path(os.environ["LOCALAPPDATA"]) / "HuaweiDocumentGenerator" / "runtime"
+        )
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        log_path = runtime_dir / "backend-crash.log"
+        with log_path.open("a", encoding="utf-8") as stream:
+            stream.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
+            traceback.print_exc(file=stream)
+            stream.write(f"exception: {exc!r}\n")
+    except Exception:
+        # Logging must never mask the original failure.
+        pass
+
+
+def _bootstrap_runtime_dir() -> Path | None:
+    try:
+        raw = os.environ.get("DSH_DESKTOP_BOOTSTRAP")
+        if raw:
+            return Path(raw).resolve().parent
+    except OSError:
+        pass
+    return None
+
+
+def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     bootstrap = load_bootstrap(args.bootstrap)
+    # Remember the bootstrap location for the crash logger.
+    os.environ["DSH_DESKTOP_BOOTSTRAP"] = str(bootstrap.state_path)
     repo_root = Path(__file__).resolve().parents[2]
     configure_graphviz_path(repo_root)
     bootstrap.jobs_path.mkdir(parents=True, exist_ok=True)
