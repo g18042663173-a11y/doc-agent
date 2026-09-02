@@ -1,0 +1,41 @@
+services:
+  backend:
+    image: doc-agent-mvp-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-stub}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://127.0.0.1:8000/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-EMPTY}
+      LLM_MODEL: ${LLM_MODEL:-glm-4.7}
+      PPT_RENDERER: ${PPT_RENDERER:-stub}
+      PPT_COMPLIANCE_GATE: ${PPT_COMPLIANCE_GATE:-warn}
+      USE_LANGGRAPH: ${USE_LANGGRAPH:-false}
+      DEFAULT_TARGET_SLIDES: ${DEFAULT_TARGET_SLIDES:-8}
+      MAX_INPUT_CHARS: ${MAX_INPUT_CHARS:-60000}
+      MAX_REPAIR_ATTEMPTS: ${MAX_REPAIR_ATTEMPTS:-2}
+      DATA_DIR: /app/data
+      OUTPUT_DIR: /app/outputs
+      LOG_DIR: /app/data/logs
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    restart: unless-stopped
+
+  frontend:
+    image: doc-agent-mvp-frontend:latest
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://127.0.0.1:8000/api}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

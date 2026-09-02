@@ -1,0 +1,49 @@
+brand:
+  name: "demo_company"
+  slide_size: "16:9"
+  logo_path: null
+
+fonts:
+  zh: "Microsoft YaHei"
+  en: "Arial"
+
+colors:
+  background: "FFFFFF"
+  title: "111827"
+  body: "374151"
+  muted: "6B7280"
+  primary: "1F4E79"
+  secondary: "5B9BD5"
+  accent: "C55A11"
+  white: "FFFFFF"
+
+ppt_rules:
+  max_slides: 12
+  min_slides: 5
+  max_title_chars: 28
+  max_bullets_per_slide: 5
+  max_chars_per_bullet: 32
+  allowed_layouts:
+    - cover
+    - agenda
+    - section
+    - title_bullets
+    - two_column
+    - table
+    - cards
+    - chart
+    - image
+    - conclusion
+  forbidden_phrases:
+    - "作为AI模型"
+    - "作为 AI 模型"
+    - "我不能"
+    - "无法提供"
+
+docx_rules:
+  heading_1_size: 18
+  heading_2_size: 15
+  heading_3_size: 13
+  body_size: 11
+  use_numbered_headings: true
+  max_paragraph_chars: 500

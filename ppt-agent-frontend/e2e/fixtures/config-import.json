@@ -1,0 +1,27 @@
+{
+  "exported_at": "2026-07-06T00:00:00Z",
+  "users": [
+    {
+      "user_name": "Imported E2E User",
+      "nga_endpoint": "http://imported.example.test/v1",
+      "auth_token": "imported-token",
+      "llm_provider": "openai_compatible",
+      "llm_model": "glm-4.7",
+      "ppt_renderer": "python_pptx"
+    }
+  ],
+  "color_schemes": [
+    {
+      "scheme_id": "imported_e2e_scheme",
+      "name": "Imported E2E Scheme",
+      "category": "business",
+      "description": "Imported by Playwright E2E",
+      "primary_color": "#123456",
+      "secondary_color": "#234567",
+      "accent_color": "#345678",
+      "background_color": "#FFFFFF",
+      "text_color": "#111111",
+      "additional_colors": ["#456789"]
+    }
+  ]
+}
