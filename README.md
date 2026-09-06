@@ -11,7 +11,9 @@
 | 工作台 | [desktop/DocumentWorkbench](desktop/DocumentWorkbench) | 人使用的 WPF 生成界面，共用本地后端 |
 
 下载 [GitHub Releases](https://github.com/g18042663173-a11y/document-toolkit/releases) 中的
-`生成.zip`、`模仿.zip`、`工作台.zip`。三个包分别携带所需 Windows 运行时，不需要 Docker。
+`tools.zip` 总包，解压得到 `生成.zip`、`模仿.zip`、`工作台.zip`。
+也可分别下载 `generate.zip`、`imitate.zip`、`workbench.zip`；GitHub 的中文附件名会被清理，
+因此线上使用英文下载文件名和中文显示名称。三个包分别携带所需 Windows 运行时，不需要 Docker。
 两个 Skill 解压后可运行 `run.cmd doctor --json`；工作台解压后运行 `DocumentWorkbench.exe`。
 
 当前工作台版本为 2.2.0，生成 Skill 为 1.1.0，模仿 Skill 为 2.0.0。
