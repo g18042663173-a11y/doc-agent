@@ -147,3 +147,21 @@ md/docx/xlsx/pptx 解析边界、shell 剥壳、模板规划/审计、lint 图�
    - TODO:按 `docs/WINDOWS_ACCEPTANCE_20260806.md` 在 Windows 10/11 各完成便携包和
      Inno Setup 安装/卸载、150%/200% DPI、系统主题/高对比度、离线 Stub Word/PPT、真实
      NGA（若授权）和设置保留验收；附环境、截图和签字后再批准发布分支。
+9. 2026-08-26 实习答辩 PPT 的真实媒体与实测值：需要答辩人提供姓名/部门/导师/日期、
+   `/templates` 模板墙截图、`demo.mp4`，以及端到端耗时中位数与成功率样本结果。
+   - 当前默认值：封面、页 9、页 12、页 13 均保留可编辑占位；未发现已注册的
+     `template_v2` / `huawei-project-report`，因此页 4、页 9 使用可核实的“8 套”版本。
+   - TODO：替换真实素材与数值；若模板注册后实测为 10 套，同步更新页 4、页 9，重新运行
+     `check.py`、溢出检查、PowerPoint/PDF 逐页视觉检查，并在答辩电脑完成字体、视频和投影终审。
+10. rhetoric-deck-workflow 的非多模态媒体策略：模式 A 保留截图与 SmartArt 图形像素，只清可见
+    文字再填用户材料。非多模态 Agent 仍无法区分装饰图、截图、带字图或含敏感数据的照片。
+    - 当前默认值：seal **不删除** `ppt/media` 与 SmartArt 图形；文本泄漏门 `RD-E040` 只拦源句
+      与数字。源图像素留在产物里是故意的，不是把图画成可编辑原生对象。旧默认「seal 删除图片」
+      已废弃。
+    - TODO：若业务方要求删除含敏感数据的照片，需另增“逐媒体确认清单 + 哈希 + 人工放行”，
+      不能仅凭提示词自动分类像素。字体/气质终审仍归人。
+11. rhetoric-deck-workflow 的内置 deck_pattern 页序与九类 page_pattern 不完全一致：规格页序还用了
+    `cover/conclusion/risk_plan/next_plan/benefit_plan`，但严格 Schema 没有这些页级枚举。
+    - 当前默认值：不擅自扩张 page_pattern；内置骨架仅含九类受控业务页。DeckIR 模式从用户材料
+      补 cover，并在已有用户结论内容时补 conclusion；source-shell 不新增页面。
+    - TODO：若业务方需要五类新增修辞页，先扩 DeckSkeleton Schema、提升版本并补正反样例，再改映射。

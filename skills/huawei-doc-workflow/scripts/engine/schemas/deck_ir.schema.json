@@ -1,0 +1,2268 @@
+{
+  "$defs": {
+    "AgendaSlide": {
+      "properties": {
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Items",
+          "type": "array"
+        },
+        "layout": {
+          "const": "agenda",
+          "title": "Layout",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "items"
+      ],
+      "title": "AgendaSlide",
+      "type": "object"
+    },
+    "ArchitectureDiagramSlide": {
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/ArchitectureEdge"
+          },
+          "maxItems": 24,
+          "title": "Edges",
+          "type": "array"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/ArchitectureGroup"
+          },
+          "maxItems": 6,
+          "title": "Groups",
+          "type": "array"
+        },
+        "layout": {
+          "const": "architecture_diagram",
+          "title": "Layout",
+          "type": "string"
+        },
+        "manual_hints": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArchitectureManualHints"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/ArchitectureNode"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Nodes",
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "nodes",
+        "edges",
+        "groups"
+      ],
+      "title": "ArchitectureDiagramSlide",
+      "type": "object"
+    },
+    "ArchitectureEdge": {
+      "properties": {
+        "direction": {
+          "default": "forward",
+          "enum": [
+            "forward",
+            "backward",
+            "both",
+            "none"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "from": {
+          "minLength": 1,
+          "title": "From",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "style": {
+          "default": "solid",
+          "enum": [
+            "solid",
+            "dashed"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "to": {
+          "minLength": 1,
+          "title": "To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "title": "ArchitectureEdge",
+      "type": "object"
+    },
+    "ArchitectureGroup": {
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Node Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "node_ids"
+      ],
+      "title": "ArchitectureGroup",
+      "type": "object"
+    },
+    "ArchitectureManualHints": {
+      "properties": {
+        "node_positions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DiagramPosition"
+          },
+          "description": "按节点 id 覆盖 nodes[].position；不是在原坐标上追加偏移。",
+          "maxProperties": 12,
+          "title": "Node Positions",
+          "type": "object"
+        },
+        "node_sizes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DiagramSize"
+          },
+          "description": "按节点 id 覆盖 nodes[].size；不是在原尺寸上追加缩放。",
+          "maxProperties": 12,
+          "title": "Node Sizes",
+          "type": "object"
+        }
+      },
+      "title": "ArchitectureManualHints",
+      "type": "object"
+    },
+    "ArchitectureNode": {
+      "properties": {
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiagramPosition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选节点中心位置；坐标相对架构图内容区归一化。"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiagramSize"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选节点尺寸；宽高分别是架构图内容区宽高的比例。"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "default": "secondary",
+          "description": "节点业务语义类型。主题已注册 primary、secondary、emphasis、data、job、module；其它非空值回退到 theme 的 default 配色，renderer 不根据节点文本猜测业务语义。",
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "ArchitectureNode",
+      "type": "object"
+    },
+    "Card": {
+      "properties": {
+        "desc": {
+          "minLength": 1,
+          "title": "Desc",
+          "type": "string"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "desc"
+      ],
+      "title": "Card",
+      "type": "object"
+    },
+    "CardsSlide": {
+      "properties": {
+        "cards": {
+          "items": {
+            "$ref": "#/$defs/Card"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Cards",
+          "type": "array"
+        },
+        "layout": {
+          "const": "cards",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "variant": {
+          "default": "default",
+          "description": "卡片视觉语义。default 为普通并列卡片；kpi 时 card.title 是指标名、card.desc 是核心数值、card.tag 是可选趋势或统计口径。",
+          "enum": [
+            "default",
+            "kpi"
+          ],
+          "title": "Variant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "cards"
+      ],
+      "title": "CardsSlide",
+      "type": "object"
+    },
+    "ChartSeries": {
+      "properties": {
+        "axis": {
+          "default": "primary",
+          "enum": [
+            "primary",
+            "secondary"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "chart_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "bar",
+                "line"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "combo 系列的原生图表类型。",
+          "title": "Chart Type"
+        },
+        "emphasis": {
+          "default": false,
+          "title": "Emphasis",
+          "type": "boolean"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "系列量纲；用于组合图双轴适用性审计，不执行单位换算。",
+          "title": "Unit"
+        },
+        "values": {
+          "description": "系列数值；与 thresholds[].value 使用相同数值单位。",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "title": "Values",
+          "type": "array"
+        },
+        "x_values": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "scatter 系列的横坐标；其它图表必须省略。",
+          "title": "X Values"
+        }
+      },
+      "required": [
+        "name",
+        "values"
+      ],
+      "title": "ChartSeries",
+      "type": "object"
+    },
+    "ChartSideTable": {
+      "properties": {
+        "header": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Header",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 6,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "header"
+      ],
+      "title": "ChartSideTable",
+      "type": "object"
+    },
+    "ChartSlide": {
+      "properties": {
+        "chart": {
+          "$ref": "#/$defs/ChartSpec"
+        },
+        "layout": {
+          "const": "chart",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "chart"
+      ],
+      "title": "ChartSlide",
+      "type": "object"
+    },
+    "ChartSpec": {
+      "properties": {
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Categories",
+          "type": "array"
+        },
+        "category_axis_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category Axis Title"
+        },
+        "kind": {
+          "enum": [
+            "bar",
+            "line",
+            "pie",
+            "scatter",
+            "combo"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "legend_position": {
+          "default": "top",
+          "enum": [
+            "top",
+            "right",
+            "none"
+          ],
+          "title": "Legend Position",
+          "type": "string"
+        },
+        "methodology": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Methodology"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "number_format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Number Format"
+        },
+        "orientation": {
+          "default": "vertical",
+          "description": "bar 的数据方向；horizontal 生成横向数据条，line/pie 只能使用默认 vertical。",
+          "enum": [
+            "vertical",
+            "horizontal"
+          ],
+          "title": "Orientation",
+          "type": "string"
+        },
+        "secondary_number_format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondary Number Format"
+        },
+        "secondary_value_axis_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondary Value Axis Title"
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/ChartSeries"
+          },
+          "minItems": 1,
+          "title": "Series",
+          "type": "array"
+        },
+        "show_data_labels": {
+          "default": true,
+          "title": "Show Data Labels",
+          "type": "boolean"
+        },
+        "side_conclusion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Side Conclusion"
+        },
+        "side_table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChartSideTable"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/ChartThreshold"
+          },
+          "maxItems": 4,
+          "title": "Thresholds",
+          "type": "array"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "仅用于坐标轴和数据/阈值标签的显示后缀，不执行单位换算。",
+          "title": "Unit"
+        },
+        "value_axis_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Axis Title"
+        }
+      },
+      "required": [
+        "kind",
+        "series"
+      ],
+      "title": "ChartSpec",
+      "type": "object"
+    },
+    "ChartThreshold": {
+      "properties": {
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "description": "阈值数值；必须与 chart.series[].values 使用相同数值单位。",
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "ChartThreshold",
+      "type": "object"
+    },
+    "ColumnContent": {
+      "properties": {
+        "bullets": {
+          "items": {
+            "$ref": "#/$defs/ListItem"
+          },
+          "maxItems": 7,
+          "title": "Bullets",
+          "type": "array"
+        },
+        "heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heading"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "ColumnContent",
+      "type": "object"
+    },
+    "CompositeRegion": {
+      "properties": {
+        "components": {
+          "description": "栏内从上到下堆叠的既有组件，首版最多 3 块。单块列表与 v1.7 的单 component 语义一致；超过栏高时渲染后由 HW-W03 提示人工拆分。",
+          "items": {
+            "description": "嵌入区域复用的既有组件；首版仅允许 table、architecture_diagram、title_bullets、cards，并继续执行对应组件的全部字段校验。",
+            "discriminator": {
+              "mapping": {
+                "architecture_diagram": "#/$defs/ArchitectureDiagramSlide",
+                "cards": "#/$defs/CardsSlide",
+                "table": "#/$defs/TableSlide",
+                "title_bullets": "#/$defs/TitleBulletsSlide"
+              },
+              "propertyName": "layout"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TableSlide"
+              },
+              {
+                "$ref": "#/$defs/ArchitectureDiagramSlide"
+              },
+              {
+                "$ref": "#/$defs/TitleBulletsSlide"
+              },
+              {
+                "$ref": "#/$defs/CardsSlide"
+              }
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Components",
+          "type": "array"
+        },
+        "slot": {
+          "description": "区域位置；固定为 left 或 right。",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "title": "Slot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot",
+        "components"
+      ],
+      "title": "CompositeRegion",
+      "type": "object"
+    },
+    "CompositeSlide": {
+      "properties": {
+        "layout": {
+          "const": "composite",
+          "description": "固定为 composite，表达左右栏内多个既有组件的联读关系。",
+          "title": "Layout",
+          "type": "string"
+        },
+        "regions": {
+          "description": "恰好两个区域，必须各包含一个 left 和 right；区域坐标和栏内堆叠坐标由主题确定，模型不提供任意坐标。",
+          "items": {
+            "$ref": "#/$defs/CompositeRegion"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Regions",
+          "type": "array"
+        },
+        "title": {
+          "description": "整页结论式标题；每个嵌入组件仍保留自己的区域小标题。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "regions"
+      ],
+      "title": "CompositeSlide",
+      "type": "object"
+    },
+    "ConclusionSlide": {
+      "properties": {
+        "bullets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Bullets",
+          "type": "array"
+        },
+        "cta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cta"
+        },
+        "layout": {
+          "const": "conclusion",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title"
+      ],
+      "title": "ConclusionSlide",
+      "type": "object"
+    },
+    "CoverSlide": {
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "layout": {
+          "const": "cover",
+          "title": "Layout",
+          "type": "string"
+        },
+        "presenter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presenter"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtitle"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title"
+      ],
+      "title": "CoverSlide",
+      "type": "object"
+    },
+    "CycleInfographic": {
+      "properties": {
+        "kind": {
+          "const": "cycle",
+          "title": "Kind",
+          "type": "string"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/InfographicStage"
+          },
+          "maxItems": 6,
+          "minItems": 3,
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "stages"
+      ],
+      "title": "CycleInfographic",
+      "type": "object"
+    },
+    "DeckMeta": {
+      "properties": {
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        },
+        "classification": {
+          "default": "HUAWEI CONFIDENTIAL",
+          "title": "Classification",
+          "type": "string"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtitle"
+        },
+        "theme": {
+          "default": "hw_v1",
+          "title": "Theme",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "DeckMeta",
+      "type": "object"
+    },
+    "DeckTable": {
+      "properties": {
+        "cell_spans": {
+          "items": {
+            "$ref": "#/$defs/TableCellSpan"
+          },
+          "maxItems": 16,
+          "title": "Cell Spans",
+          "type": "array"
+        },
+        "col_widths": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "各列的正数相对宽度权重；渲染时归一化到版心可用宽度，不是英寸或其它绝对单位。",
+          "title": "Col Widths"
+        },
+        "column_groups": {
+          "items": {
+            "$ref": "#/$defs/TableColumnGroup"
+          },
+          "maxItems": 4,
+          "title": "Column Groups",
+          "type": "array"
+        },
+        "conclusion_col": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "结论列的 0 起始列索引。",
+          "title": "Conclusion Col"
+        },
+        "header": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Header",
+          "type": "array"
+        },
+        "row_groups": {
+          "items": {
+            "$ref": "#/$defs/TableRowGroup"
+          },
+          "maxItems": 8,
+          "title": "Row Groups",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DeckTableCell"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "header"
+      ],
+      "title": "DeckTable",
+      "type": "object"
+    },
+    "DeckTableCell": {
+      "properties": {
+        "emphasis": {
+          "anyOf": [
+            {
+              "enum": [
+                "yellow",
+                "cyan"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emphasis"
+        },
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Items",
+          "type": "array"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "title": "DeckTableCell",
+      "type": "object"
+    },
+    "DiagramPosition": {
+      "properties": {
+        "x": {
+          "description": "节点中心相对架构图内容区宽度的归一化横坐标。",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "description": "节点中心相对架构图内容区高度的归一化纵坐标。",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "DiagramPosition",
+      "type": "object"
+    },
+    "DiagramSize": {
+      "properties": {
+        "height": {
+          "description": "节点高度占架构图内容区高度的比例。",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "description": "节点宽度占架构图内容区宽度的比例。",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Width",
+          "type": "number"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "title": "DiagramSize",
+      "type": "object"
+    },
+    "FunnelInfographic": {
+      "properties": {
+        "direction": {
+          "default": "forward",
+          "enum": [
+            "forward",
+            "reverse"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "kind": {
+          "const": "funnel",
+          "title": "Kind",
+          "type": "string"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/InfographicStage"
+          },
+          "maxItems": 6,
+          "minItems": 3,
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "stages"
+      ],
+      "title": "FunnelInfographic",
+      "type": "object"
+    },
+    "ImageAssetSpec": {
+      "properties": {
+        "alt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "credit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credit"
+        },
+        "fit": {
+          "default": "contain",
+          "enum": [
+            "contain",
+            "cover"
+          ],
+          "title": "Fit",
+          "type": "string"
+        },
+        "focal_x": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Focal X",
+          "type": "number"
+        },
+        "focal_y": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Focal Y",
+          "type": "number"
+        },
+        "image_ref": {
+          "minLength": 1,
+          "title": "Image Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "image_ref"
+      ],
+      "title": "ImageAssetSpec",
+      "type": "object"
+    },
+    "ImageGridSlide": {
+      "properties": {
+        "images": {
+          "items": {
+            "$ref": "#/$defs/ImageAssetSpec"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Images",
+          "type": "array"
+        },
+        "layout": {
+          "const": "image_grid",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "images"
+      ],
+      "title": "ImageGridSlide",
+      "type": "object"
+    },
+    "ImageSlide": {
+      "properties": {
+        "alt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "credit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credit"
+        },
+        "fit": {
+          "default": "contain",
+          "enum": [
+            "contain",
+            "cover"
+          ],
+          "title": "Fit",
+          "type": "string"
+        },
+        "focal_x": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Focal X",
+          "type": "number"
+        },
+        "focal_y": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Focal Y",
+          "type": "number"
+        },
+        "image_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Ref"
+        },
+        "layout": {
+          "const": "image",
+          "title": "Layout",
+          "type": "string"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title"
+      ],
+      "title": "ImageSlide",
+      "type": "object"
+    },
+    "ImageTextSlide": {
+      "properties": {
+        "bullets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Bullets",
+          "type": "array"
+        },
+        "heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heading"
+        },
+        "image": {
+          "$ref": "#/$defs/ImageAssetSpec"
+        },
+        "image_position": {
+          "default": "left",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "title": "Image Position",
+          "type": "string"
+        },
+        "layout": {
+          "const": "image_text",
+          "title": "Layout",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "image"
+      ],
+      "title": "ImageTextSlide",
+      "type": "object"
+    },
+    "InfographicSlide": {
+      "properties": {
+        "infographic": {
+          "discriminator": {
+            "mapping": {
+              "cycle": "#/$defs/CycleInfographic",
+              "funnel": "#/$defs/FunnelInfographic",
+              "matrix": "#/$defs/MatrixInfographic",
+              "quadrant": "#/$defs/QuadrantInfographic"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FunnelInfographic"
+            },
+            {
+              "$ref": "#/$defs/QuadrantInfographic"
+            },
+            {
+              "$ref": "#/$defs/CycleInfographic"
+            },
+            {
+              "$ref": "#/$defs/MatrixInfographic"
+            }
+          ],
+          "title": "Infographic"
+        },
+        "layout": {
+          "const": "infographic",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "infographic"
+      ],
+      "title": "InfographicSlide",
+      "type": "object"
+    },
+    "InfographicStage": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "enum": [
+                "person",
+                "team",
+                "organization",
+                "target",
+                "risk",
+                "cost",
+                "quality",
+                "data",
+                "cloud",
+                "device",
+                "security",
+                "process",
+                "time",
+                "growth",
+                "decline",
+                "check",
+                "warning",
+                "idea",
+                "service",
+                "network",
+                "database",
+                "document",
+                "settings",
+                "delivery"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "InfographicStage",
+      "type": "object"
+    },
+    "ListItem": {
+      "properties": {
+        "level": {
+          "default": 1,
+          "enum": [
+            1,
+            2
+          ],
+          "title": "Level",
+          "type": "integer"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ListItem",
+      "type": "object"
+    },
+    "MatrixInfographic": {
+      "properties": {
+        "cells": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Cells",
+          "type": "array"
+        },
+        "column_labels": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Column Labels",
+          "type": "array"
+        },
+        "kind": {
+          "const": "matrix",
+          "title": "Kind",
+          "type": "string"
+        },
+        "row_labels": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Row Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "row_labels",
+        "column_labels",
+        "cells"
+      ],
+      "title": "MatrixInfographic",
+      "type": "object"
+    },
+    "ProcessFlowSlide": {
+      "properties": {
+        "layout": {
+          "const": "process_flow",
+          "description": "固定为 process_flow，仅表达无分支的线性步骤。",
+          "title": "Layout",
+          "type": "string"
+        },
+        "orientation": {
+          "default": "horizontal",
+          "description": "步骤排列方向；密集纵向流程可能触发 HW-W03 人工拆分提示。",
+          "enum": [
+            "horizontal",
+            "vertical"
+          ],
+          "title": "Orientation",
+          "type": "string"
+        },
+        "steps": {
+          "description": "按执行顺序排列的 2-7 个步骤；存在分支时应改用 architecture_diagram。",
+          "items": {
+            "$ref": "#/$defs/ProcessStep"
+          },
+          "maxItems": 7,
+          "minItems": 2,
+          "title": "Steps",
+          "type": "array"
+        },
+        "title": {
+          "description": "结论式页面标题，说明该流程达成的结果。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "steps"
+      ],
+      "title": "ProcessFlowSlide",
+      "type": "object"
+    },
+    "ProcessStep": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选的步骤说明；不得补写输入中不存在的事实。",
+          "title": "Description"
+        },
+        "id": {
+          "description": "流程步骤的唯一稳定标识，供渲染对象命名和顺序复核使用。",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "description": "步骤名称，应直接来自输入材料中的顺序步骤。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "ProcessStep",
+      "type": "object"
+    },
+    "QuadrantInfographic": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/QuadrantItem"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        },
+        "kind": {
+          "const": "quadrant",
+          "title": "Kind",
+          "type": "string"
+        },
+        "x_axis": {
+          "minLength": 1,
+          "title": "X Axis",
+          "type": "string"
+        },
+        "y_axis": {
+          "minLength": 1,
+          "title": "Y Axis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "x_axis",
+        "y_axis",
+        "items"
+      ],
+      "title": "QuadrantInfographic",
+      "type": "object"
+    },
+    "QuadrantItem": {
+      "properties": {
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "enum": [
+                "person",
+                "team",
+                "organization",
+                "target",
+                "risk",
+                "cost",
+                "quality",
+                "data",
+                "cloud",
+                "device",
+                "security",
+                "process",
+                "time",
+                "growth",
+                "decline",
+                "check",
+                "warning",
+                "idea",
+                "service",
+                "network",
+                "database",
+                "document",
+                "settings",
+                "delivery"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "label",
+        "x",
+        "y"
+      ],
+      "title": "QuadrantItem",
+      "type": "object"
+    },
+    "SectionSlide": {
+      "properties": {
+        "index": {
+          "minimum": 1,
+          "title": "Index",
+          "type": "integer"
+        },
+        "layout": {
+          "const": "section",
+          "title": "Layout",
+          "type": "string"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtitle"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "index",
+        "title"
+      ],
+      "title": "SectionSlide",
+      "type": "object"
+    },
+    "TableCellSpan": {
+      "properties": {
+        "area": {
+          "default": "body",
+          "enum": [
+            "header",
+            "body"
+          ],
+          "title": "Area",
+          "type": "string"
+        },
+        "col": {
+          "description": "合并区域起始列的 0 起始索引。",
+          "minimum": 0,
+          "title": "Col",
+          "type": "integer"
+        },
+        "colspan": {
+          "default": 1,
+          "description": "合并区域覆盖的列数量，不是结束列索引。",
+          "minimum": 1,
+          "title": "Colspan",
+          "type": "integer"
+        },
+        "row": {
+          "description": "合并区域起始行的 0 起始索引；header 区固定从 0 行开始。",
+          "minimum": 0,
+          "title": "Row",
+          "type": "integer"
+        },
+        "rowspan": {
+          "default": 1,
+          "description": "合并区域覆盖的行数量，不是结束行索引。",
+          "minimum": 1,
+          "title": "Rowspan",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "row",
+        "col"
+      ],
+      "title": "TableCellSpan",
+      "type": "object"
+    },
+    "TableColumnGroup": {
+      "properties": {
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "span": {
+          "description": "分组覆盖的列数量，不是结束列索引。",
+          "minimum": 1,
+          "title": "Span",
+          "type": "integer"
+        },
+        "start_col": {
+          "description": "分组起始列的 0 起始索引。",
+          "minimum": 0,
+          "title": "Start Col",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "start_col",
+        "span"
+      ],
+      "title": "TableColumnGroup",
+      "type": "object"
+    },
+    "TableRowGroup": {
+      "properties": {
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "span": {
+          "description": "分组覆盖的数据行数量，不是结束行索引。",
+          "minimum": 1,
+          "title": "Span",
+          "type": "integer"
+        },
+        "start_row": {
+          "description": "分组起始数据行的 0 起始索引。",
+          "minimum": 0,
+          "title": "Start Row",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "start_row",
+        "span"
+      ],
+      "title": "TableRowGroup",
+      "type": "object"
+    },
+    "TableSlide": {
+      "properties": {
+        "layout": {
+          "const": "table",
+          "title": "Layout",
+          "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/DeckTable"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "table"
+      ],
+      "title": "TableSlide",
+      "type": "object"
+    },
+    "TimelineMilestone": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "可选的里程碑说明；不得编造日期、状态或结果。",
+          "title": "Description"
+        },
+        "label": {
+          "description": "时间或里程碑标签，例如 2026 Q3、7月或 M1。",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "status": {
+          "default": "planned",
+          "description": "里程碑状态；数组内按 completed、current、planned 的时间顺序排列。",
+          "enum": [
+            "completed",
+            "current",
+            "planned"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "description": "该时间节点对应的事件或阶段名称。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "title"
+      ],
+      "title": "TimelineMilestone",
+      "type": "object"
+    },
+    "TimelineSlide": {
+      "properties": {
+        "layout": {
+          "const": "timeline",
+          "description": "固定为 timeline，仅表达带明确时间标签的阶段演进。",
+          "title": "Layout",
+          "type": "string"
+        },
+        "milestones": {
+          "description": "按时间顺序排列的 2-8 个里程碑；不用于表达精确 Gantt 的持续时间或依赖关系。",
+          "items": {
+            "$ref": "#/$defs/TimelineMilestone"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Milestones",
+          "type": "array"
+        },
+        "orientation": {
+          "default": "horizontal",
+          "description": "里程碑排列方向；密集纵向时间线可能触发 HW-W03 人工拆分提示。",
+          "enum": [
+            "horizontal",
+            "vertical"
+          ],
+          "title": "Orientation",
+          "type": "string"
+        },
+        "title": {
+          "description": "结论式页面标题，说明阶段演进带来的判断。",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "milestones"
+      ],
+      "title": "TimelineSlide",
+      "type": "object"
+    },
+    "TitleBulletsSlide": {
+      "properties": {
+        "bullets": {
+          "items": {
+            "$ref": "#/$defs/ListItem"
+          },
+          "maxItems": 7,
+          "minItems": 1,
+          "title": "Bullets",
+          "type": "array"
+        },
+        "layout": {
+          "const": "title_bullets",
+          "title": "Layout",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "bullets"
+      ],
+      "title": "TitleBulletsSlide",
+      "type": "object"
+    },
+    "TwoColumnSlide": {
+      "properties": {
+        "layout": {
+          "const": "two_column",
+          "title": "Layout",
+          "type": "string"
+        },
+        "left": {
+          "$ref": "#/$defs/ColumnContent"
+        },
+        "right": {
+          "$ref": "#/$defs/ColumnContent"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout",
+        "title",
+        "left",
+        "right"
+      ],
+      "title": "TwoColumnSlide",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "ir_type": {
+      "const": "deck",
+      "title": "Ir Type",
+      "type": "string"
+    },
+    "ir_version": {
+      "const": "2.2",
+      "title": "Ir Version",
+      "type": "string"
+    },
+    "meta": {
+      "$ref": "#/$defs/DeckMeta"
+    },
+    "slides": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "agenda": "#/$defs/AgendaSlide",
+            "architecture_diagram": "#/$defs/ArchitectureDiagramSlide",
+            "cards": "#/$defs/CardsSlide",
+            "chart": "#/$defs/ChartSlide",
+            "composite": "#/$defs/CompositeSlide",
+            "conclusion": "#/$defs/ConclusionSlide",
+            "cover": "#/$defs/CoverSlide",
+            "image": "#/$defs/ImageSlide",
+            "image_grid": "#/$defs/ImageGridSlide",
+            "image_text": "#/$defs/ImageTextSlide",
+            "infographic": "#/$defs/InfographicSlide",
+            "process_flow": "#/$defs/ProcessFlowSlide",
+            "section": "#/$defs/SectionSlide",
+            "table": "#/$defs/TableSlide",
+            "timeline": "#/$defs/TimelineSlide",
+            "title_bullets": "#/$defs/TitleBulletsSlide",
+            "two_column": "#/$defs/TwoColumnSlide"
+          },
+          "propertyName": "layout"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/CoverSlide"
+          },
+          {
+            "$ref": "#/$defs/AgendaSlide"
+          },
+          {
+            "$ref": "#/$defs/SectionSlide"
+          },
+          {
+            "$ref": "#/$defs/TitleBulletsSlide"
+          },
+          {
+            "$ref": "#/$defs/TwoColumnSlide"
+          },
+          {
+            "$ref": "#/$defs/TableSlide"
+          },
+          {
+            "$ref": "#/$defs/CardsSlide"
+          },
+          {
+            "$ref": "#/$defs/ChartSlide"
+          },
+          {
+            "$ref": "#/$defs/ArchitectureDiagramSlide"
+          },
+          {
+            "$ref": "#/$defs/ProcessFlowSlide"
+          },
+          {
+            "$ref": "#/$defs/TimelineSlide"
+          },
+          {
+            "$ref": "#/$defs/ImageSlide"
+          },
+          {
+            "$ref": "#/$defs/ImageTextSlide"
+          },
+          {
+            "$ref": "#/$defs/ImageGridSlide"
+          },
+          {
+            "$ref": "#/$defs/InfographicSlide"
+          },
+          {
+            "$ref": "#/$defs/ConclusionSlide"
+          },
+          {
+            "$ref": "#/$defs/CompositeSlide"
+          }
+        ]
+      },
+      "maxItems": 30,
+      "minItems": 1,
+      "title": "Slides",
+      "type": "array"
+    }
+  },
+  "required": [
+    "ir_type",
+    "ir_version",
+    "meta",
+    "slides"
+  ],
+  "title": "DeckIR",
+  "type": "object"
+}

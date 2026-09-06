@@ -477,6 +477,49 @@ def test_render_horizontal_data_bar_kpi_and_image_slot_as_editable_objects(tmp_p
     assert not {"HW-W01", "HW-W02", "HW-W06", "HW-W07", "HW-W09"} & {item.code for item in report.items}
 
 
+def test_render_kpi_value_keeps_number_and_unit_on_one_line(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.rendering.pptx_renderer import render_deck_ir
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.2",
+            "meta": {"title": "KPI 单位", "classification": "公开"},
+            "slides": [
+                {
+                    "layout": "cards",
+                    "title": "KPI 数值与单位保持同一视觉单元",
+                    "variant": "kpi",
+                        "cards": [
+                            {"title": "下行峰值吞吐", "desc": "1.18 Gbps", "tag": "目标 ≥ 1.0 Gbps"},
+                            {"title": "协同感知时延", "desc": "16.4 ms", "tag": "目标 ≤ 20 ms"},
+                            {"title": "高速切换中断", "desc": "38 ms", "tag": "目标 ≤ 50 ms"},
+                            {"title": "典型业务功耗", "desc": "10.7 W", "tag": "目标 ≤ 12 W"},
+                        ],
+                }
+            ],
+        }
+    )
+
+    output = render_deck_ir(deck, tmp_path / "kpi-unit.pptx")
+    slide = Presentation(str(output)).slides[0]
+    value_paragraphs = [
+        shape.text_frame.paragraphs[0]
+        for shape in slide.shapes
+        if shape.name.startswith("HW_RENDERED_TEXT:KPI_CARD:")
+    ]
+    values = [paragraph.text for paragraph in value_paragraphs]
+    sizes = [paragraph.runs[0].font.size.pt for paragraph in value_paragraphs]
+
+    assert values == ["1.18\u00a0Gbps", "16.4\u00a0ms", "38\u00a0ms", "10.7\u00a0W"]
+    assert all("\n" not in value for value in values)
+    assert 20 <= sizes[0] < sizes[1] <= 28
+    report = check_pptx(output, classification="公开")
+    assert report.summary["warnings"] == 0
+
+
 def test_render_deck_ir_uses_theme_layout_coordinates(tmp_path: Path, monkeypatch) -> None:
     from app.ir.deck_ir import DeckIR
     from app.lint.pptx_lint import check_pptx
@@ -1188,6 +1231,75 @@ def test_render_architecture_falls_back_with_warning_when_graphviz_is_unavailabl
     assert all(_is_orthogonal_connector(shape) for shape in edge_segments)
     assert not any(_connector_crosses_unrelated_node(segment, node) for segment in edge_segments for node in nodes)
     assert all(_label_is_near_own_edge(label, slide) for label in labels)
+
+
+def test_render_architecture_fallback_expands_ungrouped_technical_nodes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.rendering.architecture_graphviz import GraphvizLayoutUnavailable
+    from app.rendering.typography import estimate_text_height_in
+    import app.rendering.pptx_renderer as renderer
+
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.2",
+            "meta": {"title": "技术架构", "classification": "公开", "theme": "hw-report"},
+            "slides": [
+                {
+                    "layout": "architecture_diagram",
+                    "title": "四层平台贯通业务接口、协议处理、数字基带与射频收发",
+                    "nodes": [
+                        {"id": "business", "text": "业务接口层\n以太网｜PCIe｜CAN FD", "type": "primary"},
+                        {"id": "protocol", "text": "协议软件层\nRRC｜PDCP｜RLC｜MAC", "type": "module"},
+                        {
+                            "id": "baseband",
+                            "text": "数字基带层\n调制解调｜信道编码｜MIMO 检测",
+                            "type": "emphasis",
+                        },
+                        {"id": "rf", "text": "射频收发层\n多频段收发器｜天线切换单元", "type": "data"},
+                    ],
+                    "edges": [
+                        {"from": "business", "to": "protocol", "label": "数据汇聚 / 分发", "direction": "both"},
+                        {"from": "protocol", "to": "baseband", "label": "协议处理", "direction": "both"},
+                        {"from": "baseband", "to": "rf", "label": "物理层处理", "direction": "both"},
+                    ],
+                    "groups": [],
+                }
+            ],
+        }
+    )
+
+    def unavailable(*_args, **_kwargs):
+        raise GraphvizLayoutUnavailable("dot executable is missing")
+
+    monkeypatch.setattr(renderer, "layout_architecture_with_graphviz", unavailable)
+    with pytest.warns(RuntimeWarning, match="using deterministic fallback"):
+        output = renderer.render_deck_ir(deck, tmp_path / "architecture-technical-fallback.pptx")
+
+    slide = Presentation(str(output)).slides[0]
+    nodes = [shape for shape in slide.shapes if shape.name.startswith("HW_ARCH_NODE:")]
+    theme = json.loads((ROOT / "backend/app/rendering/themes/hw-report.json").read_text(encoding="utf-8"))
+    layout = theme["layouts"]["architecture_diagram"]
+
+    assert len(nodes) == 4
+    assert all(shape.width / 914400 >= layout["node_width_in"] * 1.34 for shape in nodes)
+    assert all(shape.height / 914400 >= layout["node_height_in"] * 1.39 for shape in nodes)
+    assert not any(_overlap(first, second) for index, first in enumerate(nodes) for second in nodes[index + 1 :])
+    for shape in nodes:
+        font_size_pt = shape.text_frame.paragraphs[0].runs[0].font.size.pt
+        estimated_height = estimate_text_height_in(
+            shape.text,
+            font_size_pt,
+            width_in=shape.width / 914400,
+            line_spacing=theme["typography"]["line_spacing"],
+            baseline_pt=theme["grid"]["baseline_pt"],
+            horizontal_margin_in=layout["node_text_margin_in"],
+            vertical_margin_in=layout["node_text_margin_in"],
+        )
+        assert estimated_height <= shape.height / 914400
 
 
 @pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz dot is not installed")

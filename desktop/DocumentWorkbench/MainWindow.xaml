@@ -552,7 +552,8 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="ServiceDot" Width="8" Height="8" Fill="{DynamicResource WarningBrush}" Margin="0,1,8,0" />
-                            <TextBlock x:Name="ServiceStateText" Text="正在启动" Foreground="{DynamicResource NavigationTextBrush}" FontSize="12" />
+                            <TextBlock x:Name="ServiceStateText" Text="正在启动" Foreground="{DynamicResource NavigationTextBrush}" FontSize="12"
+                                       automation:AutomationProperties.AutomationId="service-state" />
                         </StackPanel>
                         <TextBlock x:Name="GeneratorStateText" Text="生成器：stub" Foreground="{DynamicResource NavigationMutedTextBrush}" FontSize="12" Margin="16,5,0,0" />
                     </StackPanel>
@@ -593,7 +594,7 @@
                             <StackPanel>
                                 <TextBlock Text="输入与输出" Style="{StaticResource SectionTitle}" />
                                 <TextBlock Text="输入资料" Style="{StaticResource FieldLabel}" />
-                                <Grid Margin="0,0,0,14">
+                                <Grid Margin="0,0,0,6">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
@@ -654,8 +655,16 @@
                                              automation:AutomationProperties.Name="PPT 模板路径" />
                                     <Button Grid.Column="1" Content="选择模板" Margin="8,0,0,0" Click="BrowseTemplate_Click"
                                             automation:AutomationProperties.AutomationId="select-template" />
-                                    <Button Grid.Column="2" Content="移除" Margin="8,0,0,0" Click="RemoveTemplate_Click" />
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0">
+                                        <Button x:Name="RepairTemplateButton" Content="生成安全副本" Click="RepairTemplate_Click"
+                                                Visibility="Collapsed"
+                                                automation:AutomationProperties.AutomationId="repair-template" />
+                                        <Button Content="移除" Margin="8,0,0,0" Click="RemoveTemplate_Click" />
+                                    </StackPanel>
                                 </Grid>
+                                <TextBlock x:Name="TemplateValidationText" Style="{StaticResource MutedText}"
+                                           Visibility="Collapsed" TextWrapping="Wrap" Margin="0,0,0,14"
+                                           automation:AutomationProperties.AutomationId="template-validation" />
                                 <TextBlock Text="图片资产" Style="{StaticResource FieldLabel}" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -780,6 +789,9 @@
                         <StackPanel>
                             <TextBlock Text="任务" Style="{StaticResource PageTitle}" />
                             <TextBlock Text="本机最近 24 小时的任务状态与结果。" Style="{StaticResource MutedText}" />
+                            <TextBlock x:Name="TasksSyncStatusText" Style="{StaticResource MutedText}" Margin="0,8,0,0"
+                                       TextWrapping="Wrap" Visibility="Collapsed"
+                                       automation:AutomationProperties.AutomationId="tasks-sync-status" />
                         </StackPanel>
                         <Button Content="刷新" HorizontalAlignment="Right" VerticalAlignment="Top" Click="RefreshTasks_Click"
                                 automation:AutomationProperties.AutomationId="refresh-tasks" />
@@ -1027,6 +1039,9 @@
                             <StackPanel>
                                 <TextBlock Text="诊断" Style="{StaticResource PageTitle}" />
                                 <TextBlock Text="运行状态与本机依赖，不显示凭据或文档正文。" Style="{StaticResource MutedText}" />
+                                <TextBlock x:Name="DiagnosticsStatusText" Style="{StaticResource MutedText}" Margin="0,8,0,0"
+                                           TextWrapping="Wrap" Visibility="Collapsed"
+                                           automation:AutomationProperties.AutomationId="diagnostics-status" />
                             </StackPanel>
                             <Button Content="刷新诊断" HorizontalAlignment="Right" VerticalAlignment="Top" Click="RefreshDiagnostics_Click"
                                     automation:AutomationProperties.AutomationId="refresh-diagnostics" />

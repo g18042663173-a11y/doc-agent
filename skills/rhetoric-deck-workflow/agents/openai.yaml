@@ -1,0 +1,7 @@
+interface:
+  display_name: "修辞结构幻灯片工作流"
+  short_description: "抽取论证骨架并以安全源版式或 DeckIR 重写演示文稿"
+  default_prompt: "Use $rhetoric-deck-workflow to extract or select a rhetorical skeleton, fit only my material, and produce a sanitized source-shell PPTX or validated DeckIR."
+policy:
+  allow_implicit_invocation: false
+

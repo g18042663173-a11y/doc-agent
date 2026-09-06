@@ -37,6 +37,10 @@ public partial class MainWindow : Window
     private WorkbenchSettings _settings = new();
     private string? _inputPath;
     private string? _templatePath;
+    private TemplateValidationState _templateValidationState;
+    private TemplateFingerprint? _validatedTemplateFingerprint;
+    private int _templateValidationGeneration;
+    private bool _templateRepairAvailable;
     private readonly ObservableCollection<string> _assetPaths = [];
     private JobInfo? _currentJob;
     private long _pollGeneration;
@@ -45,6 +49,18 @@ public partial class MainWindow : Window
     private bool _busy;
     private bool _ngaDraftTested;
     private int _backendRestarts;
+    private DateTime? _lastDiagnosticsUpdatedAt;
+    private readonly SemaphoreSlim _backendRestartGate = new(1, 1);
+
+    private enum TemplateValidationState
+    {
+        None,
+        Validating,
+        Valid,
+        Invalid,
+    }
+
+    private readonly record struct TemplateFingerprint(long Length, DateTime LastWriteTimeUtc);
 
     public MainWindow(BackendProcessHost backend, SettingsStore settingsStore)
     {
@@ -176,7 +192,6 @@ public partial class MainWindow : Window
         }
 
         SidebarVersionText.Text = $"本地服务 v{version.AppVersion}";
-        _serviceReady = true;
         SetServiceState(true, "本地服务已连接");
 
         if (!_settings.NgaEnabled)
@@ -243,6 +258,8 @@ public partial class MainWindow : Window
         ApplyAppearance(_settings.Appearance);
         SelectComboByTag(DefaultTargetComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTarget) ? "deck" : _settings.DefaultTarget);
         SelectComboByText(DefaultDepthComboBox, string.IsNullOrWhiteSpace(_settings.DefaultDepth) ? "标准" : _settings.DefaultDepth);
+        SelectComboByTag(TargetComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTarget) ? "deck" : _settings.DefaultTarget);
+        SelectComboByText(DepthComboBox, string.IsNullOrWhiteSpace(_settings.DefaultDepth) ? "标准" : _settings.DefaultDepth);
         SelectComboByTag(DefaultThemeComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTheme) ? "hw_v1" : _settings.DefaultTheme);
         SelectComboByTag(GenerateThemeComboBox, string.IsNullOrWhiteSpace(_settings.DefaultTheme) ? "hw_v1" : _settings.DefaultTheme);
         NgaCliPathTextBox.Text = string.IsNullOrWhiteSpace(_settings.Nga.CliPath) ? "nga" : _settings.Nga.CliPath;
@@ -323,18 +340,39 @@ public partial class MainWindow : Window
 
     private void SetServiceState(bool connected, string text)
     {
+        _serviceReady = connected;
         ServiceDot.Fill = connected
             ? (Brush)FindResource("SuccessBrush")
             : (Brush)FindResource("DangerBrush");
         ServiceStateText.Text = text;
         TopbarStatusText.Text = text;
+        UpdateActionState();
+    }
+
+    private void SetTasksSyncStatus(string? text, bool warning = false)
+    {
+        TasksSyncStatusText.Text = text ?? string.Empty;
+        TasksSyncStatusText.Foreground = (Brush)FindResource(warning ? "WarningBrush" : "MutedTextBrush");
+        TasksSyncStatusText.Visibility = string.IsNullOrWhiteSpace(text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private void SetDiagnosticsStatus(string? text, bool warning = false)
+    {
+        DiagnosticsStatusText.Text = text ?? string.Empty;
+        DiagnosticsStatusText.Foreground = (Brush)FindResource(warning ? "WarningBrush" : "MutedTextBrush");
+        DiagnosticsStatusText.Visibility = string.IsNullOrWhiteSpace(text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void UpdateActionState()
     {
         var available = _serviceReady && !_generatorBlocked && !_busy && File.Exists(_inputPath);
+        var templateBlocksGeneration = TemplateBlocksGeneration();
         AnalyzeButton.IsEnabled = available;
-        GenerateButton.IsEnabled = available;
+        GenerateButton.IsEnabled = available && !templateBlocksGeneration;
         CancelButton.IsEnabled = _currentJob is { Status: "pending" or "running" };
         if (_generatorBlocked)
         {
@@ -353,6 +391,12 @@ public partial class MainWindow : Window
         else if (_busy)
         {
             GenerateGuardText.Text = "正在处理当前操作";
+        }
+        else if (templateBlocksGeneration)
+        {
+            GenerateGuardText.Text = _templateValidationState == TemplateValidationState.Validating
+                ? "正在检查所选 PPT 模板"
+                : "请先处理模板校验提示";
         }
         else
         {
@@ -373,6 +417,155 @@ public partial class MainWindow : Window
         DepthComboBox.IsEnabled = !busy;
         DefaultTargetComboBox.IsEnabled = !busy;
         DefaultDepthComboBox.IsEnabled = !busy;
+        RepairTemplateButton.IsEnabled = _templateRepairAvailable && !busy;
+    }
+
+    private bool TemplateBlocksGeneration() =>
+        CurrentTarget() == "deck" &&
+        !string.IsNullOrWhiteSpace(_templatePath) &&
+        _templateValidationState != TemplateValidationState.Valid;
+
+    private void SetTemplateValidationStatus(string? text, string brushResource = "MutedTextBrush")
+    {
+        TemplateValidationText.Text = text ?? string.Empty;
+        TemplateValidationText.Foreground = (Brush)FindResource(brushResource);
+        TemplateValidationText.Visibility = string.IsNullOrWhiteSpace(text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private void SetTemplateRepairAvailable(bool available)
+    {
+        _templateRepairAvailable = available;
+        RepairTemplateButton.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+        RepairTemplateButton.IsEnabled = available && !_busy;
+    }
+
+    private static bool IsRepairableHyperlinkFailure(WorkbenchApiException exception) =>
+        exception.Failure.Code == "E003" &&
+        (exception.Failure.Message.Contains("(hyperlink)", StringComparison.OrdinalIgnoreCase) ||
+         exception.Failure.Message.Contains("外部超链接", StringComparison.Ordinal));
+
+    private static bool TryGetTemplateFingerprint(string path, out TemplateFingerprint fingerprint)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists)
+            {
+                fingerprint = default;
+                return false;
+            }
+            fingerprint = new TemplateFingerprint(info.Length, info.LastWriteTimeUtc);
+            return true;
+        }
+        catch (IOException)
+        {
+            fingerprint = default;
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            fingerprint = default;
+            return false;
+        }
+    }
+
+    private async Task<bool> EnsureTemplateValidatedAsync()
+    {
+        var templatePath = _templatePath;
+        if (string.IsNullOrWhiteSpace(templatePath))
+        {
+            SetTemplateRepairAvailable(false);
+            return true;
+        }
+        if (!TryGetTemplateFingerprint(templatePath, out var fingerprint))
+        {
+            _templateValidationGeneration++;
+            _templateValidationState = TemplateValidationState.Invalid;
+            _validatedTemplateFingerprint = null;
+            SetTemplateValidationStatus("模板文件无法读取或已被移动，请重新选择。", "DangerBrush");
+            SetTemplateRepairAvailable(false);
+            UpdateActionState();
+            return false;
+        }
+        if (_templateValidationState == TemplateValidationState.Valid &&
+            _validatedTemplateFingerprint is TemplateFingerprint validated &&
+            validated == fingerprint)
+        {
+            return true;
+        }
+        if (_templateValidationState == TemplateValidationState.Validating)
+        {
+            return false;
+        }
+
+        var validationGeneration = ++_templateValidationGeneration;
+        _templateValidationState = TemplateValidationState.Validating;
+        _validatedTemplateFingerprint = null;
+        SetTemplateValidationStatus("正在检查模板安全性...", "MutedTextBrush");
+        SetTemplateRepairAvailable(false);
+        UpdateActionState();
+        try
+        {
+            var result = await _api.ValidateTemplateAsync(templatePath, _lifetime.Token);
+            if (validationGeneration != _templateValidationGeneration ||
+                !string.Equals(templatePath, _templatePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            if (!result.Valid || !TryGetTemplateFingerprint(templatePath, out fingerprint))
+            {
+                _templateValidationState = TemplateValidationState.Invalid;
+                SetTemplateValidationStatus("模板文件无法读取或已被替换，请重新选择。", "DangerBrush");
+                SetTemplateRepairAvailable(false);
+                return false;
+            }
+            _templateValidationState = TemplateValidationState.Valid;
+            _validatedTemplateFingerprint = fingerprint;
+            SetTemplateValidationStatus("模板安全校验通过，可以生成 PPT。", "SuccessBrush");
+            SetTemplateRepairAvailable(false);
+            return true;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            if (validationGeneration != _templateValidationGeneration ||
+                !string.Equals(templatePath, _templatePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            _templateValidationState = TemplateValidationState.Invalid;
+            _validatedTemplateFingerprint = null;
+            if (ex is WorkbenchApiException api)
+            {
+                var location = string.IsNullOrWhiteSpace(api.Failure.Location)
+                    ? "template_file"
+                    : api.Failure.Location;
+                SetTemplateValidationStatus(
+                    $"模板不可用（{api.Failure.Code}，定位：{location}）：{api.Failure.Message} {api.Failure.Suggestion}",
+                    "DangerBrush");
+                SetTemplateRepairAvailable(IsRepairableHyperlinkFailure(api));
+            }
+            else
+            {
+                SetTemplateValidationStatus($"模板安全检查暂不可用：{SafeFailureText(ex)}", "DangerBrush");
+                SetTemplateRepairAvailable(false);
+            }
+            ShowMessage("所选模板无法使用，请按下方提示处理。", true);
+            return false;
+        }
+        finally
+        {
+            if (validationGeneration == _templateValidationGeneration &&
+                string.Equals(templatePath, _templatePath, StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateActionState();
+            }
+        }
     }
 
     private void BrowseInput_Click(object sender, RoutedEventArgs e)
@@ -400,7 +593,7 @@ public partial class MainWindow : Window
         UpdateActionState();
     }
 
-    private void BrowseTemplate_Click(object sender, RoutedEventArgs e)
+    private async void BrowseTemplate_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
@@ -419,7 +612,11 @@ public partial class MainWindow : Window
             return;
         }
         _templatePath = info.FullName;
+        _templateValidationState = TemplateValidationState.None;
+        _validatedTemplateFingerprint = null;
+        SetTemplateRepairAvailable(false);
         TemplateFileTextBox.Text = $"{info.Name}  ·  {FormatBytes(info.Length)}";
+        await EnsureTemplateValidatedAsync();
     }
 
     private void RemoveTemplate_Click(object sender, RoutedEventArgs e)
@@ -428,8 +625,79 @@ public partial class MainWindow : Window
         {
             return;
         }
+        _templateValidationGeneration++;
         _templatePath = null;
+        _templateValidationState = TemplateValidationState.None;
+        _validatedTemplateFingerprint = null;
+        SetTemplateRepairAvailable(false);
         TemplateFileTextBox.Text = "使用默认主题";
+        SetTemplateValidationStatus(null);
+        UpdateActionState();
+    }
+
+    private async void RepairTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        var sourcePath = _templatePath;
+        if (_busy || !_templateRepairAvailable || string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+        {
+            return;
+        }
+        var dialog = new SaveFileDialog
+        {
+            Title = "保存模板安全副本",
+            FileName = $"{Path.GetFileNameWithoutExtension(sourcePath)}_安全副本.pptx",
+            Filter = "PowerPoint 模板 (*.pptx)|*.pptx",
+            OverwritePrompt = true,
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        var repairGeneration = ++_templateValidationGeneration;
+        SetTemplateRepairAvailable(false);
+        SetTemplateValidationStatus("正在生成不含外部超链接的安全副本...", "MutedTextBrush");
+        try
+        {
+            await _api.SanitizeTemplateAsync(sourcePath, dialog.FileName, _lifetime.Token);
+            if (repairGeneration != _templateValidationGeneration ||
+                !string.Equals(sourcePath, _templatePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            var info = new FileInfo(dialog.FileName);
+            _templatePath = info.FullName;
+            _templateValidationState = TemplateValidationState.None;
+            _validatedTemplateFingerprint = null;
+            TemplateFileTextBox.Text = $"{info.Name}  ·  {FormatBytes(info.Length)}";
+            await EnsureTemplateValidatedAsync();
+            if (_templateValidationState == TemplateValidationState.Valid)
+            {
+                ShowMessage("模板安全副本已保存并通过校验。", false);
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (repairGeneration == _templateValidationGeneration &&
+                string.Equals(sourcePath, _templatePath, StringComparison.OrdinalIgnoreCase))
+            {
+                _templateValidationState = TemplateValidationState.Invalid;
+                SetTemplateValidationStatus($"无法生成模板安全副本：{SafeFailureText(ex)}", "DangerBrush");
+                SetTemplateRepairAvailable(ex is WorkbenchApiException api && IsRepairableHyperlinkFailure(api));
+                ShowMessage("模板安全副本生成失败，请按下方提示处理。", true);
+            }
+        }
+        finally
+        {
+            if (repairGeneration == _templateValidationGeneration &&
+                string.Equals(sourcePath, _templatePath, StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateActionState();
+            }
+        }
     }
 
     private void AddAssets_Click(object sender, RoutedEventArgs e)
@@ -512,6 +780,10 @@ public partial class MainWindow : Window
         if (!File.Exists(_inputPath) || _generatorBlocked || !_serviceReady)
         {
             UpdateActionState();
+            return;
+        }
+        if (CurrentTarget() == "deck" && !await EnsureTemplateValidatedAsync())
+        {
             return;
         }
         SetBusy(true);
@@ -626,31 +898,11 @@ public partial class MainWindow : Window
 
     private async Task StopPollingForDeadBackendAsync()
     {
-        // The backend pythonw process died (crash or external kill). Instead of
-        // a terminal "restart the app" message, try to restart the backend in
-        // place (bounded attempts) and re-initialize; only give up after the
-        // retries are exhausted.
-        try
+        if (await TryRecoverStoppedBackendAsync())
         {
-            if (_backendRestarts < 2)
-            {
-                _backendRestarts++;
-                ProgressTitleText.Text = "本地服务已停止，正在自动重启…";
-                SetServiceState(false, "本地服务已停止，正在自动重启…");
-                var restarted = await _backend.RestartAsync(_lifetime.Token);
-                var previous = _backend;
-                _backend = restarted;
-                previous.Dispose();
-                _api = new WorkbenchApiClient(restarted.CreateHttpClient());
-                await InitializeServiceAsync();
-                await RefreshJobsAsync();
-                return;
-            }
+            return;
         }
-        catch (Exception)
-        {
-            // Fall through to the terminal message when the restart fails.
-        }
+
         SetBusy(false);
         ProgressTitleText.Text = "本地服务已停止";
         SetServiceState(false, "本地服务已停止，请重启工作台");
@@ -663,6 +915,101 @@ public partial class MainWindow : Window
             // A dead backend cannot refresh the job list; ignore.
         }
     }
+
+    private async Task<bool> TryRecoverStoppedBackendAsync()
+    {
+        if (_backend.IsProcessAlive())
+        {
+            return true;
+        }
+
+        try
+        {
+            await _backendRestartGate.WaitAsync(_lifetime.Token);
+            try
+            {
+                // Another UI action may have restarted the host while this
+                // caller was waiting for the recovery gate.
+                if (_backend.IsProcessAlive())
+                {
+                    return true;
+                }
+                if (_backendRestarts >= 2)
+                {
+                    return false;
+                }
+
+                _backendRestarts++;
+                ProgressTitleText.Text = "本地服务已停止，正在自动重启…";
+                SetServiceState(false, "本地服务已停止，正在自动重启…");
+                var previousApi = _api;
+                var restarted = await _backend.RestartAsync(_lifetime.Token);
+                _backend = restarted;
+                _api = new WorkbenchApiClient(restarted.CreateHttpClient());
+                previousApi.Dispose();
+                await InitializeServiceAsync();
+                try
+                {
+                    await RefreshJobsAsync(allowRecovery: false);
+                }
+                catch (Exception)
+                {
+                    // Diagnostics and generation can continue; the task list
+                    // will be refreshed by its next explicit navigation.
+                }
+                return true;
+            }
+            finally
+            {
+                _backendRestartGate.Release();
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private bool IsBackendRecoveryExhausted() =>
+        !_backend.IsProcessAlive() && _backendRestarts >= 2;
+
+    private async Task<T> ReadApiWithRecoveryAsync<T>(
+        Func<WorkbenchApiClient, CancellationToken, Task<T>> read,
+        bool allowRecovery = true)
+    {
+        if (!allowRecovery)
+        {
+            return await read(_api, _lifetime.Token);
+        }
+
+        try
+        {
+            return await read(_api, _lifetime.Token);
+        }
+        catch (HttpRequestException) when (!_backend.IsProcessAlive())
+        {
+            if (await TryRecoverStoppedBackendAsync())
+            {
+                return await read(_api, _lifetime.Token);
+            }
+            throw;
+        }
+        catch (TaskCanceledException) when (!_lifetime.IsCancellationRequested && !_backend.IsProcessAlive())
+        {
+            if (await TryRecoverStoppedBackendAsync())
+            {
+                return await read(_api, _lifetime.Token);
+            }
+            throw;
+        }
+    }
+
+    private Task<DiagnosticsInfo> GetDiagnosticsWithRecoveryAsync() =>
+        ReadApiWithRecoveryAsync((api, cancellationToken) => api.GetDiagnosticsAsync(cancellationToken));
 
     private void ShowJob(JobInfo job)
     {
@@ -842,31 +1189,69 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RefreshJobsAsync()
+    private async Task RefreshJobsAsync(bool allowRecovery = true)
     {
+        SetTasksSyncStatus("正在同步本机任务…");
         var selectedJobId = (JobsDataGrid.SelectedItem as JobInfo)?.JobId;
-        var jobs = await _api.GetJobsAsync(_lifetime.Token);
-        Jobs.Clear();
-        foreach (var job in jobs)
+        try
         {
-            Jobs.Add(job);
+            var jobs = await ReadApiWithRecoveryAsync(
+                (api, cancellationToken) => api.GetJobsAsync(cancellationToken),
+                allowRecovery);
+            Jobs.Clear();
+            foreach (var job in jobs)
+            {
+                Jobs.Add(job);
+            }
+            if (selectedJobId is not null)
+            {
+                JobsDataGrid.SelectedItem = Jobs.FirstOrDefault(j => j.JobId == selectedJobId);
+            }
+            SetTasksSyncStatus(null);
+            SetServiceState(true, "本地服务已连接");
         }
-        if (selectedJobId is not null)
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
-            JobsDataGrid.SelectedItem = Jobs.FirstOrDefault(j => j.JobId == selectedJobId);
+            SetTasksSyncStatus(null);
+            throw;
+        }
+        catch
+        {
+            var recoveryExhausted = IsBackendRecoveryExhausted();
+            SetServiceState(
+                false,
+                recoveryExhausted ? "本地服务未能恢复，请重启工作台" : "本地服务暂不可用");
+            SetTasksSyncStatus(
+                Jobs.Count > 0
+                    ? recoveryExhausted
+                        ? "任务列表暂时无法同步。当前显示的是上次加载的结果，状态可能已变化；请重新启动工作台后重试。"
+                        : "任务列表暂时无法同步。当前显示的是上次加载的结果，状态可能已变化；请稍后点击“刷新”重试。"
+                    : recoveryExhausted
+                        ? "暂时无法读取任务列表。请重新启动工作台后重试。"
+                        : "暂时无法读取任务列表。请稍后点击“刷新”重试。",
+                warning: true);
+            throw;
         }
     }
 
-    private async void RefreshTasks_Click(object sender, RoutedEventArgs e)
+    private async Task RefreshTasksForDisplayAsync()
     {
         try
         {
             await RefreshJobsAsync();
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
-            ShowOperationError(ex, "任务列表刷新失败");
         }
+        catch (Exception)
+        {
+            // RefreshJobsAsync has already left an actionable page-level status.
+        }
+    }
+
+    private async void RefreshTasks_Click(object sender, RoutedEventArgs e)
+    {
+        await RefreshTasksForDisplayAsync();
     }
 
     private void OpenSelectedTask_Click(object sender, RoutedEventArgs e)
@@ -1372,10 +1757,10 @@ public partial class MainWindow : Window
 
     private async Task RefreshDiagnosticsAsync()
     {
+        SetDiagnosticsStatus("正在读取本机运行状态…");
         try
         {
-            var info = await _api.GetDiagnosticsAsync(_lifetime.Token);
-            var generator = await _api.GetGeneratorSettingsAsync(_lifetime.Token);
+            var info = await GetDiagnosticsWithRecoveryAsync();
             DiagnosticAppVersion.Text = info.Application.Version;
             DiagnosticApiVersion.Text = $"API {info.Application.ApiVersion} · DeckIR {info.Application.DeckIrVersion}";
             DiagnosticGenerator.Text = $"{info.Generator.Name} · 修订 {info.Generator.Revision}";
@@ -1385,14 +1770,49 @@ public partial class MainWindow : Window
             DiagnosticGraphviz.Text = info.Graphviz.Available
                 ? $"可用 · {info.Graphviz.Source} · {info.Graphviz.Version ?? "版本未知"}"
                 : "未安装 · 使用确定性降级布局";
-            DiagnosticNga.Text = generator.Active.Name == "nga"
-                ? $"已启用 · 修订 {generator.Active.Revision}"
-                : _generatorBlocked ? "配置异常 · 生成已阻断" : "未启用";
-            DiagnosticUpdatedText.Text = $"更新时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+            DiagnosticNga.Text = info.Generator.Name == "nga"
+                ? $"已启用 · 修订 {info.Generator.Revision}"
+                : _generatorBlocked ? "配置异常 · 生成已阻断"
+                : info.Generator.Name == "codex" ? "未启用 · 当前使用 opencode-go"
+                : "未启用";
+            _lastDiagnosticsUpdatedAt = DateTime.Now;
+            DiagnosticUpdatedText.Text = $"更新时间：{_lastDiagnosticsUpdatedAt:yyyy-MM-dd HH:mm:ss}";
+            SetDiagnosticsStatus(null);
+            SetServiceState(true, "本地服务已连接");
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
-            ShowOperationError(ex, "诊断刷新失败");
+            SetDiagnosticsStatus(null);
+        }
+        catch (Exception)
+        {
+            var recoveryExhausted = IsBackendRecoveryExhausted();
+            SetServiceState(
+                false,
+                recoveryExhausted ? "本地服务未能恢复，请重启工作台" : "本地服务暂不可用");
+            SetDiagnosticsStatus(
+                recoveryExhausted
+                    ? _lastDiagnosticsUpdatedAt is null
+                        ? "本地服务未能恢复。请重新启动工作台后重试。"
+                        : "本地服务未能恢复。已保留上次成功的诊断结果；请重新启动工作台后重试。"
+                    : "暂时无法读取诊断信息。服务恢复后，请点击“刷新诊断”重试。",
+                warning: true);
+            if (_lastDiagnosticsUpdatedAt is null)
+            {
+                DiagnosticAppVersion.Text = "暂不可用";
+                DiagnosticApiVersion.Text = "暂不可用";
+                DiagnosticGenerator.Text = "暂不可用";
+                DiagnosticQueue.Text = "暂不可用";
+                DiagnosticJobs.Text = "暂不可用";
+                DiagnosticDisk.Text = "暂不可用";
+                DiagnosticGraphviz.Text = "暂不可用";
+                DiagnosticNga.Text = "暂不可用";
+                DiagnosticUpdatedText.Text = "尚未读取到诊断信息。";
+            }
+            else
+            {
+                DiagnosticUpdatedText.Text = $"上次成功更新：{_lastDiagnosticsUpdatedAt:yyyy-MM-dd HH:mm:ss}";
+            }
         }
     }
 
@@ -1406,7 +1826,14 @@ public partial class MainWindow : Window
         _ = _settingsStore.SaveAsync(_settings);
     }
 
-    private void TargetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateDeckOptionsVisibility();
+    private void TargetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateDeckOptionsVisibility();
+        if (GenerateButton is not null)
+        {
+            UpdateActionState();
+        }
+    }
 
     private void AdvancedToggle_Click(object sender, RoutedEventArgs e) => UpdateDeckOptionsVisibility();
 
@@ -1479,6 +1906,14 @@ public partial class MainWindow : Window
         {
             return $"{api.Failure.Code} · {api.Failure.Message} {api.Failure.Suggestion}";
         }
+        if (exception is HttpRequestException)
+        {
+            return "本地服务暂不可用，请稍后重试。";
+        }
+        if (exception is TaskCanceledException)
+        {
+            return "本地服务响应超时，请稍后重试。";
+        }
         var value = exception.Message.Replace('\r', ' ').Replace('\n', ' ').Trim();
         return value.Length <= 500 ? value : value[..500];
     }
@@ -1513,7 +1948,7 @@ public partial class MainWindow : Window
     private async void TasksNavButton_Click(object sender, RoutedEventArgs e)
     {
         SelectMainPage("tasks");
-        await RefreshJobsAsync();
+        await RefreshTasksForDisplayAsync();
     }
     private void SettingsNavButton_Click(object sender, RoutedEventArgs e) => SelectMainPage("settings");
     private async void DiagnosticsNavButton_Click(object sender, RoutedEventArgs e)

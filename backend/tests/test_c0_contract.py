@@ -259,6 +259,25 @@ def test_verify_stops_on_schema_failure_without_rewriting(
     assert "schema verification failed: injected drift" in capsys.readouterr().err
 
 
+def test_verify_configures_utf8_console_output() -> None:
+    import scripts.verify as verify
+
+    class ReconfigurableStream:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, str]] = []
+
+        def reconfigure(self, **kwargs: str) -> None:
+            self.calls.append(kwargs)
+
+    stdout = ReconfigurableStream()
+    stderr = ReconfigurableStream()
+
+    verify.configure_console_output(stdout, stderr, object())
+
+    assert stdout.calls == [{"encoding": "utf-8", "errors": "backslashreplace"}]
+    assert stderr.calls == [{"encoding": "utf-8", "errors": "backslashreplace"}]
+
+
 def test_word_schema_requires_non_empty_blocks() -> None:
     schema = load_schema("word_ir")
 

@@ -22,6 +22,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.generators.stub import StubGenerator
+from app.template.package import validate_template_package
 from app.web_api import APP_VERSION, create_api_app
 
 
@@ -109,7 +110,7 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             source = fixture_root / "report.md"
             source.write_text("# Workbench reliability\n\n- first run fails\n- second run succeeds\n", encoding="utf-8")
             template = _write_template(fixture_root / "template.pptx")
-            unsafe_template = _write_ole_template(fixture_root / "template-with-ole.pptx")
+            unsafe_template = _write_external_hyperlink_template(fixture_root / "template-with-link.pptx")
             page.goto(f"http://127.0.0.1:{server.server_port}/static/index.html", wait_until="networkidle")
             page.get_by_test_id("service-status").get_by_text(f"本地服务 v{APP_VERSION}").wait_for(timeout=5_000)
 
@@ -205,8 +206,16 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
             page.get_by_test_id("target-select").select_option("deck")
             page.get_by_test_id("template-file").set_input_files(str(template))
             page.get_by_test_id("remove-template").wait_for(state="visible")
+            page.wait_for_function(
+                "() => document.querySelector('[data-testid=\"template-status\"]')?.textContent?.includes('模板安全校验通过')",
+                timeout=15_000,
+            )
             page.get_by_test_id("remove-template").click()
             page.get_by_test_id("template-file").set_input_files(str(template))
+            page.wait_for_function(
+                "() => document.querySelector('[data-testid=\"template-status\"]')?.textContent?.includes('模板安全校验通过')",
+                timeout=15_000,
+            )
             page.get_by_test_id("generate-button").click()
             page.locator('[data-testid="result-panel"].result--success').wait_for(state="visible", timeout=30_000)
             page.screenshot(path=str(output_dir / f"workbench-{name}-success.png"), full_page=True)
@@ -229,25 +238,42 @@ def _run_viewport(playwright, output_dir: Path, channel: str, name: str, width: 
 
             console_count_before_ole = len(console_errors)
             page.get_by_test_id("template-file").set_input_files(str(unsafe_template))
-            page.get_by_test_id("generate-button").click()
-            page.get_by_test_id("failure-diagnostic").wait_for(state="visible", timeout=15_000)
-            if page.get_by_test_id("failure-code").inner_text() != "E003":
-                raise AssertionError("unsafe OLE template did not expose E003")
-            if page.locator("#failureStage").inner_text() != "定位：template_file":
-                raise AssertionError("unsafe OLE template did not expose template_file location")
-            suggestion = page.locator("#failureSuggestion").inner_text()
-            if "删除" not in suggestion or "PNG" not in suggestion:
-                raise AssertionError("unsafe OLE template did not expose an actionable suggestion")
-            if "第 1 页" not in page.get_by_test_id("result-detail").inner_text():
-                raise AssertionError("unsafe OLE template did not expose the referencing slide")
-            if page.get_by_test_id("failure-report-link").is_visible():
-                raise AssertionError("pre-job template rejection must not expose a stale failure report")
-            ole_console_errors = console_errors[console_count_before_ole:]
-            unexpected_ole_errors = [
-                message for message in ole_console_errors if "status of 400 (BAD REQUEST)" not in message
+            page.wait_for_function(
+                "() => document.querySelector('[data-testid=\"template-status\"]')?.textContent?.includes('模板不可用')",
+                timeout=15_000,
+            )
+            template_status = page.get_by_test_id("template-status").inner_text()
+            if "E003" not in template_status or "hyperlink" not in template_status:
+                raise AssertionError("unsafe hyperlink template did not expose its E003 validation result")
+            if "幻灯片母版" not in template_status or "超链接" not in template_status:
+                raise AssertionError("unsafe hyperlink template did not expose master-link guidance")
+            if page.get_by_test_id("generate-button").is_enabled():
+                raise AssertionError("unsafe template must disable generation before a task is created")
+            if not page.get_by_test_id("analyze-button").is_enabled():
+                raise AssertionError("template preflight must not block source analysis")
+            if page.get_by_test_id("failure-diagnostic").is_visible():
+                raise AssertionError("template preflight must not open a stale generation failure panel")
+            repair_template = page.get_by_test_id("repair-template")
+            if repair_template.is_hidden():
+                raise AssertionError("unsafe hyperlink template must offer a safe-copy repair action")
+            with page.expect_download(timeout=15_000) as download_info:
+                repair_template.click()
+            safe_copy = fixture_root / "template-safe-copy.pptx"
+            download_info.value.save_as(str(safe_copy))
+            assert validate_template_package(safe_copy)["pass"] is True
+            page.get_by_test_id("template-file").set_input_files(str(safe_copy))
+            page.wait_for_function(
+                "() => document.querySelector('[data-testid=\"template-status\"]')?.textContent?.includes('模板安全校验通过')",
+                timeout=15_000,
+            )
+            if not page.get_by_test_id("generate-button").is_enabled():
+                raise AssertionError("sanitized template must enable generation after it is reselected")
+            template_console_errors = console_errors[console_count_before_ole:]
+            unexpected_template_errors = [
+                message for message in template_console_errors if "status of 400 (BAD REQUEST)" not in message
             ]
-            if unexpected_ole_errors:
-                raise AssertionError(f"unexpected OLE rejection console errors: {unexpected_ole_errors}")
+            if unexpected_template_errors:
+                raise AssertionError(f"unexpected template preflight console errors: {unexpected_template_errors}")
             del console_errors[console_count_before_ole:]
 
             page.get_by_test_id("remove-template").click()
@@ -335,6 +361,24 @@ def _write_ole_template(path: Path) -> Path:
                 )
             target.writestr(info, data)
         target.writestr("ppt/embeddings/oleObject1.bin", b"unsafe")
+    path.write_bytes(output.getvalue())
+    return path
+
+
+def _write_external_hyperlink_template(path: Path) -> Path:
+    source = _write_template(path).read_bytes()
+    output = BytesIO()
+    with ZipFile(BytesIO(source)) as source_package, ZipFile(output, "w", ZIP_DEFLATED) as target:
+        for info in source_package.infolist():
+            data = source_package.read(info.filename)
+            if info.filename == "ppt/slideLayouts/_rels/slideLayout1.xml.rels":
+                data = data.replace(
+                    b"</Relationships>",
+                    b'<Relationship Id="rIdHyperlink" Type="http://schemas.openxmlformats.org/'
+                    b'officeDocument/2006/relationships/hyperlink" '
+                    b'Target="https://example.invalid/template" TargetMode="External"/></Relationships>',
+                )
+            target.writestr(info, data)
     path.write_bytes(output.getvalue())
     return path
 

@@ -1,3 +1,5 @@
+> 2026-09-05 当前实现说明：本仓库已在 Windows 上具备本机 Office 和便携运行时。本文早期“你跑不了 Windows”“不支持真实语料”的环境假设不再适用。完整模仿遵循 `docs/superpowers/specs/2026-09-05-complete-imitation.md`，保持全部源页与截图，使用真实 PowerPoint 导出和 Agent 逐页复核，并区别自动检查与视觉验收。已有 WPF/本地 API 保持生成功能。
+
 # AGENTS.md — 华为风格文档生成工具链(Codex 运行手册)
 
 本文件是 Codex 的操作手册(runbook),放在仓库根目录、Codex 会自动读取。**权威规格是 `docs/taskbook.md`(《实习任务书 定稿交付版 v3》)**。动手前先通读它,重点 §0.5、§2、§3、§7、附录 A。

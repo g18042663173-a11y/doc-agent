@@ -29,6 +29,12 @@ public sealed class AnalysisInfo
     public List<AnalysisTier> Tiers { get; set; } = [];
 }
 
+public sealed class TemplateValidationInfo
+{
+    [JsonPropertyName("valid")]
+    public bool Valid { get; set; }
+}
+
 public sealed class AnalysisMetrics
 {
     [JsonPropertyName("title_count")]
@@ -346,6 +352,7 @@ public static class StageLabels
         "linting" => "合规检查",
         "validating_package" => "校验包结构",
         "validating_analysis" => "校验分析结果",
+        "validating_template" => "检查模板安全性",
         "done" => "处理完成",
         "failed" => "处理失败",
         "canceled" => "已取消",

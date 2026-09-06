@@ -1,0 +1,472 @@
+{
+  "files": [
+    {
+      "bytes": 6,
+      "path": "VERSION",
+      "sha256": "c4a2383a03bdb6739d16a0e24058e4b9c7da4e63d203e0be2f448868cc03c530",
+      "source": "VERSION"
+    },
+    {
+      "bytes": 45,
+      "path": "app/__init__.py",
+      "sha256": "999b5b7769cf5140563ac1a85829195d75cc25ab20684336746295fdd5a7fa17",
+      "source": "backend/app/__init__.py"
+    },
+    {
+      "bytes": 403,
+      "path": "app/assets/__init__.py",
+      "sha256": "9e4b5f761b060ed7c699530a962f7d6aa9ae079caddb6847de5a7ca79612833a",
+      "source": "backend/app/assets/__init__.py"
+    },
+    {
+      "bytes": 4691,
+      "path": "app/assets/contracts.py",
+      "sha256": "f6f4fbff2ac73170861346e6aa8575c6517c0ae0905f32bf79452d7953b3bac5",
+      "source": "backend/app/assets/contracts.py"
+    },
+    {
+      "bytes": 257,
+      "path": "app/assets/errors.py",
+      "sha256": "734ebff6a78cb57aef29600bcca9a1111ff32e37c1de4a70fc7ce29ca4260ceb",
+      "source": "backend/app/assets/errors.py"
+    },
+    {
+      "bytes": 2908,
+      "path": "app/assets/extract.py",
+      "sha256": "1ebe08e0edae1db52e1828d7679f743ff4a5eeb12cada1a3c67ef75c831c17bf",
+      "source": "backend/app/assets/extract.py"
+    },
+    {
+      "bytes": 8818,
+      "path": "app/assets/pipeline.py",
+      "sha256": "f0e084968aa724b8d4a4ff77667b3b1e33f5b11c1351aa24cb2465fb3985062d",
+      "source": "backend/app/assets/pipeline.py"
+    },
+    {
+      "bytes": 617,
+      "path": "app/assets/provider.py",
+      "sha256": "379c2726ae0939ff89c6fd1a6576a11c0b7faacf7de12e5bb72054b89201e9a1",
+      "source": "backend/app/assets/provider.py"
+    },
+    {
+      "bytes": 86,
+      "path": "app/generation/__init__.py",
+      "sha256": "f6a641c08abec2bd4d2dee0d03fd3f220a149ad9fffcc7d1d859b23b7bec6da0",
+      "source": "backend/app/generation/__init__.py"
+    },
+    {
+      "bytes": 5122,
+      "path": "app/generation/layout_policy.py",
+      "sha256": "584f78f1d7778b37fa8316a741abea5d6f075b2781ae2f31f54d0aea6f6dafcb",
+      "source": "backend/app/generation/layout_policy.py"
+    },
+    {
+      "bytes": 48,
+      "path": "app/ir/__init__.py",
+      "sha256": "23fd76f5db4d83dcafb9c7fe9666361877bb38fba94aaf8dd7957635c763b813",
+      "source": "backend/app/ir/__init__.py"
+    },
+    {
+      "bytes": 3248,
+      "path": "app/ir/common.py",
+      "sha256": "dad621d02e35517f8a2ffb269bf751149b9cfd3edc245131e400bb5f2e8a930c",
+      "source": "backend/app/ir/common.py"
+    },
+    {
+      "bytes": 43167,
+      "path": "app/ir/deck_ir.py",
+      "sha256": "f93410a8667680adc186acec7727cf51b1107f307b465da381302c3e6921a7e0",
+      "source": "backend/app/ir/deck_ir.py"
+    },
+    {
+      "bytes": 7648,
+      "path": "app/ir/document_ir.py",
+      "sha256": "4356a5b73a025c76ff8c7f70752d95390ecf0d17ef010f1658bd317d7253d31d",
+      "source": "backend/app/ir/document_ir.py"
+    },
+    {
+      "bytes": 644,
+      "path": "app/ir/errors.py",
+      "sha256": "c59a92128016d5269a1f14e56acd3f46a02a7dc60c31c81f302f3339c85be254",
+      "source": "backend/app/ir/errors.py"
+    },
+    {
+      "bytes": 4453,
+      "path": "app/ir/repair.py",
+      "sha256": "b7f1f0525c4978fe1593d4777cf43bd9380510dbf485e27faad3c13ef5b486c1",
+      "source": "backend/app/ir/repair.py"
+    },
+    {
+      "bytes": 2117,
+      "path": "app/ir/report.py",
+      "sha256": "8c35f3d59a967f9daf10d8001796efb4733ff50c72034d0e17c9814e674a68a4",
+      "source": "backend/app/ir/report.py"
+    },
+    {
+      "bytes": 5570,
+      "path": "app/ir/schema_export.py",
+      "sha256": "58a27c38b1bf4ab601601296f68cb0537347fbc942de22bc974d570012902be7",
+      "source": "backend/app/ir/schema_export.py"
+    },
+    {
+      "bytes": 5256,
+      "path": "app/ir/shell.py",
+      "sha256": "625e93a821a81c3cd33a4223e12d731753b4036c0f1ca90e53db37e76fb67c4a",
+      "source": "backend/app/ir/shell.py"
+    },
+    {
+      "bytes": 33240,
+      "path": "app/ir/validation.py",
+      "sha256": "e01aa765f0e3e07e465ed50125e8494ff5795eb242eee70ad166db78cae73c96",
+      "source": "backend/app/ir/validation.py"
+    },
+    {
+      "bytes": 5404,
+      "path": "app/ir/word_ir.py",
+      "sha256": "2f367635878431616ad5b0fdf5431a46f3c609e5bc114ff0deea7085f400a2ff",
+      "source": "backend/app/ir/word_ir.py"
+    },
+    {
+      "bytes": 25,
+      "path": "app/lint/__init__.py",
+      "sha256": "6d60c91637ccc8900c4f67613317881076ad79ce5bb0fc68887a7f2e3145fac8",
+      "source": "backend/app/lint/__init__.py"
+    },
+    {
+      "bytes": 17564,
+      "path": "app/lint/docx_lint.py",
+      "sha256": "dfd36547dec54dae3bd66d64baacac88bee22ca3e8e736ecf585bf23a553db2b",
+      "source": "backend/app/lint/docx_lint.py"
+    },
+    {
+      "bytes": 69181,
+      "path": "app/lint/pptx_lint.py",
+      "sha256": "760e198909ef51568a0bbd45f6a3e361f84fe21d96a7087ce4792201c3b9d9ee",
+      "source": "backend/app/lint/pptx_lint.py"
+    },
+    {
+      "bytes": 45,
+      "path": "app/parsers/__init__.py",
+      "sha256": "87ff118d888b9595d0f017e643adf34017238a7e579208907c43a501a5e3e940",
+      "source": "backend/app/parsers/__init__.py"
+    },
+    {
+      "bytes": 16945,
+      "path": "app/parsers/docx_parser.py",
+      "sha256": "e2c5921652f199baf07f1bd9789eeb1d4375bc0a1e9392b477a9e5651f2be645",
+      "source": "backend/app/parsers/docx_parser.py"
+    },
+    {
+      "bytes": 3239,
+      "path": "app/parsers/errors.py",
+      "sha256": "9a32f90eaefbf8bc207f1694695f5b524ef5f347db7be87924c25979f3b36a9e",
+      "source": "backend/app/parsers/errors.py"
+    },
+    {
+      "bytes": 11676,
+      "path": "app/parsers/md_parser.py",
+      "sha256": "59205fbdb8dd6e5d05a68bab44afebfc62202d9d453bf40378ae4689e34df0bd",
+      "source": "backend/app/parsers/md_parser.py"
+    },
+    {
+      "bytes": 909,
+      "path": "app/parsers/office_preflight.py",
+      "sha256": "eddad39cecda46e979c00b55956214279cc95570d47534d00b021e06754f3828",
+      "source": "backend/app/parsers/office_preflight.py"
+    },
+    {
+      "bytes": 13936,
+      "path": "app/parsers/pptx_parser.py",
+      "sha256": "0d4164cb454f03f41593c5dc07dd3582e9513991d0041527f645d35ed7a995ee",
+      "source": "backend/app/parsers/pptx_parser.py"
+    },
+    {
+      "bytes": 491,
+      "path": "app/parsers/source_metadata.py",
+      "sha256": "cf75eeadf8abfbe6542ca7fcb528c3f25f2b39dde8efcce9330d72ea3b46f0f9",
+      "source": "backend/app/parsers/source_metadata.py"
+    },
+    {
+      "bytes": 666,
+      "path": "app/parsers/text_limits.py",
+      "sha256": "4ee81e4732b64b9e8490adb40f5653ed4d4d8c64729ea17e5aea3b8cc5233637",
+      "source": "backend/app/parsers/text_limits.py"
+    },
+    {
+      "bytes": 33993,
+      "path": "app/parsers/xlsx_parser.py",
+      "sha256": "9b0cf8b296db32a68a333f5b46abcca70146153ab394de32a2d2db05cd9f27c5",
+      "source": "backend/app/parsers/xlsx_parser.py"
+    },
+    {
+      "bytes": 27,
+      "path": "app/rendering/__init__.py",
+      "sha256": "e2604ca9aaad59bd678a9e4d953715e7a4b809c52e184622a43f963c7ec438c6",
+      "source": "backend/app/rendering/__init__.py"
+    },
+    {
+      "bytes": 12625,
+      "path": "app/rendering/architecture_graphviz.py",
+      "sha256": "ffd3af680e6405197c3e02eff98366ffbbf35fc6aa0d02d32afeaf89c05c8699",
+      "source": "backend/app/rendering/architecture_graphviz.py"
+    },
+    {
+      "bytes": 27023,
+      "path": "app/rendering/docx_renderer.py",
+      "sha256": "af448abb66d8a81f5c1b1736e3872393f023066474abeb81c562ec6e669f354c",
+      "source": "backend/app/rendering/docx_renderer.py"
+    },
+    {
+      "bytes": 133730,
+      "path": "app/rendering/pptx_renderer.py",
+      "sha256": "ff07ed946626f9f23d9ab8196ae87edcdb9402b6446e43f994a815b81d95d4fc",
+      "source": "backend/app/rendering/pptx_renderer.py"
+    },
+    {
+      "bytes": 1689,
+      "path": "app/rendering/semantic_icons.py",
+      "sha256": "9b66c5e1fc11b488ab67b24c22eff16575251d772442b566e52f10c0fec09081",
+      "source": "backend/app/rendering/semantic_icons.py"
+    },
+    {
+      "bytes": 1152,
+      "path": "app/rendering/theme.py",
+      "sha256": "0011701a3334e830d35cf7320a42f5d11c06d332f15110a5b42f1222b3b201b6",
+      "source": "backend/app/rendering/theme.py"
+    },
+    {
+      "bytes": 15241,
+      "path": "app/rendering/themes/hw-academic.json",
+      "sha256": "c257f63d2aef3505a30c0ed208fcdfc0fdada807532e2a2b92e2aad7f30637d7",
+      "source": "backend/app/rendering/themes/hw-academic.json"
+    },
+    {
+      "bytes": 15270,
+      "path": "app/rendering/themes/hw-proposal.json",
+      "sha256": "e448ebcef47823cc20a616f82ba6ba26f6342cd48e741438e4c6f9fe807d4879",
+      "source": "backend/app/rendering/themes/hw-proposal.json"
+    },
+    {
+      "bytes": 15176,
+      "path": "app/rendering/themes/hw-report.json",
+      "sha256": "49a923762a0645f12fa5eca21114425f08bc447e061837af89aabde1cbbcadd6",
+      "source": "backend/app/rendering/themes/hw-report.json"
+    },
+    {
+      "bytes": 14797,
+      "path": "app/rendering/themes/hw_theme.json",
+      "sha256": "a8f2ae702794558914ad7934d209df19f85b7eaafe790dec91bf534c09dfa961",
+      "source": "backend/app/rendering/themes/hw_theme.json"
+    },
+    {
+      "bytes": 3915,
+      "path": "app/rendering/typography.py",
+      "sha256": "f9f2911cf7f37a616ac5b4600ea18b8c1ccddd90b124f72f296a7426f6f5f038",
+      "source": "backend/app/rendering/typography.py"
+    },
+    {
+      "bytes": 86,
+      "path": "app/security/__init__.py",
+      "sha256": "00b9b674ae53201a717061a08331682f3439ff115f7f1be73a5fc1ecb96b96d6",
+      "source": "backend/app/security/__init__.py"
+    },
+    {
+      "bytes": 17791,
+      "path": "app/security/office_package.py",
+      "sha256": "9ce7c6ced5e565bb8d4f61870bbc4985644237dd83d001bffcc6f9d4c4cee4fe",
+      "source": "backend/app/security/office_package.py"
+    },
+    {
+      "bytes": 12500,
+      "path": "app/template/contracts.py",
+      "sha256": "fc9807072aaeed3880d9c95d6bbff3232f4060dd17ec49de1eaf34187da3faf2",
+      "source": "backend/app/template/contracts.py"
+    },
+    {
+      "bytes": 17074,
+      "path": "app/template/package.py",
+      "sha256": "9f6fbaf9da9d855678cc48ac556259ab96ef645b3834908bbef9b37ad9f38727",
+      "source": "backend/app/template/package.py"
+    },
+    {
+      "bytes": 12089,
+      "path": "app/template/planner.py",
+      "sha256": "c66e79699bb7c8221d38e6bb2dbe2e0fe79321f8b917d45e2d737f1c9db92698",
+      "source": "backend/app/template/planner.py"
+    },
+    {
+      "bytes": 12778,
+      "path": "app/template/ppt_template_structure.py",
+      "sha256": "7ee81ac65db76e61512efbf06010655047eb8d816324ddf6a1e3072cc659811a",
+      "source": "backend/app/template/ppt_template_structure.py"
+    },
+    {
+      "bytes": 16024,
+      "path": "app/template/profile.py",
+      "sha256": "d98722a283f901d33f8d0182540e7da43b7d3fa77275b256dc90e75dd9574e2d",
+      "source": "backend/app/template/profile.py"
+    },
+    {
+      "bytes": 13631,
+      "path": "app/template/renderer.py",
+      "sha256": "65fc81506ef38b0913e319d14ec651da459a067594db7fcecf41ce1962e2f146",
+      "source": "backend/app/template/renderer.py"
+    },
+    {
+      "bytes": 9690,
+      "path": "app/template/replacement_audit.py",
+      "sha256": "8739959e8e10ce765c8140eb642055733ade7934ff2d62b12268c64dddd81b59",
+      "source": "backend/app/template/replacement_audit.py"
+    },
+    {
+      "bytes": 12571,
+      "path": "app/template/text_fit.py",
+      "sha256": "541e10e214674698c46d88c6c49a7b05393e2a82ace353e7a304f9064ff88f18",
+      "source": "backend/app/template/text_fit.py"
+    },
+    {
+      "bytes": 6047,
+      "path": "app/template/theme.py",
+      "sha256": "5dc1d790ba4c10eb5845af0ad93f8a7584c27de6400d9e4a32a97d01cf9538bb",
+      "source": "backend/app/template/theme.py"
+    },
+    {
+      "bytes": 236,
+      "path": "app/visual/__init__.py",
+      "sha256": "6b3461492b494ed66a63e1061c0d6c4e0fd1fcba73775bea2c0b9e841aafd69d",
+      "source": "backend/app/visual/__init__.py"
+    },
+    {
+      "bytes": 2733,
+      "path": "app/visual/contracts.py",
+      "sha256": "e3c0ffba616eaf1b90850a2726e341a334ae374cae28f3728858ff37d40890db",
+      "source": "backend/app/visual/contracts.py"
+    },
+    {
+      "bytes": 6625,
+      "path": "app/visual/planner.py",
+      "sha256": "1c019550cccf5ee73197a1b678b5ef280a336bab7237c37b281f1c0f20c8d7ea",
+      "source": "backend/app/visual/planner.py"
+    },
+    {
+      "bytes": 548,
+      "path": "examples/deck_few_shot_architecture_v19.json",
+      "sha256": "29d442379cc8658d29e3e44c8c4030e0c2c9ad92ef2d0e4e377c7b1699e1d2ab",
+      "source": "samples/ir/deck_few_shot_architecture_v19.json"
+    },
+    {
+      "bytes": 968,
+      "path": "examples/deck_few_shot_composite_v19.json",
+      "sha256": "33379775b37ccf3faf43c6190480487a41d3e83cc6e5b1d58d47d3b0444a08a0",
+      "source": "samples/ir/deck_few_shot_composite_v19.json"
+    },
+    {
+      "bytes": 598,
+      "path": "examples/deck_few_shot_table_v19.json",
+      "sha256": "2f0b03b965968da24f292844c6abe1b679b934fde7369bc418e126941fbe573c",
+      "source": "samples/ir/deck_few_shot_table_v19.json"
+    },
+    {
+      "bytes": 354,
+      "path": "examples/deck_valid_01_minimal.json",
+      "sha256": "38246b66c40d41eee33341a7ffdd8efe889327078f31bccaa8c94b71430d1b08",
+      "source": "samples/ir/deck_valid_01_minimal.json"
+    },
+    {
+      "bytes": 6194,
+      "path": "examples/deck_valid_full.json",
+      "sha256": "00817f1729cb4cce7b94fc9f34b258e6318a5f35c0b03bd77a579d01888f7fbe",
+      "source": "samples/ir/deck_valid_full.json"
+    },
+    {
+      "bytes": 597,
+      "path": "examples/word_valid_01_plain.json",
+      "sha256": "b7385364fb77163b8e16c734e0a1a244e54b00bf87a2f715eb14f155d627d706",
+      "source": "samples/ir/word_valid_01_plain.json"
+    },
+    {
+      "bytes": 707,
+      "path": "examples/word_valid_03_table.json",
+      "sha256": "99c4ac3588fdbd407d2abe60f483b6c8d1b2097e5124c8350547481a498ec72d",
+      "source": "samples/ir/word_valid_03_table.json"
+    },
+    {
+      "bytes": 909,
+      "path": "examples/word_valid_05_document_control.json",
+      "sha256": "ec4266c545bb6a623109018245ee8f9f38be94b6451cdaabdeefcef3c1848faf",
+      "source": "samples/ir/word_valid_05_document_control.json"
+    },
+    {
+      "bytes": 3984,
+      "path": "schemas/asset_manifest.schema.json",
+      "sha256": "146e0e68782914ef5af5f28acfbd926630672d7c12b5987defd3c3e4bbf2269c",
+      "source": "backend/schemas/asset_manifest.schema.json"
+    },
+    {
+      "bytes": 2804,
+      "path": "schemas/asset_usage_audit.schema.json",
+      "sha256": "5b47994b5c6ff8c8f9bac00b7ee5ab080ccbeb35f2e1e1f624450afe9d6006b6",
+      "source": "backend/schemas/asset_usage_audit.schema.json"
+    },
+    {
+      "bytes": 54844,
+      "path": "schemas/deck_ir.schema.json",
+      "sha256": "c7fe94dc7ed782f5b5d1fb3ee59570b20ff3d7241eaed45b664b262669457c0b",
+      "source": "backend/schemas/deck_ir.schema.json"
+    },
+    {
+      "bytes": 17271,
+      "path": "schemas/document_ir.schema.json",
+      "sha256": "11d85a431a8cc02b76a8ce6ec89991d6052e1c7521ecfa06975eb555821b2cb4",
+      "source": "backend/schemas/document_ir.schema.json"
+    },
+    {
+      "bytes": 1440,
+      "path": "schemas/schema_history.json",
+      "sha256": "5bd6aed6f970a9a08d76003c768bb85f10143ac6d53f112eec2037fa4a9bf084",
+      "source": "backend/schemas/schema_history.json"
+    },
+    {
+      "bytes": 5697,
+      "path": "schemas/template_plan.schema.json",
+      "sha256": "5e969cea54d364d79d179122ae46115e377a25568f4dbdcdaec3c90b1ebecf6a",
+      "source": "backend/schemas/template_plan.schema.json"
+    },
+    {
+      "bytes": 11197,
+      "path": "schemas/template_profile.schema.json",
+      "sha256": "42ada9eefb50d628182e1130c84984c46de4e4baed76e0b0362e7f6d8b9048e7",
+      "source": "backend/schemas/template_profile.schema.json"
+    },
+    {
+      "bytes": 8203,
+      "path": "schemas/template_replacement_audit.schema.json",
+      "sha256": "885415769a76b737a0acdfc27be89730a31ee2f355f4e2756a44da04c3d5a62a",
+      "source": "backend/schemas/template_replacement_audit.schema.json"
+    },
+    {
+      "bytes": 2619,
+      "path": "schemas/visual_plan.schema.json",
+      "sha256": "92762c508126fcaf9056da07e94af99aad996c91fbb2f3dea30917bc2f6776a8",
+      "source": "backend/schemas/visual_plan.schema.json"
+    },
+    {
+      "bytes": 1742,
+      "path": "schemas/visual_selection_audit.schema.json",
+      "sha256": "bc563239345a9be2026541886a7f638d45b5068278c0015e2f6f92b6e72168a3",
+      "source": "backend/schemas/visual_selection_audit.schema.json"
+    },
+    {
+      "bytes": 12246,
+      "path": "schemas/word_ir.schema.json",
+      "sha256": "2362721b3171cc37729be9c09705002621af5d6ebe58a25254db9d50a04f9e00",
+      "source": "backend/schemas/word_ir.schema.json"
+    }
+  ],
+  "generated_at_utc": "2026-09-05T05:13:56.873579+00:00",
+  "schema_version": 1,
+  "skill_name": "huawei-doc-workflow",
+  "skill_version": "1.1.0",
+  "source_commit": "7c098b1eaea4bf48ba45ec87e14f881d141ce990",
+  "source_product_version": "2.2.0"
+}

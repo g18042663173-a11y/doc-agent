@@ -2,14 +2,14 @@
   "hash_algorithm": "sha256",
   "schema_version": 1,
   "source_requirements": "requirements.txt",
-  "source_requirements_sha256": "7b82d3f7166dac62f11ffccce3b0b1d358da26e5a343ed0489b36e6d5935884c",
+  "source_requirements_sha256": "83d8b98d9bdf5e763e58e2b65efddd6b1c040101f045081923958dc3163e6939",
   "target": {
     "implementation": "CPython",
     "platform": "win_amd64",
     "python_version": "3.12"
   },
   "verification_boundary": "Hashes were generated from downloaded Windows wheels on Windows; clean-machine physical-offline Windows true-machine validation is still required.",
-  "wheel_count": 29,
+  "wheel_count": 36,
   "wheels": [
     {
       "bytes": 13643,
@@ -17,6 +17,13 @@
       "name": "annotated-types",
       "sha256": "1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53",
       "version": "0.7.0"
+    },
+    {
+      "bytes": 67548,
+      "filename": "attrs-26.1.0-py3-none-any.whl",
+      "name": "attrs",
+      "sha256": "c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309",
+      "version": "26.1.0"
     },
     {
       "bytes": 8458,
@@ -61,6 +68,13 @@
       "version": "3.0.0"
     },
     {
+      "bytes": 2482071,
+      "filename": "fonttools-4.64.0-cp312-cp312-win_amd64.whl",
+      "name": "fonttools",
+      "sha256": "06b6409b868494556a831ae33b2d9a090476c37516b38d70f45a9720b460d423",
+      "version": "4.64.0"
+    },
+    {
       "bytes": 47300,
       "filename": "graphviz-0.21-py3-none-any.whl",
       "name": "graphviz",
@@ -87,6 +101,20 @@
       "name": "Jinja2",
       "sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67",
       "version": "3.1.6"
+    },
+    {
+      "bytes": 90630,
+      "filename": "jsonschema-4.26.0-py3-none-any.whl",
+      "name": "jsonschema",
+      "sha256": "d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce",
+      "version": "4.26.0"
+    },
+    {
+      "bytes": 18437,
+      "filename": "jsonschema_specifications-2025.9.1-py3-none-any.whl",
+      "name": "jsonschema-specifications",
+      "sha256": "98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe",
+      "version": "2025.9.1"
     },
     {
       "bytes": 3997255,
@@ -152,6 +180,13 @@
       "version": "2.20.0"
     },
     {
+      "bytes": 388051,
+      "filename": "pypdf-6.17.0-py3-none-any.whl",
+      "name": "pypdf",
+      "sha256": "5bd827266a21553b74d910e350131a6227b72f2ab4209bf372814b8195fa11c5",
+      "version": "6.17.0"
+    },
+    {
       "bytes": 375249,
       "filename": "pytest-9.0.3-py3-none-any.whl",
       "name": "pytest",
@@ -178,6 +213,20 @@
       "name": "python-pptx",
       "sha256": "160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba",
       "version": "1.0.2"
+    },
+    {
+      "bytes": 26766,
+      "filename": "referencing-0.37.0-py3-none-any.whl",
+      "name": "referencing",
+      "sha256": "381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231",
+      "version": "0.37.0"
+    },
+    {
+      "bytes": 220394,
+      "filename": "rpds_py-2026.6.3-cp312-cp312-win_amd64.whl",
+      "name": "rpds-py",
+      "sha256": "2c958bf94822e9290a40aaf2a822d4bc5c88099093e3948ad6c571eca9272e5f",
+      "version": "2026.6.3"
     },
     {
       "bytes": 45571,

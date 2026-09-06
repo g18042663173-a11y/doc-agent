@@ -63,9 +63,7 @@ public sealed class BackendProcessHost : IDisposable
     /// </summary>
     public async Task<BackendProcessHost> RestartAsync(CancellationToken cancellationToken)
     {
-        TryStopOwnedProcess(_process);
-        _process.Dispose();
-        TryDelete(_statePath);
+        Dispose();
         return await StartCoreAsync(ApplicationDataDirectory, cancellationToken);
     }
 

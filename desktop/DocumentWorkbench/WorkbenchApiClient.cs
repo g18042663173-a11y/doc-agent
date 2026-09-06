@@ -43,6 +43,27 @@ public sealed class WorkbenchApiClient : IDisposable
         return await ReadJsonAsync<AnalysisInfo>(response, cancellationToken);
     }
 
+    public async Task<TemplateValidationInfo> ValidateTemplateAsync(
+        string templatePath,
+        CancellationToken cancellationToken = default)
+    {
+        using var content = new MultipartFormDataContent();
+        AddFile(content, "template_file", templatePath);
+        using var response = await _client.PostAsync("api/templates/validate", content, cancellationToken);
+        return await ReadJsonAsync<TemplateValidationInfo>(response, cancellationToken);
+    }
+
+    public async Task SanitizeTemplateAsync(
+        string templatePath,
+        string outputPath,
+        CancellationToken cancellationToken = default)
+    {
+        using var content = new MultipartFormDataContent();
+        AddFile(content, "template_file", templatePath);
+        using var response = await _client.PostAsync("api/templates/sanitize", content, cancellationToken);
+        await WriteDownloadAsync(response, outputPath, cancellationToken);
+    }
+
     public async Task<JobInfo> GenerateAsync(
         string inputPath,
         string target,
@@ -115,6 +136,14 @@ public sealed class WorkbenchApiClient : IDisposable
     public async Task DownloadAsync(string relativeUrl, string outputPath, CancellationToken cancellationToken = default)
     {
         using var response = await _client.GetAsync(relativeUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        await WriteDownloadAsync(response, outputPath, cancellationToken);
+    }
+
+    private static async Task WriteDownloadAsync(
+        HttpResponseMessage response,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
         await EnsureSuccessAsync(response, cancellationToken);
         var temporary = $"{outputPath}.{Guid.NewGuid():N}.download";
         try
@@ -167,6 +196,10 @@ public sealed class WorkbenchApiClient : IDisposable
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
         try
         {
             var payload = await response.Content.ReadFromJsonAsync<ApiErrorResponse>(JsonOptions, cancellationToken);

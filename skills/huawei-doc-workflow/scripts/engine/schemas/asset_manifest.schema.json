@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "AssetRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "alt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt"
+        },
+        "animated": {
+          "default": false,
+          "title": "Animated",
+          "type": "boolean"
+        },
+        "asset_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "bytes": {
+          "minimum": 1,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "credit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credit"
+        },
+        "exif_orientation_applied": {
+          "title": "Exif Orientation Applied",
+          "type": "boolean"
+        },
+        "has_alpha": {
+          "title": "Has Alpha",
+          "type": "boolean"
+        },
+        "height": {
+          "minimum": 1,
+          "title": "Height",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "media_type": {
+          "const": "image/png",
+          "default": "image/png",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "metadata_removed": {
+          "title": "Metadata Removed",
+          "type": "boolean"
+        },
+        "normalized_sha256": {
+          "title": "Normalized Sha256",
+          "type": "string"
+        },
+        "original_media_type": {
+          "enum": [
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ],
+          "title": "Original Media Type",
+          "type": "string"
+        },
+        "original_sha256": {
+          "title": "Original Sha256",
+          "type": "string"
+        },
+        "pixel_count": {
+          "minimum": 1,
+          "title": "Pixel Count",
+          "type": "integer"
+        },
+        "relative_path": {
+          "minLength": 1,
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "source_filename": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Source Filename",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "upload",
+            "document",
+            "local_whitelist",
+            "generated"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "width": {
+          "minimum": 1,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset_id",
+        "source_type",
+        "source_filename",
+        "original_media_type",
+        "original_sha256",
+        "normalized_sha256",
+        "width",
+        "height",
+        "pixel_count",
+        "bytes",
+        "relative_path",
+        "has_alpha",
+        "exif_orientation_applied",
+        "metadata_removed"
+      ],
+      "title": "AssetRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "assets": {
+      "items": {
+        "$ref": "#/$defs/AssetRecord"
+      },
+      "maxItems": 20,
+      "title": "Assets",
+      "type": "array"
+    },
+    "manifest_version": {
+      "const": "1.0",
+      "title": "Manifest Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "manifest_version"
+  ],
+  "title": "AssetManifest",
+  "type": "object"
+}

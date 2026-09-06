@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Any
 from urllib.request import Request, urlopen
 import zipfile
@@ -56,35 +57,34 @@ def main(argv: list[str] | None = None) -> int:
     python_archive = _resolve_python_archive(args.python_embed, descriptors["python"])
     _verify_graphviz(graphviz_root, descriptors["graphviz"])
 
-    _reset_staging()
-    publish_dir = STAGING_ROOT / "dotnet-publish"
-    _publish_wpf(dotnet, publish_dir)
-    _copy_publish(publish_dir, STAGE)
-    _copy_backend(STAGE)
-    _install_python_runtime(python_archive, STAGE)
-    _copy_graphviz(graphviz_root, STAGE)
-    _write_readme(STAGE)
-    shutil.copy2(ROOT / "docs" / "THIRD_PARTY_NOTICES_WINDOWS.md", STAGE / "THIRD_PARTY_NOTICES.md")
-
-    manifest = _runtime_manifest(descriptors, python_archive, dotnet, graphviz_root, STAGE)
-    manifest_path = STAGE / "runtime-manifest.json"
-    manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    _assert_clean_package(STAGE)
-    _write_file_hashes(STAGE)
-
     output_dir.mkdir(parents=True, exist_ok=True)
-    if archive.exists():
-        archive.unlink()
-    _zip_stage(STAGE, archive)
+    with tempfile.TemporaryDirectory(prefix="dw-build-") as temporary:
+        build_root = Path(temporary)
+        stage = build_root / "root"
+        publish_dir = build_root / "dotnet-publish"
+        _publish_wpf(dotnet, publish_dir)
+        _copy_publish(publish_dir, stage)
+        _copy_backend(stage)
+        _install_python_runtime(python_archive, stage)
+        _copy_graphviz(graphviz_root, stage)
+        _write_readme(stage)
+        shutil.copy2(ROOT / "docs/THIRD_PARTY_NOTICES_WINDOWS.md", stage / "THIRD_PARTY_NOTICES.md")
+        shutil.copy2(ROOT / "scripts/verify_workbench_portable.py", stage / "portable_acceptance.py")
+        manifest = _runtime_manifest(descriptors, python_archive, dotnet, graphviz_root, stage)
+        (stage / "runtime-manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _assert_clean_package(stage)
+        _write_file_hashes(stage)
+        temporary_archive = build_root / "package.zip"
+        _zip_stage(stage, temporary_archive)
+        verify_archive(temporary_archive)
+        os.replace(temporary_archive, archive)
     archive_hash = _sha256(archive)
     digest_file.write_text(f"{archive_hash}  {archive.name}\n", encoding="utf-8")
     print(f"archive: {archive}")
     print(f"sha256: {archive_hash}")
     print(f"bytes: {archive.stat().st_size}")
-    print(f"files: {sum(1 for path in STAGE.rglob('*') if path.is_file())}")
+
     return 0
 
 
@@ -333,6 +333,8 @@ def _runtime_manifest(
             "commit": _git("rev-parse", "HEAD"),
             "branch": _git("branch", "--show-current"),
             "working_tree_clean": not bool(_git("status", "--short")),
+            "tree_sha256": source_tree_sha256(),
+            "dependency_lock_sha256": _sha256(ROOT / "requirements-win312.lock"),
         },
         "runtimes": {
             "dotnet_sdk_used_for_build": {**descriptors["dotnet_sdk"], "executable_sha256": _sha256(dotnet)},
@@ -350,6 +352,22 @@ def _runtime_manifest(
             "credential_in_archive": False,
         },
     }
+
+
+def source_tree_sha256() -> str:
+    suffixes = {".py", ".json", ".txt", ".cs", ".xaml", ".csproj", ".config", ".manifest", ".ico"}
+    excluded = {"__pycache__", "bin", "obj", ".packages"}
+    roots = [ROOT / "backend/app", ROOT / "desktop/DocumentWorkbench", ROOT / "samples/ir", ROOT / "desktop/runtime"]
+    lines = []
+    for directory in roots:
+        for path in sorted(directory.rglob("*")):
+            if path.is_file() and path.suffix.lower() in suffixes and not (set(path.parts) & excluded):
+                lines.append(f"{path.relative_to(ROOT).as_posix()} {_sha256(path)}")
+    for relative in ("VERSION", "requirements-win312.lock", "docs/wheelhouse-win312-manifest.json",
+                     "docs/THIRD_PARTY_NOTICES_WINDOWS.md", "scripts/package_document_workbench.py",
+                     "scripts/verify_workbench_portable.py"):
+        lines.append(f"{relative} {_sha256(ROOT / relative)}")
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
 
 
 def _installed_python_packages(site_packages: Path) -> list[dict[str, str | None]]:
@@ -398,6 +416,48 @@ def _zip_stage(stage: Path, archive: Path) -> None:
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
         for path in sorted(path for path in stage.rglob("*") if path.is_file()):
             bundle.write(path, f"{PACKAGE_NAME}/{path.relative_to(stage).as_posix()}")
+
+
+def verify_archive(archive: Path) -> dict:
+    """Verify every packaged file before publishing or accepting the ZIP."""
+    with zipfile.ZipFile(archive) as bundle:
+        names = set(bundle.namelist())
+        sums = [name for name in names if name.endswith("/SHA256SUMS.txt")]
+        if len(sums) != 1:
+            raise ValueError("Expected one workbench SHA256SUMS.txt")
+        prefix = sums[0].removesuffix("SHA256SUMS.txt")
+        expected = {sums[0]}
+        for line in bundle.read(sums[0]).decode("utf-8").splitlines():
+            digest, relative = line.split("  ", 1)
+            name = prefix + relative
+            expected.add(name)
+            if hashlib.sha256(bundle.read(name)).hexdigest() != digest:
+                raise ValueError(f"Workbench package hash mismatch: {relative}")
+        if names != expected or len(names) != len(bundle.infolist()):
+            raise ValueError("Workbench ZIP has unlisted or duplicate members")
+        return json.loads(bundle.read(prefix + "runtime-manifest.json"))
+
+
+def verify_isolated_archive(archive: Path) -> dict:
+    verify_archive(archive)
+    with tempfile.TemporaryDirectory(prefix="dw-check-") as temporary:
+        base = Path(temporary)
+        with zipfile.ZipFile(archive) as bundle:
+            bundle.extractall(base)
+            folder = bundle.namelist()[0].split("/")[0]
+        root = base / folder
+        environment = os.environ.copy()
+        for key in list(environment):
+            if key.upper().startswith("PYTHON") or key.upper() == "VIRTUAL_ENV":
+                environment.pop(key)
+        environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32")
+        result = subprocess.run([str(root / "runtime/python/python.exe"), "-I", "-X", "utf8", "-B",
+                                 str(root / "portable_acceptance.py"), "--out", str(base / "acceptance")],
+                                cwd=base, env=environment, capture_output=True, text=True,
+                                encoding="utf-8", errors="replace", timeout=180)
+        if result.returncode:
+            raise RuntimeError(f"Workbench portable acceptance failed: {result.stderr or result.stdout}")
+        return json.loads((base / "acceptance/acceptance.json").read_text(encoding="utf-8"))
 
 
 def _sha256(path: Path) -> str:

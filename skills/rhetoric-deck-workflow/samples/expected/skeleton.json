@@ -1,0 +1,567 @@
+{
+  "format": "deck_skeleton",
+  "version": "1.0",
+  "source_kind": "extracted",
+  "deck_pattern": "review_solution",
+  "page_count": 4,
+  "pages": [
+    {
+      "page_id": "p01",
+      "page_pattern": "struct_cover",
+      "argument_flow": "cover_title_subtitle",
+      "confidence": 0.95,
+      "structure": {
+        "items": {
+          "count": 1,
+          "expandable": false,
+          "max": 1
+        }
+      },
+      "slots": [
+        {
+          "slot_id": "s1",
+          "semantic": "page.title",
+          "type": "title",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 36,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3"
+        },
+        {
+          "slot_id": "s2",
+          "semantic": "page.subtitle",
+          "type": "subtitle",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 40,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_4"
+        },
+        {
+          "slot_id": "s3",
+          "semantic": "page.byline",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 1
+          },
+          "required": true,
+          "shape_ref": "sp_5"
+        }
+      ],
+      "emphasis": [],
+      "diagram": {
+        "type": "none",
+        "groups": 0,
+        "nodes_per_group": 0,
+        "flow": "none",
+        "annotations": 0,
+        "labels": null
+      },
+      "structural_labels": {
+        "_display": []
+      }
+    },
+    {
+      "page_id": "p02",
+      "page_pattern": "context_pain",
+      "argument_flow": "context_pain_goal",
+      "confidence": 0.95,
+      "structure": {
+        "items": {
+          "count": 4,
+          "expandable": false,
+          "max": 4
+        }
+      },
+      "slots": [
+        {
+          "slot_id": "s1",
+          "semantic": "page.title",
+          "type": "title",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 36,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_2"
+        },
+        {
+          "slot_id": "s2",
+          "semantic": "context.card_1",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_4"
+        },
+        {
+          "slot_id": "s3",
+          "semantic": "context.card_2",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_5"
+        },
+        {
+          "slot_id": "s4",
+          "semantic": "context.card_3",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_7"
+        },
+        {
+          "slot_id": "s5",
+          "semantic": "context.card_4",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_8"
+        },
+        {
+          "slot_id": "s6",
+          "semantic": "context.card_5",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_10"
+        },
+        {
+          "slot_id": "s7",
+          "semantic": "context.card_6",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_11"
+        },
+        {
+          "slot_id": "s8",
+          "semantic": "context.card_7",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_13"
+        },
+        {
+          "slot_id": "s9",
+          "semantic": "context.card_8",
+          "type": "caption",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_14"
+        }
+      ],
+      "emphasis": [],
+      "diagram": {
+        "type": "none",
+        "groups": 0,
+        "nodes_per_group": 0,
+        "flow": "none",
+        "annotations": 0,
+        "labels": null
+      },
+      "structural_labels": {
+        "_display": []
+      }
+    },
+    {
+      "page_id": "p03",
+      "page_pattern": "issue_retro",
+      "argument_flow": "problem_symptom_analysis_action",
+      "confidence": 0.95,
+      "structure": {
+        "items": {
+          "count": 12,
+          "expandable": false,
+          "max": 12
+        }
+      },
+      "slots": [
+        {
+          "slot_id": "s1",
+          "semantic": "page.title",
+          "type": "title",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 36,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_2"
+        },
+        {
+          "slot_id": "s2",
+          "semantic": "issue.cell_0_0",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_0_0"
+        },
+        {
+          "slot_id": "s3",
+          "semantic": "issue.cell_0_1",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_0_1"
+        },
+        {
+          "slot_id": "s4",
+          "semantic": "issue.cell_0_2",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_0_2"
+        },
+        {
+          "slot_id": "s5",
+          "semantic": "issue.cell_0_3",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_0_3"
+        },
+        {
+          "slot_id": "s6",
+          "semantic": "issue.cell_1_0",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_1_0"
+        },
+        {
+          "slot_id": "s7",
+          "semantic": "issue.cell_1_1",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_1_1"
+        },
+        {
+          "slot_id": "s8",
+          "semantic": "issue.cell_1_2",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_1_2"
+        },
+        {
+          "slot_id": "s9",
+          "semantic": "issue.cell_1_3",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_1_3"
+        },
+        {
+          "slot_id": "s10",
+          "semantic": "issue.cell_2_0",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_2_0"
+        },
+        {
+          "slot_id": "s11",
+          "semantic": "issue.cell_2_1",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_2_1"
+        },
+        {
+          "slot_id": "s12",
+          "semantic": "issue.cell_2_2",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_2_2"
+        },
+        {
+          "slot_id": "s13",
+          "semantic": "issue.cell_2_3",
+          "type": "table_cell",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 24,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3.cell_2_3"
+        }
+      ],
+      "emphasis": [],
+      "diagram": {
+        "type": "none",
+        "groups": 0,
+        "nodes_per_group": 0,
+        "flow": "none",
+        "annotations": 0,
+        "labels": null
+      },
+      "structural_labels": {
+        "_display": []
+      }
+    },
+    {
+      "page_id": "p04",
+      "page_pattern": "method_walkthrough",
+      "argument_flow": "steps_compare_benefit",
+      "confidence": 0.95,
+      "structure": {
+        "items": {
+          "count": 4,
+          "expandable": false,
+          "max": 4
+        }
+      },
+      "slots": [
+        {
+          "slot_id": "s1",
+          "semantic": "page.title",
+          "type": "title",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 36,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_2"
+        },
+        {
+          "slot_id": "s2",
+          "semantic": "method.node_1",
+          "type": "node_label",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 16,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_3"
+        },
+        {
+          "slot_id": "s3",
+          "semantic": "method.node_2",
+          "type": "node_label",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 16,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_4"
+        },
+        {
+          "slot_id": "s4",
+          "semantic": "method.node_3",
+          "type": "node_label",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 16,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_5"
+        },
+        {
+          "slot_id": "s5",
+          "semantic": "method.node_4",
+          "type": "node_label",
+          "cardinality": {
+            "min": 1,
+            "max": 1
+          },
+          "capacity": {
+            "chars_cjk": 16,
+            "lines": 2
+          },
+          "required": true,
+          "shape_ref": "sp_6"
+        }
+      ],
+      "emphasis": [],
+      "diagram": {
+        "type": "linear_flow",
+        "groups": 1,
+        "nodes_per_group": 4,
+        "flow": "left_right",
+        "annotations": 0,
+        "labels": null
+      },
+      "structural_labels": {
+        "_display": []
+      }
+    }
+  ]
+}

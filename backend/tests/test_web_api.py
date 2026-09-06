@@ -15,6 +15,7 @@ from pptx.util import Inches, Pt
 from PIL import Image
 
 from app.generators.stub import StubGenerator
+from app.template.package import validate_template_package
 import app.web_api as web_api
 from app.web_api import create_api_app
 from app.version import APP_VERSION
@@ -464,6 +465,70 @@ def test_template_upload_is_deck_only_and_must_be_valid_pptx(tmp_path: Path) -> 
     assert "deck" in word.get_json()["error"]["message"]
     assert corrupt.status_code == 400
     assert corrupt.get_json()["error"]["code"] == "E003"
+
+
+def test_template_validation_preflights_valid_upload_without_retaining_workspace(tmp_path: Path) -> None:
+    root = tmp_path / "jobs"
+    client = create_api_app(work_dir=root).test_client()
+
+    response = client.post(
+        "/api/templates/validate",
+        data={"template_file": (BytesIO(_template_bytes(tmp_path)), "template.pptx")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"valid": True}
+    assert not list(root.glob("analysis-*"))
+
+
+def test_template_validation_blocks_external_hyperlink_with_master_guidance(tmp_path: Path) -> None:
+    root = tmp_path / "jobs"
+    client = create_api_app(work_dir=root).test_client()
+
+    response = client.post(
+        "/api/templates/validate",
+        data={
+            "template_file": (
+                BytesIO(_template_with_external_hyperlink_bytes(tmp_path)),
+                "template-with-link.pptx",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    error = response.get_json()["error"]
+    assert error["code"] == "E003"
+    assert error["loc"] == "template_file"
+    assert error["retryable"] is False
+    assert "hyperlink" in error["message"]
+    assert "幻灯片母版" in error["suggestion"]
+    assert "超链接" in error["suggestion"]
+    assert "https://example.invalid" not in response.get_data(as_text=True)
+    assert not list(root.glob("analysis-*"))
+
+
+def test_template_sanitizer_downloads_valid_safe_copy_without_retaining_workspace(tmp_path: Path) -> None:
+    root = tmp_path / "jobs"
+    client = create_api_app(work_dir=root).test_client()
+    response = client.post(
+        "/api/templates/sanitize",
+        data={
+            "template_file": (
+                BytesIO(_template_with_external_hyperlink_bytes(tmp_path)),
+                "template-with-link.pptx",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert response.mimetype == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    safe_copy = tmp_path / "template-safe-copy.pptx"
+    safe_copy.write_bytes(response.data)
+    assert validate_template_package(safe_copy)["pass"] is True
+    assert not list(root.glob("analysis-*"))
 
 
 def test_template_ole_error_is_non_retryable_and_actionable(tmp_path: Path) -> None:
@@ -1192,6 +1257,23 @@ def _template_with_ole_bytes(tmp_path: Path) -> bytes:
                 )
             target.writestr(info, data)
         target.writestr("ppt/embeddings/oleObject1.bin", b"unsafe")
+    return output.getvalue()
+
+
+def _template_with_external_hyperlink_bytes(tmp_path: Path) -> bytes:
+    source_bytes = _template_bytes(tmp_path)
+    output = BytesIO()
+    with ZipFile(BytesIO(source_bytes)) as source, ZipFile(output, "w", ZIP_DEFLATED) as target:
+        for info in source.infolist():
+            data = source.read(info.filename)
+            if info.filename == "ppt/slideLayouts/_rels/slideLayout1.xml.rels":
+                data = data.replace(
+                    b"</Relationships>",
+                    b'<Relationship Id="rIdHyperlink" Type="http://schemas.openxmlformats.org/'
+                    b'officeDocument/2006/relationships/hyperlink" '
+                    b'Target="https://example.invalid/template" TargetMode="External"/></Relationships>',
+                )
+            target.writestr(info, data)
     return output.getvalue()
 
 

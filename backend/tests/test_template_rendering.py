@@ -14,7 +14,12 @@ import pytest
 from app.assets.pipeline import load_asset_manifest, normalize_assets
 from app.ir.deck_ir import DeckIR
 from app.lint.pptx_lint import check_pptx
-from app.template.package import TemplateInputError, validate_pptx_package, validate_template_package
+from app.template.package import (
+    TemplateInputError,
+    sanitize_template_hyperlinks,
+    validate_pptx_package,
+    validate_template_package,
+)
 from app.template.planner import build_template_plan
 from app.template.profile import extract_template_profile
 from app.template.renderer import render_deck_ir_with_template
@@ -350,6 +355,83 @@ def test_template_package_rejects_external_relationship_path_traversal_and_embed
         validate_template_package(referenced_ole)
 
 
+def test_template_hyperlink_sanitizer_creates_valid_copy_without_mutating_original(tmp_path: Path) -> None:
+    template = _template(tmp_path)
+    linked = tmp_path / "linked-template.pptx"
+    safe_copy = tmp_path / "linked-template-safe-copy.pptx"
+    original_bytes = template.read_bytes()
+
+    def add_hyperlink_reference(data: bytes) -> bytes:
+        root_marker = b"<p:sldLayout "
+        assert root_marker in data
+        data = data.replace(
+            root_marker,
+            b'<p:sldLayout xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+            b'xmlns:test="urn:codex:test" mc:Ignorable="test" ',
+            1,
+        )
+        marker = b'<p:cNvPr id="1" name=""/>'
+        assert marker in data
+        return data.replace(
+            marker,
+            b'<p:cNvPr id="1" name=""><a:hlinkClick r:id="rIdHyperlink"/></p:cNvPr>',
+            1,
+        )
+
+    _rewrite_package(
+        template,
+        linked,
+        replacements={
+            "ppt/slideLayouts/slideLayout1.xml": add_hyperlink_reference,
+            "ppt/slideLayouts/_rels/slideLayout1.xml.rels": lambda data: data.replace(
+                b"</Relationships>",
+                b'<Relationship Id="rIdHyperlink" Type="http://schemas.openxmlformats.org/'
+                b'officeDocument/2006/relationships/hyperlink" '
+                b'Target="https://example.invalid/template" TargetMode="External"/></Relationships>',
+            ),
+        },
+    )
+
+    with pytest.raises(TemplateInputError, match="外部关系"):
+        validate_template_package(linked)
+
+    removed = sanitize_template_hyperlinks(linked, safe_copy)
+
+    assert removed == 1
+    assert template.read_bytes() == original_bytes
+    assert validate_template_package(safe_copy)["pass"] is True
+    with zipfile.ZipFile(safe_copy) as package:
+        relationships = package.read("ppt/slideLayouts/_rels/slideLayout1.xml.rels")
+        layout = package.read("ppt/slideLayouts/slideLayout1.xml")
+    assert b"TargetMode=\"External\"" not in relationships
+    assert b"rIdHyperlink" not in layout
+    assert b'xmlns:test="urn:codex:test"' in layout
+    assert b'Ignorable="test"' in layout
+
+
+def test_template_hyperlink_sanitizer_refuses_non_hyperlink_external_relationship(tmp_path: Path) -> None:
+    template = _template(tmp_path)
+    external = tmp_path / "external-link.pptx"
+    safe_copy = tmp_path / "external-link-safe-copy.pptx"
+    _rewrite_package(
+        template,
+        external,
+        replacements={
+            "ppt/slides/_rels/slide1.xml.rels": lambda data: data.replace(
+                b"</Relationships>",
+                b'<Relationship Id="rIdExternal" Type="http://schemas.openxmlformats.org/'
+                b'officeDocument/2006/relationships/externalLink" '
+                b'Target="https://example.invalid/data" TargetMode="External"/></Relationships>',
+            )
+        },
+    )
+
+    with pytest.raises(TemplateInputError, match="仅支持移除外部超链接"):
+        sanitize_template_hyperlinks(external, safe_copy)
+
+    assert not safe_copy.exists()
+
+
 def test_template_package_enforces_compressed_uncompressed_slide_and_shape_limits(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -628,6 +710,59 @@ def test_cover_optional_metadata_does_not_force_fallback_but_maps_when_slot_exis
         f"replacements={[(r.source_path, r.role) for r in plan.slides[0].replacements]}, "
         f"warnings={[w.message for w in plan.slides[0].warnings]}"
     )
+
+
+def test_template_renderer_replaces_cover_presenter_and_date_slots(tmp_path: Path) -> None:
+    from app.ir.deck_ir import DeckIR
+    from app.lint.pptx_lint import check_pptx
+    from app.template.renderer import render_deck_ir_with_template
+
+    template = tmp_path / "cover-metadata.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    _textbox(slide, "TEMPLATE TITLE", 1.0, 0.5, 8.0, 1.0, 32)
+    slide.shapes[-1].text_frame.paragraphs[0].runs[0].font.name = "Impact"
+    _textbox(slide, "TEMPLATE SUBTITLE", 1.0, 1.7, 8.0, 0.7, 18)
+    _textbox(slide, "GENERIC BODY", 1.0, 2.4, 4.0, 0.6, 14)
+    _textbox(slide, "汇报人 / TEMPLATE PRESENTER", 1.0, 3.0, 4.0, 0.6, 14)
+    presenter_shape_id = slide.shapes[-1].shape_id
+    _textbox(slide, "时间 / TEMPLATE DATE", 1.0, 4.0, 4.0, 0.6, 14)
+    date_shape_id = slide.shapes[-1].shape_id
+    presentation.save(template)
+    deck = DeckIR.model_validate(
+        {
+            "ir_type": "deck",
+            "ir_version": "2.2",
+            "meta": {"title": "T", "classification": "PUBLIC"},
+            "slides": [
+                {
+                    "layout": "cover",
+                    "title": "车载通信基带技术报告",
+                    "subtitle": "模板驱动生成",
+                    "presenter": "张三",
+                    "date": "2026-08-25",
+                }
+            ],
+        }
+    )
+
+    output = tmp_path / "cover-metadata-output.pptx"
+    result = render_deck_ir_with_template(deck, template, output)
+    replacement_by_source = {
+        replacement.source_path: replacement.shape_id for replacement in result.plan.slides[0].replacements
+    }
+    rendered_text = "\n".join(
+        shape.text
+        for shape in Presentation(output).slides[0].shapes
+        if getattr(shape, "has_text_frame", False)
+    )
+
+    assert "张三" in rendered_text
+    assert "2026-08-25" in rendered_text
+    assert replacement_by_source["presenter"] == presenter_shape_id
+    assert replacement_by_source["date"] == date_shape_id
+    report = check_pptx(output, classification="PUBLIC", template_profile=result.profile)
+    assert "HW-E02" not in {item.code for item in report.items}
 
 
 def test_profile_survives_placeholder_shape_without_explicit_geometry(tmp_path: Path) -> None:

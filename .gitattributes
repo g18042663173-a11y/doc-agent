@@ -1,0 +1,4 @@
+# Package provenance hashes source bytes. Preserve them across Windows/Linux
+# checkouts instead of letting core.autocrlf change an audited source snapshot.
+# This disables newline conversion, not textual diffs.
+* -text

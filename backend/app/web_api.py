@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import hmac
+from io import BytesIO
 import json
 from pathlib import Path
 from queue import Full, Queue
@@ -50,7 +51,12 @@ from app.reliability.contracts import FailureEnvelope, JobState
 from app.rendering.docx_renderer import render_word_ir
 from app.rendering.pptx_renderer import render_deck_ir
 from app.rendering.theme import THEME_REGISTRY
-from app.template.package import TemplateInputError, validate_pptx_package, validate_template_package
+from app.template.package import (
+    TemplateInputError,
+    sanitize_template_hyperlinks,
+    validate_pptx_package,
+    validate_template_package,
+)
 from app.template.planner import build_template_plan
 from app.template.profile import extract_template_profile
 from app.template.renderer import render_deck_ir_with_template
@@ -155,6 +161,10 @@ class ApiJob:
             payload["assets"] = {
                 name: {"name": path.name, "download_url": f"/api/download/{self.job_id}/{name}"}
                 for name, path in sorted(self.assets.items())
+                if name in ALLOWED_DOWNLOAD_ASSETS and path.is_file()
+                and (self.status == "done"
+                     or (self.status in {"failed", "canceled"} and name == "failure-report")
+                     or (self.status == "failed" and name == "original-input"))
             }
         if self.status in {"failed", "canceled"}:
             payload["error"] = self.error
@@ -929,6 +939,94 @@ def _analysis_error_response(exc: Exception):
     )
 
 
+def _validate_template_request(app: Flask, root: Path):
+    """Run the authoritative template package check without creating a job."""
+    validation_dir: Path | None = None
+    try:
+        _enforce_rate_limit(app)
+        _ensure_disk_capacity(root)
+        # Reuse the bounded temporary-workspace lifecycle used by analysis so
+        # a failed browser/desktop preflight cannot retain a user template.
+        validation_dir = _new_workspace(root, prefix="analysis")
+        template_path = _save_template_upload(validation_dir, "deck")
+        if template_path is None:
+            raise ApiRequestError(
+                "E001",
+                "请以 template_file 上传 .pptx 模板。",
+                status=400,
+                loc="template_file",
+                suggestion="请选择需要检查的 PowerPoint 模板后重试。",
+            )
+        return jsonify({"valid": True})
+    except ApiRequestError as exc:
+        return _api_request_error_response(exc)
+    except Exception:
+        return _error_response(
+            "E001",
+            "模板安全检查未完成。",
+            status=500,
+            stage="validating_template",
+            loc="template_file",
+            suggestion="请稍后重新选择模板；若持续失败，请提供支持编号。",
+            retryable=True,
+        )
+    finally:
+        if validation_dir is not None:
+            shutil.rmtree(validation_dir, ignore_errors=True)
+
+
+def _sanitize_template_request(app: Flask, root: Path):
+    """Return a validated copy with external hyperlink relationships removed."""
+    repair_dir: Path | None = None
+    try:
+        _enforce_rate_limit(app)
+        _ensure_disk_capacity(root)
+        repair_dir = _new_workspace(root, prefix="analysis")
+        template_path = _save_template_upload(repair_dir, "deck", validate_package=False)
+        if template_path is None:
+            raise ApiRequestError(
+                "E001",
+                "请以 template_file 上传 .pptx 模板。",
+                status=400,
+                loc="template_file",
+                suggestion="请选择需要生成安全副本的 PowerPoint 模板后重试。",
+            )
+        safe_copy = repair_dir / "template-safe-copy.pptx"
+        sanitize_template_hyperlinks(template_path, safe_copy)
+        payload = BytesIO(safe_copy.read_bytes())
+        return send_file(
+            payload,
+            as_attachment=True,
+            download_name="template_安全副本.pptx",
+            mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
+    except ApiRequestError as exc:
+        return _api_request_error_response(exc)
+    except TemplateInputError as exc:
+        return _error_response(
+            exc.code,
+            exc.message,
+            status=400,
+            stage="sanitizing_template",
+            loc=exc.loc,
+            suggestion=_template_input_suggestion(exc),
+            retryable=False,
+        )
+    except Exception:
+        return _error_response(
+            "E001",
+            "模板安全副本生成失败。",
+            status=500,
+            stage="sanitizing_template",
+            loc="template_file",
+            suggestion="请稍后重试；若持续失败，请保留原模板并提供支持编号。",
+            retryable=True,
+        )
+    finally:
+        if repair_dir is not None:
+            shutil.rmtree(repair_dir, ignore_errors=True)
+
+
 def _generate_request(
     app: Flask,
     root: Path,
@@ -1230,6 +1328,14 @@ def _register_generation_routes(
     def analyze():
         return _analyze_request(app, root, manager)
 
+    @app.post("/api/templates/validate")
+    def validate_template():
+        return _validate_template_request(app, root)
+
+    @app.post("/api/templates/sanitize")
+    def sanitize_template():
+        return _sanitize_template_request(app, root)
+
     @app.post("/api/generate")
     def generate():
         return _generate_request(app, root, jobs, runner, manager)
@@ -1366,7 +1472,7 @@ def _save_upload(work_dir: Path) -> Path:
     return path
 
 
-def _save_template_upload(work_dir: Path, target: TargetKind) -> Path | None:
+def _save_template_upload(work_dir: Path, target: TargetKind, *, validate_package: bool = True) -> Path | None:
     upload = request.files.get("template_file")
     if upload is None or not upload.filename:
         return None
@@ -1388,16 +1494,17 @@ def _save_template_upload(work_dir: Path, target: TargetKind) -> Path | None:
         )
     path = work_dir / "template.pptx"
     _stream_upload(upload, path, max_bytes=MAX_TEMPLATE_UPLOAD_BYTES, label="模板文件")
-    try:
-        validate_template_package(path)
-    except TemplateInputError as exc:
-        raise ApiRequestError(
-            exc.code,
-            exc.message,
-            status=400,
-            loc=exc.loc,
-            suggestion=_template_input_suggestion(exc),
-        ) from exc
+    if validate_package:
+        try:
+            validate_template_package(path)
+        except TemplateInputError as exc:
+            raise ApiRequestError(
+                exc.code,
+                exc.message,
+                status=400,
+                loc=exc.loc,
+                suggestion=_template_input_suggestion(exc),
+            ) from exc
     return path
 
 
@@ -2424,6 +2531,12 @@ def _template_input_suggestion(exc: TemplateInputError) -> str:
         return (
             "请在 PowerPoint 中删除所列页面的嵌入 Excel、Visio 或 OLE 对象；"
             "如只需保留外观，请先将对象转成 PNG 后重新插入。该问题不能通过重试解决。"
+        )
+    if "外部关系" in exc.message and "(hyperlink)" in exc.message.lower():
+        return (
+            "模板包含外部超链接。请在 PowerPoint 中打开“视图 > 幻灯片母版”，"
+            "在受影响的母版或版式中选中带链接的文字、图标或页脚并取消超链接，"
+            "再另存为新的 .pptx 后重新选择。该问题不能通过重试解决。"
         )
     if "外部关系" in exc.message:
         return "请在 PowerPoint 中断开外部链接并将所需内容嵌入为普通图片或原生图形后重新上传。"

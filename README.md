@@ -1,5 +1,31 @@
 # 华为风格文档生成工具链
 
+## 三个交付入口
+
+本仓库统一维护生成 Skill、模仿 Skill 和 Windows 工作台，共用后端、IR 契约和发布脚本。
+
+| 交付 | 源码入口 | 用途 |
+|---|---|---|
+| 生成 Skill | [skills/huawei-doc-workflow](skills/huawei-doc-workflow) | Agent 按材料生成可编辑 Word/PPT |
+| 模仿 Skill | [skills/rhetoric-deck-workflow](skills/rhetoric-deck-workflow) | Agent 保留模板原生图形，替换正文、表格和图表数据 |
+| 工作台 | [desktop/DocumentWorkbench](desktop/DocumentWorkbench) | 人使用的 WPF 生成界面，共用本地后端 |
+
+下载 [GitHub Releases](https://github.com/g18042663173-a11y/document-toolkit/releases) 中的
+`生成.zip`、`模仿.zip`、`工作台.zip`。三个包分别携带所需 Windows 运行时，不需要 Docker。
+两个 Skill 解压后可运行 `run.cmd doctor --json`；工作台解压后运行 `DocumentWorkbench.exe`。
+
+当前工作台版本为 2.2.0，生成 Skill 为 1.1.0，模仿 Skill 为 2.0.0。
+统一发布入口是 `scripts/release_agent_deliverables.py`。Skill 内的后端副本由构建脚本同步，
+修改共享逻辑时应先修改 `backend/`，不要分别手工维护副本。
+
+模板模仿的完整页、材料证据和视觉复核规则见
+[完整仿版规格](docs/superpowers/specs/2026-09-05-complete-imitation.md)。
+Office 导出成功不等于视觉验收通过：应结合 `scripts/rdw_office_review.ps1` 的全页导出、
+`scripts/rdw_readability_audit.py` 的排版候选和逐页看图复核。
+9 月 5 日的真实 18 页材料、模板原件和渲染对照保存在本地任务交付目录，不包含在源码仓库中。
+
+此项目与独立的 FastAPI + React 项目 `doc-agent-mvp` 分别维护。
+
 本仓库实现确定性的离线文档流水线:
 
 ```text
@@ -8,9 +34,9 @@ md/docx/xlsx/pptx -> DocumentIR -> Prompt/generator -> WordIR/DeckIR -> DOCX/PPT
 
 IR 是唯一契约。模型文本必须先剥壳和校验,非法 IR 不进入 renderer。
 
-## 唯一正式版本与入口
+## 工作台与底层入口
 
-- 产品版本唯一来源：根目录 `VERSION`。Python API、WPF Assembly、界面版本、User-Agent
+- 工作台产品版本唯一来源：根目录 `VERSION`。Python API、WPF Assembly、界面版本、User-Agent
   和便携包名称都从该文件派生，不在各模块单独维护版本号。
 - 主用户入口：发布包中的 `DocumentWorkbench.exe`；源码项目为
   `desktop/DocumentWorkbench/DocumentWorkbench.csproj`。

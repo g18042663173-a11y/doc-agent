@@ -21,11 +21,11 @@ public sealed class PortableAcceptanceTests
     [Trait("Category", "PortableAcceptance")]
     public void SettingsExposeThemeAndNgaControls()
     {
-        if (!System.OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        var required = Environment.GetEnvironmentVariable("DOCUMENT_WORKBENCH_RELEASE_ACCEPTANCE") == "1";
+        if (required) Assert.True(System.OperatingSystem.IsWindows(), "Release acceptance requires Windows.");
+        if (!System.OperatingSystem.IsWindows()) return;
         var executable = Environment.GetEnvironmentVariable("DOCUMENT_WORKBENCH_EXE");
+        if (required) Assert.True(!string.IsNullOrWhiteSpace(executable) && File.Exists(executable), "Set DOCUMENT_WORKBENCH_EXE to the extracted release EXE.");
         if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
         {
             return; // 未指定目标 exe：跳过（常规 CI/verify 不受影响）
@@ -39,8 +39,12 @@ public sealed class PortableAcceptanceTests
             WorkingDirectory = Path.GetDirectoryName(executable)!,
             UseShellExecute = false,
         };
+        start.Environment.Remove("PYTHONPATH");
+        start.Environment.Remove("PYTHONHOME");
         using var application = Application.Launch(start);
         using var automation = new UIA3Automation();
+        try
+        {
         var window = Retry.WhileNull(
             () => application.GetMainWindow(automation),
             TimeSpan.FromSeconds(60),
@@ -56,6 +60,15 @@ public sealed class PortableAcceptanceTests
             TimeSpan.FromMilliseconds(250)).Result;
         Assert.NotNull(engineState);
         Assert.Contains("生成器", engineState.Name);
+        var targetSelection = RequireElement(window.FindFirstDescendant(condition.ByAutomationId("target-type")), "target-type").AsComboBox();
+        Assert.NotNull(targetSelection.SelectedItem);
+        Assert.False(string.IsNullOrWhiteSpace(targetSelection.SelectedItem.Text));
+        if (targetSelection.SelectedItem.Text.Contains("PowerPoint"))
+        {
+            var depthSelection = RequireElement(window.FindFirstDescendant(condition.ByAutomationId("deck-depth")), "deck-depth").AsComboBox();
+            Assert.NotNull(depthSelection.SelectedItem);
+            Assert.False(string.IsNullOrWhiteSpace(depthSelection.SelectedItem.Text));
+        }
         CaptureShot(window, shotDir, "01-main");
 
         // 设置 > 常规：默认 PPT 主题（含学术版）
@@ -68,12 +81,12 @@ public sealed class PortableAcceptanceTests
         CaptureShot(window, shotDir, "02-settings-general");
 
         // 设置 > NGA：调用方式 + 当前生成器状态
-        RequireElement(window.FindFirstDescendant(condition.ByName("NGA")), "NGA").AsButton().Invoke();
+        RequireElement(window.FindFirstDescendant(condition.ByAutomationId("GeneratorSettingsButton")), "GeneratorSettingsButton").AsButton().Invoke();
         Retry.WhileFalse(
-            () => window.FindFirstDescendant(condition.ByAutomationId("nga-transport")) is not null,
+            () => window.FindFirstDescendant(condition.ByAutomationId("generator-channel")) is not null,
             TimeSpan.FromSeconds(5),
             TimeSpan.FromMilliseconds(100));
-        var ngaState = window.FindFirstDescendant(condition.ByAutomationId("NgaActiveStateText"));
+        var ngaState = window.FindFirstDescendant(condition.ByAutomationId("GeneratorActiveStateText"));
         Assert.NotNull(ngaState);
         Assert.Contains("当前生成器", ngaState.Name);
         CaptureShot(window, shotDir, "03-settings-nga");
@@ -144,24 +157,21 @@ public sealed class PortableAcceptanceTests
         CaptureShot(window, shotDir, "08-system-settings");
 
         // 紧凑与宽屏窗口：无裁切、无横向溢出目检用截图
-        var transform = window.Patterns.Transform.PatternOrDefault;
-        Mark(shotDir, "transform-null=" + (transform is null));
-        if (transform is not null)
-        {
-            transform.Resize(1024, 700);
-            Thread.Sleep(400);
-            CaptureShot(window, shotDir, "09-compact-1024x700");
-            transform.Resize(1280, 820);
-            Thread.Sleep(400);
-            CaptureShot(window, shotDir, "10-standard-1280x820");
-            transform.Resize(1920, 1080);
-            Thread.Sleep(400);
-            CaptureShot(window, shotDir, "11-wide-1920x1080");
-        }
+        ResizeWindowDip(window, shotDir, 1024, 700);
+        CaptureShot(window, shotDir, "09-compact-1024x700dip");
+        ResizeWindowDip(window, shotDir, 1280, 820);
+        CaptureShot(window, shotDir, "10-standard-1280x820dip");
+        ResizeWindowDip(window, shotDir, 1600, 1000);
+        CaptureShot(window, shotDir, "11-wide-1600x1000dip");
         Mark(shotDir, "before-close");
 
         CloseAndAssertExit(application);
         Mark(shotDir, "closed");
+        }
+        finally
+        {
+            if (!application.HasExited) application.Kill();
+        }
     }
 
     private static void CloseAndAssertExit(Application application)
@@ -190,6 +200,30 @@ public sealed class PortableAcceptanceTests
 
     private static AutomationElement RequireElement(AutomationElement? element, string automationId) =>
         element ?? throw new InvalidOperationException($"Missing required UI Automation element: {automationId}");
+
+    private static void ResizeWindowDip(Window window, string shotDir, int widthDip, int heightDip)
+    {
+        var handle = new IntPtr(window.Properties.NativeWindowHandle.ValueOrDefault);
+        var previous = SetThreadDpiAwarenessContext(PerMonitorAwareV2);
+        try
+        {
+            var dpi = GetDpiForWindow(handle);
+            Assert.True(dpi >= 96, $"Invalid window DPI: {dpi}");
+            var width = (int)Math.Round(widthDip * dpi / 96.0);
+            var height = (int)Math.Round(heightDip * dpi / 96.0);
+            Assert.True(SetWindowPos(handle, IntPtr.Zero, 0, 0, width, height, 0x0014),
+                $"SetWindowPos failed: {Marshal.GetLastWin32Error()}");
+            Thread.Sleep(400);
+            Assert.True(GetWindowRect(handle, out var bounds));
+            Assert.Equal(width, bounds.Right - bounds.Left);
+            Assert.Equal(height, bounds.Bottom - bounds.Top);
+            Mark(shotDir, $"resized {widthDip}x{heightDip} DIP, DPI={dpi}, pixels={width}x{height}");
+        }
+        finally
+        {
+            if (previous != IntPtr.Zero) SetThreadDpiAwarenessContext(previous);
+        }
+    }
 
     private static void CaptureShot(Window window, string shotDir, string name)
     {
@@ -252,6 +286,12 @@ public sealed class PortableAcceptanceTests
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr windowHandle);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr windowHandle, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect

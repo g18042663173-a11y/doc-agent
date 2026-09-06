@@ -1,5 +1,239 @@
 # Progress
 
+## 2026-09-07 GitHub 私有发布
+
+- 三个交付按现有共享后端结构统一发布至 `g18042663173-a11y/document-toolkit`；生成、模仿、WPF 各有源码入口，`doc-agent-mvp` 仍独立维护。
+- 保留现有 Git 历史与全部源码修改；忽略本地真实材料、运行目录、缓存与 ZIP。下载包经清单、SHA-256 和源文件一致性检查，从 GitHub Release 单独提供。
+- 仓库检出保持源文件原始字节，避免 Windows 自动换行转换破坏已验收的包内来源哈希。源码与历史凭据模式筛查未发现候选。
+- 本次发布沿用9月5日已验证的生成1.1.0、模仿2.0.0、工作台2.2.0便携包；源码包含后续排版检查工具。真实18页材料及修订图留在本地outputs。
+
+## 2026-09-05 排版纠正：旧视觉结论已撤销
+
+- 用户指出挤压与重叠后，重新检查完整18页PowerPoint实际导出。此前“accepted”的视觉结论不再作为当前交付依据；保留历史文件和运行目录。
+- `tmp/imitate-spacing-20260905-140617` 对43个文字/表格对象修订：缩写长句、显式断行与段距、13–14页表格居中并调至12pt正文/13pt表头、拆开图表侧栏、缩短18页总结。未删除任何页或槽，未改图形/图片位置；图片、图表、工作簿和全部非幻灯片部件字节保持。
+- 新增 `scripts/rdw_readability_audit.py`；Office导出补充逐行、组合对象和表格文字边界，明确导出成功不代表视觉通过。表格局部坐标已归一；行距筛查注明为启发式，不能冒充字形测量或视觉终审。
+- 本轮自动回读18页/284槽通过；逐页看图复核完成。多行紧凑候选24→0，跨对象文字边界重叠0；7个原模板页脚/箭头边界候选保留记录，图上无裁字。修订版与完整前后对照作为新增交付；原三个ZIP的运行时代码未改变，未宣称此次重新发布ZIP或重新做便携验收。
+- 新增排版检查5项回归通过；完整 `scripts/verify.py` 通过四格式Word/PPT Stub闭环、Schema快照和覆盖率门禁，overall88.29%。修订PPT已打开至第5页，全页对照已打开。
+
+## 2026-09-05 完整页重构已验收
+
+- 保持全部18页与原页序，完整72页PDF提取、284槽填充并实际PPTX回读通过；6媒体字节与几何保持，3图表缓存/工作簿同步。
+- 新契约2.0、证据引用、草稿/正式验收分离；取消按低分删页，保留DeckIR2.2/WordIR1.3交接。
+- PowerPoint已全页导出并完成Agent视觉与独立材料复核；最终out-08状态accepted，content-v4。工作目录tmp/imitate-visual-20260905-122511；9/4原目录62文件及2输入复核哈希未变。
+- 完整scripts/verify.py通过：parsers91.96%、IR94.06%、lint94.23%、overall88.49%。原生对象7、完整性10、安装12、生成13、模仿20、API62及真实WPF UI验收通过。
+- release-final-r2为本轮正式发布：生成1.1.0、模仿2.0.0、工作台2.2.0。三个独立ZIP已回验，两个Skill当前用户安装一致，旧版已备份。
+- 最终模仿ZIP另在仓库外中文空格路径、仅包内Python、进程级禁网下完成真实18页闭环。未宣称干净VM/整机物理断网/真实模型API验收。
+- 用户交付集中在当前Codex任务outputs：三个短名ZIP、18页仿版.pptx、全页对照、验收报告与哈希清单。实施前源码基线已保存，没有提交或重置Git。
+
+
+## 2026-09-05 模仿 Skill：骨架草稿、按页打分、删 fit-reject 页
+
+- 9/4 人工对照真实《华为工作汇报模板》后，空白壳已被覆盖门禁/删 omitted 页堵住；人再验收仍会倒在三件事：宿主只绑几个框、整份素材把不该填的页硬填、`verdict=reject` 页留在成品里当空页。
+- `extract` 写出可过覆盖门禁的 `extract_pack/skeleton_draft.json`（绑完纳入页全部有字候选；目录/结束/empty 不纳入）。草稿不是 seal；宿主只改角色或省略页。
+- `plan` 按该页 `page_pattern` 的角色词打分，`hits=0` 时 role 封顶 8，不再用全文 bullets 给每一页加分。过瘦素材整份仍 `RD-E020`。
+- `finalize` 模式 A 从 `deck.pptx` 删除 `omitted`/`empty`/`reject` 页；输出 `skip_report.json` 合并 seal 省略与 fit reject。
+- 不把 18 页华为原模板写入 git；不改 DeckIR 2.2；工作台不加模仿按钮；不做复制列/删行。对照脚本仍是 `scripts/rhetoric_deck_visual_qa.py`。
+- 相关测试在 `backend/tests/test_rhetoric_deck_skill.py`。
+
+## 2026-09-04 模仿 Skill：母版页脚、槽位覆盖与省略页
+
+- 模式 A 消毒不再清空母版/版式铬；页脚密级改写成用户材料（缺省 `HUAWEI CONFIDENTIAL`）。
+- `extract` 写出 `slot_candidates.json`；`seal` 对纳入页强制覆盖，漏绑 `RD-E010`。
+- `finalize` 从 `deck.pptx` 删除 `omitted`/`empty` 页，`skip_report.json` 仍保留原因。
+- 规格样品改为 4 页 16:9（封面、卡片框、原生表、圆角节点 + 母版页脚），不把 18 页华为原模板提交进 git。
+- 相关测试在 `backend/tests/test_rhetoric_deck_skill.py`；对照脚本 `scripts/rhetoric_deck_visual_qa.py` 不进 Skill ZIP。
+
+## 2026-09-04 模仿 Skill 1.0.3：保住 SmartArt 图形和截图像素
+
+- source-shell 保留原页图片与 SmartArt 图形，只清可见文字再填用户材料。空页仍 skip，动画仍剥掉。
+- 文本泄漏门 `RD-E040` 不变。源图像素留在产物里是故意的，不是把图画成可编辑原生对象。
+- 相关测试在 `backend/tests/test_rhetoric_deck_skill.py`。
+
+## 2026-09-04 双产物离线交付
+
+- **Agent**：`dist/huawei-doc-workflow-1.0.3.zip`、`dist/rhetoric-deck-workflow-1.0.3.zip`
+  及 `.sha256`。`python scripts/install_agent_kit.py --from-zip dist` 已在本机装入
+  `.codex/skills`，两边 `doctor` 通过。
+- **工作台**：`dist/document-workbench-windows-x64-2.2.0.zip`（105,811,123 字节），
+  WPF 测试 23/23，Release 便携包已打出。
+- **给拿走的短文件名**：`dist/生成.zip`、`dist/模仿.zip`、`dist/工作台.zip`（内容与带版本号 ZIP 相同）。
+  说明见 `dist/DELIVER.txt`。
+
+## 2026-09-04 模仿 Skill 1.0.2：恢复 SmartArt / 截图 / 动画页
+
+- SmartArt 抽节点文字并换成可换字文本框；纯截图页改空占位框，不拷原图；动画/切换从页 XML 剥掉，有字的页不再整页跳过。
+- 仍无法恢复的空页进 `skip_hints.json`。泄漏门继续扣住成品，`leak_report.json` 增加 `hits.loc`。
+- 相关测试在 `backend/tests/test_rhetoric_deck_skill.py`。
+
+## 2026-09-04 离线 Agent Kit（无 Docker）
+
+- **推荐落地**：内网 Windows 不走 Docker、不合成两个 Skill、不打 PyInstaller 单文件。
+  Agent 侧一条命令装两个 Skill；人机 Demo 仍用现成工作台便携 ZIP。
+- **入口**：`python scripts/install_agent_kit.py` 复制 `huawei-doc-workflow` 与
+  `rhetoric-deck-workflow` 到 `%USERPROFILE%\.codex\skills`，写
+  `agent_kit_manifest.json`，并分别跑 `doctor`。`--check` 只验收不覆盖。
+- **工作台**：继续 `scripts/package_document_workbench.py` 的
+  `document-workbench-windows-x64-<VERSION>.zip`，与 Skill 目录解耦。
+- **验收**：`backend/tests/test_agent_kit.py` 覆盖双 Skill 复制与 doctor。
+
+## 2026-08-26 实习答辩 PPT（华为浅色模板）
+
+- **最终产物**：已按 `答辩PPT完整设计稿.md` 和用户提供的浅色 16:9 模板完成 19 页可编辑
+  PPTX，输出到 `C:\Users\GSQ\Downloads\实习答辩PPT_华为浅色版_20260826.pptx`。
+- **叙事与证据**：把仓库程序明确定位为端到端 Demo / 原型验证，不包装成已投产产品；图表与
+  关键数字以答辩稿、`docs/taskbook.md` 和仓库可复核统计为准。每页均写入讲稿备注和
+  `[Sources]` 来源块。
+- **模板与规则**：保留雪山封面、正文母版、Logo、品牌结束页；正文按项目 `hw-report`
+  主题使用华为红、黑灰层级、微软雅黑/Arial 和 `HUAWEI CONFIDENTIAL`。源模板 6 个主题
+  XML 已逐字节恢复，成品无外部关系、动画、切换和默认占位文字。
+- **验收**：19 页均已渲染逐页目检；通用幻灯片测试通过（无文字溢出）；项目 lint 为
+  **0 Error / 117 Warning / 1 Info，Pass=True**。Warning 主要来自“保留用户模板几何”与项目
+  12 栏网格、字号种类上限之间的预期差异，未放宽任何 lint 规则。
+- **审计说明**：模板保真启发式检查仍把 4 个已在 frame map 中声明删除的默认内容占位符
+  误判为被新卡片遮盖；最终 PPTX XML 已确认这些占位符实际不存在。Windows PowerPoint
+  字体保真与现场投影效果仍需人工终审。
+
+## 2026-08-25 `huawei-doc-workflow` 非多模态可移植交付版 1.0.3
+
+- **定位收敛**：Skill 继续不携带、不调用任何外部模型或图片生成服务；预期宿主 Agent
+  不具备多模态图片理解。图片安全解码、规范化、哈希、嵌入和 DPI/裁切审计仍可运行，
+  但引擎明确不声明理解图片像素或完成视觉评审。
+- **图片语义门禁**：`prepare` 新增私有 `asset_semantics` 记录，模式固定为
+  `text_grounded_only`。安全解码、尺寸、哈希、文件名或 `asset_id` 均不构成语义证据；
+  未获 brief/源材料明确映射的图片会保留在 AssetManifest 中但从 Skill 输出的 VisualPlan
+  图片推荐中过滤，禁止自动编造图片含义、说明、焦点、署名或图文关系。IR、Schema 和
+  renderer 公共契约均未修改。
+- **人工视觉终审**：`workflow_manifest.json.visual_review` 明确记录确定性引擎没有执行
+  像素检查，状态为 `human_required`。有 PowerPoint/LibreOffice 时可导出预览供人查看，
+  Agent 不得把“已导出图片”表述为“已视觉检查”；模板分析只承诺 OOXML 结构、槽位、
+  几何、颜色和字体适配，不承诺像素级复刻。
+- **跨电脑保护**：运行时从当前 `SKILL.md` 所在目录和当前宿主 Python 动态解析路径；
+  文档禁止复用其它机器的盘符、用户目录、Python 或输出路径。打包检查扩展到全部文本
+  文件，并阻断 `C:\Users\`、`C:/Users/`、`/Users/`、`/home/` 等用户机器绝对路径进入 ZIP。
+- **验收结果**：Skill Creator 官方校验通过，Skill 专项 **13 passed**；安装版使用
+  “真实 PNG（无文字说明）+ Markdown”前向验证得到 `grounded_assets=0`、
+  `ungrounded_assets=1`、`image_recommendations=0`。`python scripts/verify.py` 通过，
+  四格式端到端全绿；parsers 91.96%、IR 94.06%、lint 94.23%、整体 88.79%。
+- **发布与安装**：`dist/huawei-doc-workflow-1.0.3.zip` 为 239,663 字节，SHA-256
+  `87affae88d88de9f32a352732082997d2128770eb19d35fe86c8fd5142fcb875`。离开仓库解压后
+  `doctor` 通过，85 个源文件逐一核对包清单；已安装到
+  `C:\Users\GSQ\.codex\skills\huawei-doc-workflow`，旧 1.0.2 安装备份位于
+  `C:\Users\GSQ\.codex\skill-backups\`。
+
+## 2026-08-25 `huawei-doc-workflow` 商务模板实测与 1.0.2
+
+- **真实套版验收**：用安装后的 Skill 1.0.2 读取
+  `基带技术报告_演示生成测试.md`，套用用户提供的 `商务汇报.pptx`，生成 13 页可编辑
+  PPTX。本机 PowerPoint 成功打开并导出全部 13 页 PNG；最终 lint 为
+  **0 Error / 4 Warning / 1 Info**。四条 Warning 均来自封面沿用模板的非标准网格、页边、
+  标题坐标和复杂背景，已做人工可读性复核；仍需目标 Office/字体环境终审。
+- **模板安全处理**：原模板包含 18 个外部超链接，严格预检按 E003 阻断。新增公开命令
+  `workflow.py sanitize-template`，只在“仅含外部超链接”的可证明场景生成独立安全副本，
+  从不修改原文件；对其它外部/嵌入内容继续拒绝。改用 `lxml` 保留 Open XML 的
+  `mc:Ignorable` 命名空间，修复标准库重序列化后 PowerPoint 无法打开的问题。
+- **模板字段与字体修复**：模板渲染和替换审计支持 `presenter`、`date`、`index`；规划器
+  对“演讲人/汇报人/日期/时间/序号/章节”等语义槽位加权，避免日期误写入普通正文。
+  不合规或缺失字体会切换到模板提取出的合规回退字体，同时写入 Latin 与 East Asian
+  run 属性，并按实际字体重新度量；没有放宽字体 lint。
+- **实测边界**：本样例仅封面 1/13 使用 `prototype_replace`，其余 12/13 使用
+  `master_redraw`。生成稿继承了模板的蓝色配色、背景语言和封面视觉，但没有智能复刻
+  原模板所有卡片、时间线、图片和复杂版式；“安全套版 + 确定性重绘”已可用，复杂模板
+  的页面级结构匹配仍是下一阶段主要能力缺口。
+- **回归与发布**：模板专项回归 **21 passed**，Skill Creator 官方校验、快照同步检查和
+  `python scripts/verify.py` 全部通过（parsers 91.96%、IR 94.06%、lint 94.23%、整体
+  88.79%）。发布包 `dist/huawei-doc-workflow-1.0.2.zip` 为 238,304 字节，SHA-256
+  `f16979265f9dda83049a14e2758122df0a7ac06f03bb66f0bf3a6b6bfb0cf5d8`；85 个文件按
+  manifest 校验后安装到 `C:\Users\GSQ\.codex\skills\huawei-doc-workflow`。
+- **最终产物**：`...\huawei-doc-workflow-output\商务汇报模板_基带技术报告_skill_1.0.2_release\`
+  内含 `deck.pptx`、安全模板副本、结构分析、模板计划、lint、工作流清单和 PowerPoint
+  导出的 `visual-qa`。PPTX SHA-256 为
+  `a6e8c0e2e14248a5d4095331cba9689f469863862d3f878440e48e356d98229e`。
+
+## 2026-08-25 `huawei-doc-workflow` 真实前向验收与 1.0.1 修复
+
+- **前向样例**：用安装后的 Skill 处理 `基带技术报告_演示生成测试.md`，生成 13 页
+  `hw-report` PPTX，并通过本机 PowerPoint 导出 1600×900 PNG 逐页检查；不再只依赖
+  JSON lint。
+- **发现的问题**：1.0.0 在无 Graphviz 时虽然能完成渲染，但四节点架构图节点过小、
+  整体稀疏，强调节点技术文字出现难看换行；四列 KPI 的 `1.18 Gbps` 也发生单位
+  断行。原 lint 为 0 Warning，说明自动检查没有覆盖 Office 实际字体度量和降级布局观感。
+- **1.0.1 修复**：无 Graphviz 的未分组架构节点按可用槽位放大，保留显式/分组几何；
+  KPI 根据卡片实际宽度预估并降低数值字号，保持“数值 + 单位”单行；Graphviz 降级
+  写入 `workflow_manifest.json.runtime_warnings`，`doctor` 与 Skill 指令明确要求视觉复核，
+  禁止再表述为“视觉不受影响”。PPT lint 同步接受主题约束内的 KPI 自适应字号，并从
+  单页字号层级统计中排除该数值 run；低于主题下限的篡改仍稳定告警。
+- **验证证据**：PowerPoint 复渲染确认第 3 页 KPI 与第 5 页架构文字完整、可读；新增
+  两条渲染回归。相关 PPT/Skill 套件 **121 passed / 8 skipped**，Skill Creator 官方校验
+  通过；最终 `python scripts/verify.py` 通过（全量 backend、四格式端到端；parsers
+  91.96%、IR 94.06%、lint 94.23%、整体 88.82%）。最终安装后的样例审计为
+  **0 Error / 0 Warning / 1 Info**，并由 PowerPoint 导出 13 页 PNG；唯一架构页已单独复核。
+- **发布与安装**：最终包 `dist/huawei-doc-workflow-1.0.1.zip`（237,050 字节），SHA-256
+  `b03c87cdfa4768d53e30304736239f7e0e5a02268232c1d94c2ce5aff43c6b91`；已按包清单核对
+  85 个文件并更新安装到
+  `C:\Users\GSQ\.codex\skills\huawei-doc-workflow`，1.0.0 安装备份保存在
+  `C:\Users\GSQ\.codex\skill-backups\`。最终样例位于
+  `...\huawei-doc-workflow-output\基带技术报告_演示生成测试_skill_1.0.1_release\`。
+
+## 2026-08-25 `huawei-doc-workflow` 独立 Skill 1.0.0
+
+- **已交付**：新增可直接安装的 `skills/huawei-doc-workflow/`。Skill 仅允许显式
+  `$huawei-doc-workflow` 调用，由当前 Agent 根据生成包编写 WordIR 1.3 / DeckIR
+  2.2；本地 `workflow.py` 只执行 `doctor → prepare → validate → finalize → audit`
+  的确定性解析、校验、渲染和审计，不包含 Stub/NGA/opencode-go、Web、WPF、密钥、
+  wheelhouse 或嵌入式 Python。
+- **契约与隔离**：冻结产品 2.2.0 的最小运行快照、Schema、few-shot 示例和逐文件
+  SHA-256 清单；打包前检查原项目核心与快照漂移，发现差异即阻止发布。非法 IR 最多
+  允许初稿加两轮修正，仍失败即 `SKILL-E020` 停止，绝不进入 renderer；已有产物默认
+  拒绝覆盖。
+- **专项验收**：`backend/tests/test_huawei_doc_skill.py` **12 passed**，覆盖四种输入格式、
+  纯主题、Word、完整 Deck、17 种版式契约、四主题、真实图片、模板、独立 audit、
+  Graphviz 确定性降级、非法 IR、危险模板、缺失图片、覆盖保护和解压后隔离运行。
+  `skill-creator` 官方 `quick_validate.py`、Ruff、源码清单/漂移检查均通过。
+- **项目回归**：`python scripts/verify.py` 通过（四格式 Word/Deck 端到端；parsers
+  91.96%、IR 94.06%、lint 94.26%、整体 88.68%）。最终 ZIP 离开仓库目录后再次通过
+  `doctor + validate + finalize`，生成可编辑 DOCX。
+- **发布物**：`dist/huawei-doc-workflow-1.0.0.zip`（235,468 字节，86 个条目），
+  SHA-256 `8a1599d299ec03f01e03015fab28ad0a0f5d387feb10fbff44d75890c8923a6e`；
+  同目录包含 `.zip.sha256`。仍需人在目标 Windows Word/PowerPoint 与目标字体环境中做
+  事实、字体和视觉终审；lint 全绿不替代人工签字。
+
+## 2026-08-14 WPF 下载服务误报修复
+
+- **根因**：`WorkbenchApiClient.DownloadAsync` 对成功的二进制响应也调用了
+  `EnsureSuccessAsync`；该方法未先判断 2xx，尝试把 PPTX 解析为 JSON 后统一抛出
+  `HttpRequestException`，界面因此错误显示“本地服务暂不可用”。后端实际返回
+  `200`，产物 `deck.pptx` 存在且可读。
+- **修复**：`EnsureSuccessAsync` 在成功 HTTP 状态时立即返回；非 2xx 响应继续保留
+  原有的结构化错误解析与定位。
+- **回归**：新增 `WorkbenchApiClientTests.DownloadAsync_WritesSuccessfulBinaryResponse`；
+  修复前确定性失败为“本地 API 请求失败（200）”，修复后通过。完整 WPF 测试
+  `21/21` 通过，`python scripts/verify.py` 通过（parsers 91.96%、IR 94.06%、
+  lint 94.26%、整体 88.78%）。
+- **可见复验**：重启更新版工作台，在“任务”页下载已完成 PPTX；界面显示已保存，
+  保存副本为有效 ZIP/PPTX（45,212 字节，`PK` 文件头），测试副本已清理。
+
+## 2026-08-14 桌面端异常恢复体验复查
+
+- **复现问题**：隐藏 Python 后端异常退出后，任务页导航会使 `async void` 异常进入全局处理并弹出通用错误框；任务表继续显示旧数据却没有过期提示；侧栏“已连接”与顶部原始 loopback 连接错误相互矛盾；诊断页首次读取失败时字段为空，无法判断当前状态。
+- **修复**：任务与诊断的只读请求归并到同一条有界、串行化的后端恢复路径；任务页改为页面内同步/缓存状态，诊断页改为可读的不可用状态，避免暴露本机端口和原始网络错误。恢复达到两次上限时，明确要求重启工作台，不再错误引导用户继续刷新。
+- **回归与可见复验**：`dotnet test desktop/DocumentWorkbench.Tests/DocumentWorkbench.Tests.csproj` 通过 **20/20**，覆盖诊断恢复、任务恢复无通用弹窗、恢复上限提示；`python scripts/verify.py` 通过，parsers 91.96%、IR 94.06%、lint 94.26%、整体 88.78%。手动注入后端退出后，任务页与诊断页均在约 3.5 秒内恢复，诊断字段完整显示。
+- **Windows 控制台修复**：`verify.py` 入口显式采用 UTF-8 + `backslashreplace` 输出，避免 GBK 终端因 pytest 的 Unicode 输出而中断；新增覆盖该行为的单测。
+- **交付状态**：已重建 `dist/document-workbench-windows-x64-2.2.0.zip`，SHA-256 为 `1cb88d66d9a4b49ebcb4ba026dc0c60808ab15c2dd9294bc4104731829dcca4c`（2257 个文件）。
+
+## 2026-08-14 桌面诊断页后端自恢复
+
+- **修复**：诊断页检测到隐藏 Python 后端已退出时，会复用有上限、串行化的
+  自动重启流程，待新后端通过 API 就绪检查后重新读取诊断；不再因读取失败走通用
+  操作错误提示。诊断页仅使用 `/api/diagnostics` 的既有生成器快照，不再额外依赖
+  生成器设置请求。
+- **回归**：新增原生 UI 用例，显式终止测试窗口所属后端后点击“诊断”，断言替代
+  后端进程成功启动。`dotnet test` 通过 **18/18**；`python scripts/verify.py` 通过，
+  parsers 91.96%、IR 94.06%、lint 94.26%、整体 88.78%。
+- **交付状态**：已生成独立热修复便携包
+  `output/diagnostics-hotfix/document-workbench-windows-x64-2.2.0.zip`
+  （SHA-256 `b8a1bd4a6130de6721b4fcad752c2313e8e02c85ed75bd09c3118db02d76135e`）；
+  现有运行中的旧便携包未被覆盖。
+
 ## 2026-08-14 AI 通道统一管理界面(用户指令:NGA 与 opencode-go 整合)
 
 - **概念统一**:NGA(CLI/HTTP)与 opencode-go 归并为"AI 通道",同一个设置界面
@@ -1123,3 +1357,205 @@
 - **已重打包（当前最新分发物）**：ZIP sha256 `0a6d0411d41c48a48147a60df60a048ed042c147b27a45e341978064fc2b36a2`；
   安装程序 sha256 `55070608157d1a9c79181b98a9c9124990b250bfc44cc11234d244acfa9da38f`。
   含架构图渲染改造 + 深色/浅色双主题 + AI Arena 交互吸收全部改动。
+
+## 2026-08-14 模板上传预检与晚期生成失败修复
+
+### 已完成并通过验收
+
+- 根因确认：用户模板 `商务汇报.pptx` 的
+  `ppt/slideLayouts/_rels/slideLayout12.xml.rels:rId2` 含外部超链接关系；该关系继续按
+  `E003` 安全规则拒绝，未放宽 Office 包安全校验。
+- 新增 `POST /api/templates/validate`：复用生成链路的模板上传和包校验逻辑，在临时
+  `analysis-*` 工作区完成检查并始终清理，不创建任务、不保留用户模板。
+- 浏览器工作台和 WPF 在选择模板后立即显示校验状态；无效或尚未完成校验的模板只禁用 PPT
+  生成，不影响“分析资料”。生成前还会按文件大小和修改时间重新检查，后端保留最终权威校验。
+- 外部关系提示按关系类型显示为 `(hyperlink)`，不暴露外链目标；界面给出 PowerPoint
+  “视图 → 幻灯片母版 → 移除超链接 → 另存为”的可执行处理路径。
+- 回归通过：`dotnet test desktop/DocumentWorkbench.Tests/DocumentWorkbench.Tests.csproj -c Release --no-restore`
+  为 22/22；`python scripts/verify.py` 通过（parsers 91.96%、ir 94.06%、lint 94.26%、
+  overall 88.78%）；`scripts/test_workbench_ui.py` 在 desktop/mobile 视口均通过。
+
+### 使用边界
+
+- 含外部关系的原模板不能直接用于生成；用户可移除母版中的外部超链接后重新选择，或移除模板
+  使用默认主题。该限制是安全策略，不能通过 UI 或渲染器绕过。
+
+## 2026-08-14 外部超链接模板安全副本
+
+### 已完成并通过验收
+
+- 新增 `sanitize_template_hyperlinks()`：先以 source 级 Office 安全检查扫描模板，只移除
+  `TargetMode=External` 且关系类型为 `hyperlink` 的关系及其 XML 引用；原模板不会被修改，
+  输出副本会再次经过 `validate_template_package()` 权威校验。
+- 新增 `POST /api/templates/sanitize`：只在内存中返回已校验的 `.pptx` 副本，临时
+  `analysis-*` 工作区始终清理；浏览器下载后要求重新选择副本，WPF 通过保存对话框写入副本后
+  自动切换并复检。
+- 浏览器与 WPF 仅在预检确认 `E003 (hyperlink)` 时显示“生成安全副本”；布局在移动端会换行，
+  保持按钮可达和文本不溢出。
+- 对用户真实模板 `商务汇报.pptx` 已生成不覆盖原件的
+  `C:\\Users\\GSQ\\Desktop\\商务汇报_安全副本.pptx`：移除 18 个外部超链接，模板校验通过；
+  python-pptx 与模板画像链路均成功读取 22 页。
+- 回归通过：`pytest backend/tests/test_template_rendering.py backend/tests/test_web_api.py -q`
+  为 80 passed；WPF xUnit 23/23；`scripts/test_workbench_ui.py` desktop/mobile 均通过；
+  `python scripts/verify.py` 通过（parsers 91.96%、ir 94.06%、lint 94.26%、overall 88.68%）；
+  ruff 与 `git diff --check` 通过。
+
+### 使用边界
+
+- 自动安全副本只适用于外部超链接。任何宏、OLE/ActiveX、嵌入图表数据中的外部关系或非 hyperlink
+  外部关系仍会被 `E003` 拒绝，必须由模板提供方人工处理，不能通过转换器绕过。
+
+## 2026-08-26 实习答辩 PPT 交付
+
+### 已完成并通过验收
+
+- 基于 `PPT模板-浅色版16-9.pptx` 生成 19 页答辩 PPTX，并导出 19 页 PDF 备份；
+  所有页面均保留华为 logo、`HUAWEI CONFIDENTIAL`、版权与页码。
+- 使用原生 PowerPoint 形状、连接线和表格重建架构图、流程图、卡片与对比表；19 页均写入纯讲稿备注。
+- `check.py`：0 Error / 0 Warning / 0 Info；`slides_test.py`：无溢出；模板忠实度检查：0 issue。
+- PowerPoint COM 实机渲染 19/19 页，PDF 经 Poppler 栅格化逐页检查，无裁切、重叠、黑块或缺页。
+- 模板 6 个 theme part 与源模板逐字节一致；包内 0 外部关系、0 视频媒体、0 页面切换、0 元素动画；
+  四种禁用说法与备注噪声词均为 0 命中。
+- 交付物：`output/实习答辩PPT_华为浅色版_19页.pptx`、
+  `output/pdf/实习答辩PPT_华为浅色版_19页.pdf`、
+  `output/实习答辩PPT_交付报告与人工替换清单.md`。
+
+### 降级、待人输入与边界
+
+- 未发现已注册的 `template_v2` / `huawei-project-report`，按指令将页 4、页 9 的“10 套”降级为可核实的“8 套”。
+- 页 1 个人信息、页 9 模板墙截图、页 12 `demo.mp4`、页 13 两项端到端实测值仍需答辩人替换；未伪造数据或媒体。
+- 当前机器已用 PowerPoint 2024 做视觉终检；答辩电脑仍需人工确认现场字体、视频编码、投影比例和最终华为风格观感。
+
+### 2026-08-26 通用业务版（未使用 academic-pptx）
+
+- 仅使用通用 `presentations` 工作流，在同一华为模板和已核验内容上另做
+  `output/实习答辩PPT_通用业务版_19页.pptx`；未调用 `academic-pptx` 或学术答辩优化技能。
+- 视觉改为扁平业务汇报：去除大部分卡片底色/边框，保留必要原生流程图，强化红色证据条，
+  第 19 页重构为三列编号式总结；19 页备注、占位和“8 套”诚实降级保持不变。
+- 验证：`check.py` 0 Error / 0 Warning / 0 Info；无溢出；模板忠实度 0 issue；
+  逐页全尺寸渲染检查通过；6 个 theme part 与源模板一致；19 页/19 备注；
+  0 外部关系、0 页面切换、0 元素动画、四种禁用说法 0 命中。
+
+## 2026-08-26 实习答辩 PPT（项目工程汇报版，不使用 academic-pptx）
+
+### 已完成并通过验收
+
+- 按用户要求未使用 `academic-pptx`，仅沿用通用演示文稿工作流；依据答辩稿重组为 19 页项目工程复盘，直接复用所给浅色模板的封面、母版、Logo、密级、版权与页码体系。
+- 叙事围绕“输入解析 → DeckIR 契约 → 确定性渲染 → 合规校验 → Demo 验证”展开；明确程序仅为 Demo/原型，不包装为产品发布，不填写未实测的耗时、成功率或采用率。
+- 图表与图示按答辩稿和仓库可核验证据制作：原生可编辑柱图展示 17 种布局、4 套主题、20 条规则、77 个冻结引擎文件，并标注 16,323 LOC、后端占比 69.5%；架构图、流程图、表格、卡片均保持可编辑。
+- 19 页逐页渲染检查通过；`slides_test.py` 无溢出；模板忠实度检查 0 issue；项目合规检查为 Pass（0 Error、6 Warning、1 Info）。
+- 包结构审计：19 slides、19 notes、19 个 `[Sources]` 来源块；0 外部关系、0 页面切换、0 元素动画、0 默认占位提示；6/6 theme part 与源模板同名文件哈希一致。
+- 交付物：`C:\\Users\\GSQ\\Downloads\\实习答辩PPT_项目工程汇报版_非academic-pptx_20260826.pptx`。
+
+### 降级、待人输入与边界
+
+- 合规 Warning 集中在第 9/12/13 页的字号层级、网格最小间距与原生柱图坐标轴声明；均未造成溢出或结构错误，终稿判定通过。
+- 封面个人信息仍需答辩人填写；“华为模板源码存在”不等于已注册进 Demo 运行库，现场展示前仍需完成注册与实测。
+- 当前完成程序化渲染与逐页视觉检查；正式答辩电脑仍需人工确认 Office 字体、投影比例及现场播放效果。
+
+## 2026-08-26 实习答辩 PPT（项目 DeckIR 2.2 引擎版）
+
+### 已完成并通过验收
+
+- 按 `docs/taskbook.md` 的唯一主链路，用项目自身
+  `DeckIR 2.2 → Schema 校验 → python-pptx 渲染 → PPTX lint` 生成 19 页答辩稿；
+  IR、PPTX、19 页演讲备注和双格式 lint 报告统一放在
+  `output/defense-deck-20260826/`。
+- 叙事采用 19 个结论式动作标题，完成“痛点 → 任务判断 → 分层架构 → IR 契约 →
+  人机协同 → 内网 Skill → 合规与交接 → 边界与总结”的幽灵稿检查。
+- 对设计稿中的旧数字重新按仓库实测口径校正：Skill 引擎冻结 77 个文件，当前 ZIP
+  239,663 bytes（约 234 KiB），Skill Python 13,657 行 / 主项目后端 20,760 行，
+  占 65.8%；未继续使用旧稿中的 16,323 行 / 69.5%。
+- 最终 PPTX 含 19 slides、19 notes；项目 lint 为 0 Error / 0 Warning / 0 Info；
+  PowerPoint 实机成功导出 19 张 1600×900 PNG，并对总览及架构、流程、表格、占位和总结页
+  做全尺寸视觉检查，未发现裁切、遮挡或不可读连线。
+- `python scripts/verify.py` 全量通过：四格式 word/deck stub E2E 全绿；覆盖率
+  parsers 91.96%、ir 94.06%、lint 94.23%、overall 88.99%。
+
+### 降级或近似
+
+- 页 9 模板墙和页 12 演示视频缺少真实媒体，按契约使用 `image.placeholder`；可见文字已改为
+  面向评委的“8 套已注册内置模板 / 支持导入自有 PPTX”和“实机演示视频 / 100 秒 / 本地文件”，
+  替换操作仅保留在演讲备注中。
+- 架构图使用仓库便携包自带 Graphviz 自动布局；流程、表格、卡片、连接线和文本均为原生
+  PowerPoint 对象，可继续编辑。
+
+### 阻塞待人输入
+
+- 封面姓名、部门、导师和结论页联系方式仍为明确占位，需要答辩人填写。
+- 页 9 需替换真实模板墙截图；页 12 需插入脱敏的本地 100 秒演示视频并准备静态截图备份。
+
+### 仍不确定
+
+- 设计稿涉及的 Web 工作台功能口径来自用户材料，本次只做本地仓库事实复核，未启动另一套
+  Web 平台逐项做在线功能验收。
+- 当前 Windows + PowerPoint 环境视觉检查已通过；正式答辩电脑的投影比例、视频编码、字体
+  和最终华为 CI 观感仍需现场人工确认。
+
+## 2026-08-26 实习答辩 PPT（通用项目汇报版，未使用 academic-pptx）
+
+### 已完成并通过验收
+
+- 按用户要求未使用 `academic-pptx`；仅使用通用 `presentations` 工作流，并严格走项目自身
+  `DeckIR 2.2 → Schema 校验 → python-pptx 渲染 → PPTX lint` 主链路生成独立版本。
+- 采用 `hw-report` 主题，将 19 页标题统一为“模块 + 结论”的业务项目汇报表达；重点强化
+  场景痛点、系统架构、分层 IR、Demo 证据、阶段结果、内网落地和项目结论。
+- 最终文件为
+  `output/defense-deck-20260826-general/实习答辩PPT_通用项目汇报版_19页.pptx`；同目录保留
+  DeckIR 2.2、演讲备注和 lint 报告，未覆盖上一版交付物。
+- 结构审计为 19 slides、19 notes、19 个 `[Sources]` 来源块；项目 lint 为
+  0 Error / 0 Warning / 0 Info，PowerPoint 实机成功导出 19 张 1600×900 PNG。
+- 已检查总览及封面、架构、分层 IR、阶段结果、Skill 工作流和结论等重点页面，未发现裁切、
+  重叠、文本溢出或不可读连线；最终文件 SHA-256 为
+  `A472AF20EC7AD72571CAD055FAF3B6724AC06F63E20372FFD93A4B65A399FFBA`。
+
+### 待答辩人替换
+
+- 封面姓名、部门、导师和结论页联系方式仍为明确占位。
+- 第 9 页需替换真实模板墙截图；第 12 页需插入脱敏的本地演示视频，并保留静态截图备份。
+
+## 2026-08-27 rhetoric-deck-workflow Skill 1.0.0
+
+### 已完成并通过验收
+
+- 新增独立、显式调用的 `skills/rhetoric-deck-workflow/`；宿主 Agent 负责两次语义推理，Skill
+  自身不调用模型 API。命令覆盖 `doctor / extract / seal / plan / finalize / library`，均以稳定
+  JSON 诊断和退出码交互。
+- 按用户边界冻结直接复制：Office 包安全预检、CJK 字号拟合、CLI 错误 JSON 约定和 DeckIR
+  2.2 Schema；`engine/runtime_manifest.json` 记录产品版本 2.2.0、源路径与 SHA-256，包脚本发现
+  源漂移即阻止发布。
+- `seal` 已验证：Schema 与零原文门禁通过后才生成 shell；源副本与 `extract_pack/pages/`
+  物理删除；仅保留 SHA-256 n-gram/数字/术语指纹。非法 skeleton 不销毁源上下文，便于修正。
+- `finalize` 已验证：非法 FillContent 返回 `RD-E030` 且不建产物目录；注入源句返回
+  `RD-E040`，只保留泄漏报告，不生成 PPTX；模式 A 仅在现有 shape/cell 中替换文字与缩字，
+  不实现布局；模式 B 只输出通过冻结 Schema 的 DeckIR 2.2。
+- 四类主输入链路已覆盖：UTF-8 Markdown、DOCX、XLSX、PPTX；专项测试 6 passed。Skill 官方
+  `quick_validate.py` 返回 `Skill is valid!`。
+- 项目 Python 3.12 下 `python scripts/verify.py` 全绿：原项目四格式 word/deck stub E2E 通过，
+  parsers 91.96%、ir 94.06%、lint 94.23%、overall 88.79%。
+- 生成 `dist/rhetoric-deck-workflow-1.0.0.zip`（119,791 bytes，解压 255,795 bytes，51 entries）
+  与 SHA-256 `cfbc924156d164c332ec097b872e3ef1de64d2ee400c8b2e2b61606a0fc4966d`；包内 0 渲染器、
+  0 lint、0 template assets、0 generators/Web/WPF。解压到临时目录后已自动跑通 doctor、
+  source-shell 全链路和 deck-ir 全链路。
+
+### 降级 / 近似
+
+- 非多模态环境无法判断图片是装饰还是源内容。为保证“源数据不进入产物”，seal 会删除所有
+  可识别图片/媒体；若母版或特殊部件仍残留媒体则阻断，而不是冒险保留。矢量形状、位置、样式、
+  表格与文本 run 结构仍保留。
+- `--allow-page-adjust` 只记录允许的适配建议并启用容量宽容，不复制列、不删行、不重排几何；
+  这是为了遵守“本 Skill 不实现版式渲染”的直接约束。
+- 五因子打分是确定性信号评分，能稳定分流 fill/adapt/reject，但不能替代宿主 Agent 的语义判断。
+
+### 阻塞待人输入
+
+- 无阻塞。正式推广前仍需业务方在代表性真实脱敏源件上确认：图片一律移除是否符合模式 A 的
+  使用预期，以及目标 PowerPoint/字体环境的视觉签字。
+
+### 仍不确定
+
+- 规格中的 deck_pattern 页序含 `cover/conclusion/risk_plan/next_plan/benefit_plan`，但页级契约只
+  允许 9 个 page_pattern。当前不扩张契约：内置骨架只使用九类业务页，DeckIR 模式从用户材料
+  确定性补 cover，并仅在存在用户结论内容时补 conclusion；模式 A 不合成这些页。
+- `python-pptx` 的正常安装会带来其传递依赖 Pillow；Skill 自身只声明并检查用户指定的三个直接
+  依赖 `python-pptx/jsonschema/lxml`，没有额外安装逻辑或依赖包。

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/rhetoric-deck-workflow/fill_content.schema.json",
+  "title": "FillContent 1.0 generic contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "version",
+    "pages"
+  ],
+  "properties": {
+    "format": {
+      "const": "fill_content"
+    },
+    "version": {
+      "const": "1.0"
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "page_id",
+          "slots"
+        ],
+        "properties": {
+          "page_id": {
+            "type": "string",
+            "pattern": "^p[0-9]{2,3}$"
+          },
+          "slots": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "slot_id",
+                    "value"
+                  ],
+                  "properties": {
+                    "slot_id": {
+                      "type": "string",
+                      "pattern": "^s[0-9]{1,4}$"
+                    },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "slot_id",
+                    "status",
+                    "reason"
+                  ],
+                  "properties": {
+                    "slot_id": {
+                      "type": "string",
+                      "pattern": "^s[0-9]{1,4}$"
+                    },
+                    "status": {
+                      "const": "missing"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

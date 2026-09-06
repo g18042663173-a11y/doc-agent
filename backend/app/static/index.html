@@ -228,12 +228,16 @@
     #themeField.is-disabled { opacity: .42; pointer-events: none; }
     .theme-swatch { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
     .theme-swatch i { width: 11px; height: 11px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35); }
-    .template-picker { display: flex; align-items: center; gap: 12px; margin-top: var(--space-3); padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
+    .template-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: var(--space-3); padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
     .template-picker.is-disabled { opacity: .45; pointer-events: none; }
-    .template-picker__meta { min-width: 0; flex: 1; }
+    .template-picker.is-valid { border-color: var(--success); }
+    .template-picker.is-invalid { border-color: var(--danger); }
+    .template-picker__meta { min-width: 0; flex: 1 1 220px; }
     .template-picker__meta strong, .template-picker__meta span { display: block; }
     .template-picker__meta strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .template-picker__meta span { color: var(--muted); font-size: 11px; }
+    .template-picker__meta span.is-valid { color: var(--success); }
+    .template-picker__meta span.is-invalid { color: var(--danger); }
     .template-picker__remove { border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font-size: 18px; padding: 4px 6px; }
     .template-picker__remove:hover { color: var(--accent-coral); background: var(--hw-red-soft); }
     .asset-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -580,6 +584,9 @@
       .side { display: block; }
       .side-panel + .side-panel { border-left: 0; border-top: 1px solid var(--line); }
       .settings-row, .task-row { grid-template-columns: 1fr; gap: 12px; }
+      .template-picker { align-items: stretch; gap: 8px; }
+      .template-picker__meta { flex-basis: 100%; }
+      .template-picker > .button { flex: 1 1 auto; }
       .settings-row__value, .task-row__actions { justify-self: start; justify-content: flex-start; }
       .diagnostics-list > div { grid-template-columns: 1fr; gap: 4px; }
     }
@@ -833,8 +840,9 @@
             </div>
           </details>
           <div id="templatePicker" class="template-picker">
-            <div class="template-picker__meta"><strong id="templateName">使用默认华为自绘主题</strong><span id="templateDetail">可选上传 .pptx 模板，系统将生成可审计页面映射</span></div>
+            <div class="template-picker__meta"><strong id="templateName">使用默认华为自绘主题</strong><span id="templateDetail" aria-live="polite" data-testid="template-status">可选上传 .pptx 模板，系统将生成可审计页面映射</span></div>
             <button id="templateBrowse" class="button button--secondary" type="button" data-testid="browse-template">选择模板</button>
+            <button id="templateRepair" class="button button--secondary" type="button" hidden data-testid="repair-template">生成安全副本</button>
             <button id="templateRemove" class="template-picker__remove" type="button" aria-label="移除模板" hidden data-testid="remove-template">×</button>
             <input id="templateInput" class="file-input" type="file" accept=".pptx" data-testid="template-file">
           </div>
@@ -1000,7 +1008,7 @@
         }
         return fetch(input, { ...init, headers });
       };
-      const state = { file: null, template: null, assets: [], type: "deck", depth: "标准", jobId: null, idempotencyKey: null, timer: null, elapsedTimer: null, startedAt: null, busy: false, jobRunning: false, pollFailures: 0, connected: false, compatible: false };
+      const state = { file: null, template: null, templateValidation: "none", templateValidationGeneration: 0, templateRepairAvailable: false, assets: [], type: "deck", depth: "标准", jobId: null, idempotencyKey: null, timer: null, elapsedTimer: null, startedAt: null, busy: false, jobRunning: false, pollFailures: 0, connected: false, compatible: false };
       const stageText = { queued: "任务已创建，等待执行", parsing: "正在解析源文件", normalizing_assets: "正在校验图片资产", planning_visuals: "正在规划视觉表达", generating: "正在生成结构化内容", profiling_template: "正在分析模板母版与页面原型", planning_template: "正在规划页面与模板映射", rendering: "正在渲染可编辑文档", validating_package: "正在检查 PPTX 包关系", linting: "正在执行合规检查", done: "交付件已准备完成", validation_failed: "内容草稿未通过校验", failed: "任务执行失败", canceled: "任务已取消", timed_out: "任务执行超时", interrupted: "服务重启导致任务中断", rate_limited: "请求频率受限" };
       const stageOrder = ["parsing", "generating", "rendering", "linting"];
       const el = (id) => document.getElementById(id);
@@ -1009,6 +1017,7 @@
       const browseButton = el("browseButton");
       const templateInput = el("templateInput");
       const templateBrowse = el("templateBrowse");
+      const templateRepair = el("templateRepair");
       const assetInput = el("assetInput");
       const assetBrowse = el("assetBrowse");
       const targetSelect = el("targetSelect");
@@ -1019,6 +1028,7 @@
         fileInput.disabled = busy;
         templateInput.disabled = busy;
         templateBrowse.disabled = busy;
+        templateRepair.disabled = busy || !state.templateRepairAvailable;
         assetInput.disabled = busy;
         assetBrowse.disabled = busy;
         targetSelect.disabled = busy;
@@ -1030,9 +1040,16 @@
 
       const updateActions = () => {
         const available = Boolean(state.file) && !state.busy && state.connected && state.compatible;
+        const templateBlocksGeneration = state.type === "deck" && state.template && state.templateValidation !== "valid";
         el("analyzeButton").disabled = !available;
-        el("generateButton").disabled = !available;
-        el("actionNote").textContent = state.busy ? "任务运行中，可刷新页面后继续查看" : !state.connected ? "本地服务未连接" : !state.compatible ? "前后端版本不兼容" : state.file ? "可先分析内容规模，再开始生成" : "请先选择一份资料";
+        el("generateButton").disabled = !available || templateBlocksGeneration;
+        el("actionNote").textContent = state.busy ? "任务运行中，可刷新页面后继续查看" : !state.connected ? "本地服务未连接" : !state.compatible ? "前后端版本不兼容" : !state.file ? "请先选择一份资料" : templateBlocksGeneration ? state.templateValidation === "pending" ? "正在检查所选 PPT 模板" : "请先处理模板校验提示" : "可先分析内容规模，再开始生成";
+      };
+
+      const setTemplateRepairAvailable = (available) => {
+        state.templateRepairAvailable = available;
+        templateRepair.hidden = !available;
+        templateRepair.disabled = !available || state.busy;
       };
 
       const setConnection = (mode, text) => {
@@ -1410,6 +1427,7 @@
       fileInput.addEventListener("change", () => selectFile(fileInput.files?.[0]));
       templateBrowse.addEventListener("click", () => templateInput.click());
       templateInput.addEventListener("change", () => selectTemplate(templateInput.files?.[0]));
+      templateRepair.addEventListener("click", repairTemplate);
       el("templateRemove").addEventListener("click", clearTemplate);
       assetBrowse.addEventListener("click", () => assetInput.click());
       assetInput.addEventListener("change", () => selectAssets([...(assetInput.files || [])]));
@@ -1473,7 +1491,7 @@
       };
 
       el("generateButton").addEventListener("click", async () => {
-        if (!state.file || state.busy) return;
+        if (!state.file || state.busy || (state.type === "deck" && state.template && state.templateValidation !== "valid")) return;
         hideResult(); state.jobRunning = true; state.idempotencyKey = state.idempotencyKey || newIdempotencyKey(); setBusy(true); startProgress();
         try {
           const data = formDataForFile(); data.append("type", state.type); if (state.type === "deck") { data.append("depth", state.depth); data.append("theme", el("themeSelect").value); if (state.template) data.append("template_file", state.template); state.assets.forEach((file) => data.append("asset_files", file)); }
@@ -1568,15 +1586,104 @@
         const links = el("auditLinks"); links.replaceChildren();
         Object.entries(assets).forEach(([name, asset]) => { const link = document.createElement("a"); link.href = asset.download_url; link.textContent = labels[name] || asset.name; links.append(link); });
       };
-      function selectTemplate(file) {
+      async function selectTemplate(file) {
         if (!file) return;
         if (!file.name.toLowerCase().endsWith(".pptx")) { showToast("模板仅支持 .pptx 文件", true); return; }
         if (file.size > 50 * 1024 * 1024) { showToast("模板不能超过 50 MB", true); return; }
-        state.template = file; el("templateName").textContent = file.name; el("templateDetail").textContent = `${formatBytes(file.size)} · 将继承母版、主题和安全原型页`; el("templateRemove").hidden = false;
+        const validationGeneration = ++state.templateValidationGeneration;
+        state.template = file;
+        state.templateValidation = "pending";
+        setTemplateRepairAvailable(false);
+        el("templateName").textContent = file.name;
+        el("templateDetail").textContent = `${formatBytes(file.size)} · 正在检查模板安全性...`;
+        el("templateDetail").className = "";
+        el("templatePicker").classList.remove("is-valid", "is-invalid");
+        el("templateRemove").hidden = false;
+        updateActions();
+        try {
+          const form = new FormData();
+          form.append("template_file", file);
+          const response = await sessionFetch("/api/templates/validate", { method: "POST", body: form });
+          const result = await readJson(response);
+          if (validationGeneration !== state.templateValidationGeneration || state.template !== file) return;
+          if (!result.valid) throw new Error("模板安全检查未返回通过结果。");
+          state.templateValidation = "valid";
+          el("templateDetail").textContent = `${formatBytes(file.size)} · 模板安全校验通过，可以生成 PPT`;
+          el("templateDetail").className = "is-valid";
+          el("templatePicker").classList.add("is-valid");
+        } catch (error) {
+          if (validationGeneration !== state.templateValidationGeneration || state.template !== file) return;
+          const failure = error.payload?.error || {};
+          state.templateValidation = "invalid";
+          const message = failure.message || error.message || "模板安全检查未完成。";
+          const suggestion = failure.suggestion ? ` ${failure.suggestion}` : "";
+          const diagnostic = failure.code
+            ? `（${failure.code}${failure.loc ? `，定位：${failure.loc}` : ""}）`
+            : "";
+          el("templateDetail").textContent = `模板不可用${diagnostic} · ${message}${suggestion}`;
+          el("templateDetail").className = "is-invalid";
+          el("templatePicker").classList.add("is-invalid");
+          setTemplateRepairAvailable(
+            failure.code === "E003" && (message.includes("(hyperlink)") || message.includes("外部超链接")),
+          );
+          showToast("模板未通过安全校验，请按提示处理。", true);
+        } finally {
+          if (validationGeneration === state.templateValidationGeneration && state.template === file) updateActions();
+        }
       }
       function clearTemplate() {
         if (state.busy) return;
-        state.template = null; templateInput.value = ""; el("templateName").textContent = "使用默认华为自绘主题"; el("templateDetail").textContent = "可选上传 .pptx 模板，系统将生成可审计页面映射"; el("templateRemove").hidden = true;
+        state.templateValidationGeneration++;
+        state.template = null;
+        state.templateValidation = "none";
+        setTemplateRepairAvailable(false);
+        templateInput.value = "";
+        el("templateName").textContent = "使用默认华为自绘主题";
+        el("templateDetail").textContent = "可选上传 .pptx 模板，系统将生成可审计页面映射";
+        el("templateDetail").className = "";
+        el("templatePicker").classList.remove("is-valid", "is-invalid");
+        el("templateRemove").hidden = true;
+        updateActions();
+      }
+      async function repairTemplate() {
+        const file = state.template;
+        if (!file || state.busy || !state.templateRepairAvailable) return;
+        setTemplateRepairAvailable(false);
+        el("templateDetail").textContent = `${formatBytes(file.size)} · 正在生成不含外部超链接的安全副本...`;
+        el("templateDetail").className = "";
+        try {
+          const form = new FormData();
+          form.append("template_file", file);
+          const response = await sessionFetch("/api/templates/sanitize", { method: "POST", body: form });
+          if (!response.ok) await readJson(response);
+          const payload = await response.blob();
+          if (!payload.size) throw new Error("安全副本为空。");
+          const objectUrl = URL.createObjectURL(payload);
+          const link = document.createElement("a");
+          link.href = objectUrl;
+          link.download = `${file.name.replace(/\.pptx$/i, "")}_安全副本.pptx`;
+          document.body.append(link);
+          link.click();
+          link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+          state.templateValidation = "invalid";
+          el("templateDetail").textContent = "安全副本已下载，请重新选择该副本后生成 PPT。";
+          el("templatePicker").classList.add("is-invalid");
+          showToast("模板安全副本已下载，请重新选择。", false);
+        } catch (error) {
+          const failure = error.payload?.error || {};
+          const message = failure.message || error.message || "模板安全副本生成失败。";
+          const suggestion = failure.suggestion ? ` ${failure.suggestion}` : "";
+          el("templateDetail").textContent = `无法生成模板安全副本 · ${message}${suggestion}`;
+          el("templateDetail").className = "is-invalid";
+          el("templatePicker").classList.add("is-invalid");
+          setTemplateRepairAvailable(
+            failure.code === "E003" && (message.includes("(hyperlink)") || message.includes("外部超链接")),
+          );
+          showToast("模板安全副本生成失败，请按提示处理。", true);
+        } finally {
+          updateActions();
+        }
       }
       function selectAssets(files) {
         if (!files.length) return;

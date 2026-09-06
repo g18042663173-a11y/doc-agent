@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/rhetoric-deck-workflow/deck_skeleton.schema.json",
+  "title": "DeckSkeleton 2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "version",
+    "source_kind",
+    "deck_pattern",
+    "page_count",
+    "pages",
+    "page_policy"
+  ],
+  "properties": {
+    "format": {
+      "const": "deck_skeleton"
+    },
+    "version": {
+      "const": "2.0"
+    },
+    "source_kind": {
+      "enum": [
+        "extracted",
+        "builtin",
+        "imported"
+      ]
+    },
+    "deck_pattern": {
+      "enum": [
+        "defense_technical",
+        "defense_capability",
+        "review_solution",
+        "report_progress",
+        "pitch_proposal"
+      ]
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/page"
+      }
+    },
+    "page_policy": {
+      "const": "preserve"
+    }
+  },
+  "$defs": {
+    "asciiKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+    },
+    "cardinality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      }
+    },
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chars_cjk",
+        "lines"
+      ],
+      "properties": {
+        "chars_cjk": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "lines": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slot_id",
+        "semantic",
+        "type",
+        "cardinality",
+        "capacity",
+        "required",
+        "shape_ref"
+      ],
+      "properties": {
+        "slot_id": {
+          "type": "string",
+          "pattern": "^s[0-9]{1,4}$"
+        },
+        "semantic": {
+          "$ref": "#/$defs/asciiKey"
+        },
+        "type": {
+          "enum": [
+            "title",
+            "subtitle",
+            "bullet_list",
+            "table_cell",
+            "node_label",
+            "conclusion",
+            "metric",
+            "caption",
+            "chart",
+            "navigation",
+            "footer"
+          ]
+        },
+        "cardinality": {
+          "$ref": "#/$defs/cardinality"
+        },
+        "capacity": {
+          "$ref": "#/$defs/capacity"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "shape_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(?:sp_[0-9]+(?:\\.cell_[0-9]+_[0-9]+|\\.dgm_[A-Za-z0-9_{}-]+|\\.chart)?|part_[a-zA-Z0-9_-]+\\.sp_[0-9]+)$"
+        }
+      }
+    },
+    "emphasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applies_to",
+        "style"
+      ],
+      "properties": {
+        "applies_to": {
+          "$ref": "#/$defs/asciiKey"
+        },
+        "style": {
+          "type": "string",
+          "pattern": "^(color:[a-z_]+\\|bold:(true|false))(,(color:[a-z_]+\\|bold:(true|false)))*$"
+        }
+      }
+    },
+    "structureValue": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 200
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "diagram": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "groups",
+        "nodes_per_group",
+        "flow",
+        "annotations",
+        "labels"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "none",
+            "parallel_compare",
+            "linear_flow",
+            "matrix",
+            "layered",
+            "quadrant"
+          ]
+        },
+        "groups": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "nodes_per_group": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "flow": {
+          "enum": [
+            "none",
+            "linear",
+            "bidirectional",
+            "top_down",
+            "left_right"
+          ]
+        },
+        "annotations": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "labels": {
+          "type": "null"
+        }
+      }
+    },
+    "structuralLabels": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^(_display|[a-z][a-z0-9_]*)$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "maxItems": 30,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      },
+      "properties": {
+        "_display": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6
+          }
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_id",
+        "page_pattern",
+        "argument_flow",
+        "confidence",
+        "structure",
+        "slots",
+        "emphasis",
+        "diagram",
+        "structural_labels"
+      ],
+      "properties": {
+        "page_id": {
+          "type": "string",
+          "pattern": "^p[0-9]{2,3}$"
+        },
+        "page_pattern": {
+          "enum": [
+            "capability_evidence",
+            "solution_selection",
+            "method_walkthrough",
+            "implementation_detail",
+            "test_matrix",
+            "issue_retro",
+            "phase_summary",
+            "context_pain",
+            "status_progress",
+            "struct_cover",
+            "struct_agenda",
+            "struct_close",
+            "visual_only"
+          ]
+        },
+        "argument_flow": {
+          "enum": [
+            "quantify_columns_compare",
+            "options_compare_conclude",
+            "steps_compare_benefit",
+            "flow_components_constraints",
+            "intent_matrix_emphasis",
+            "problem_symptom_analysis_action",
+            "phase_input_output",
+            "context_pain_goal",
+            "goal_progress_risk_next",
+            "cover_title_subtitle",
+            "agenda_items",
+            "close_summary",
+            "preserved_visual"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "structure": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/structureValue"
+          }
+        },
+        "slots": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 5000,
+          "items": {
+            "$ref": "#/$defs/slot"
+          }
+        },
+        "emphasis": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/$defs/emphasis"
+          }
+        },
+        "diagram": {
+          "$ref": "#/$defs/diagram"
+        },
+        "structural_labels": {
+          "$ref": "#/$defs/structuralLabels"
+        }
+      }
+    }
+  }
+}

@@ -30,6 +30,16 @@ CORE_PACKAGE_THRESHOLD = 80.0
 OVERALL_THRESHOLD = 70.0
 
 
+def configure_console_output(*streams: object) -> None:
+    """Keep Windows verification output readable when pytest emits Unicode."""
+    if not streams:
+        streams = (sys.stdout, sys.stderr)
+    for stream in streams:
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def main(output_dir: Path | None = None) -> int:
     try:
         verify_schema_snapshots(ROOT / "backend" / "schemas")
@@ -321,4 +331,5 @@ def _package_coverage(coverage: dict, package: str) -> float:
 
 
 if __name__ == "__main__":
+    configure_console_output()
     raise SystemExit(main())

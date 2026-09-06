@@ -1,0 +1,73 @@
+{
+  "capability_evidence": {
+    "argument_flow": "quantify_columns_compare",
+    "semantics": ["page.title", "benefit.metric", "capability.summary", "value.as_is", "value.to_be", "technical.point"],
+    "types": ["title", "metric", "bullet_list", "table_cell", "table_cell", "bullet_list"],
+    "required": [true, true, true, false, true, false],
+    "diagram": ["parallel_compare", 3, 2, "left_right"]
+  },
+  "solution_selection": {
+    "argument_flow": "options_compare_conclude",
+    "semantics": ["page.title", "option.a", "option.b", "comparison.dimensions", "conclusion.winner"],
+    "types": ["title", "bullet_list", "bullet_list", "table_cell", "conclusion"],
+    "required": [true, true, true, true, true],
+    "diagram": ["parallel_compare", 2, 3, "left_right"]
+  },
+  "method_walkthrough": {
+    "argument_flow": "steps_compare_benefit",
+    "semantics": ["page.title", "method.steps", "process.before", "process.after", "benefit.summary"],
+    "types": ["title", "bullet_list", "bullet_list", "bullet_list", "conclusion"],
+    "required": [true, true, false, true, true],
+    "diagram": ["linear_flow", 1, 5, "linear"]
+  },
+  "implementation_detail": {
+    "argument_flow": "flow_components_constraints",
+    "semantics": ["page.title", "implementation.flow", "component.list", "constraint.list"],
+    "types": ["title", "bullet_list", "bullet_list", "bullet_list"],
+    "required": [true, true, true, true],
+    "diagram": ["layered", 3, 3, "left_right"]
+  },
+  "test_matrix": {
+    "argument_flow": "intent_matrix_emphasis",
+    "semantics": ["page.title", "test.intent", "test.cases", "test.focus"],
+    "types": ["title", "subtitle", "table_cell", "conclusion"],
+    "required": [true, true, true, true],
+    "diagram": ["matrix", 3, 4, "none"]
+  },
+  "issue_retro": {
+    "argument_flow": "problem_symptom_analysis_action",
+    "semantics": ["page.title", "issue.problem", "issue.symptom", "issue.analysis", "issue.action"],
+    "types": ["title", "bullet_list", "bullet_list", "bullet_list", "bullet_list"],
+    "required": [true, true, true, true, true],
+    "diagram": ["matrix", 4, 1, "left_right"]
+  },
+  "phase_summary": {
+    "argument_flow": "phase_input_output",
+    "semantics": ["page.title", "phase.labels", "phase.input", "phase.output"],
+    "types": ["title", "caption", "bullet_list", "bullet_list"],
+    "required": [true, true, false, true],
+    "diagram": ["linear_flow", 1, 4, "linear"]
+  },
+  "context_pain": {
+    "argument_flow": "context_pain_goal",
+    "semantics": ["page.title", "context.background", "pain.categories", "goal.summary"],
+    "types": ["title", "bullet_list", "bullet_list", "conclusion"],
+    "required": [true, true, true, true],
+    "diagram": ["none", 0, 0, "none"]
+  },
+  "status_progress": {
+    "argument_flow": "goal_progress_risk_next",
+    "semantics": ["page.title", "status.goal", "status.progress", "status.risk", "status.next"],
+    "types": ["title", "bullet_list", "bullet_list", "bullet_list", "bullet_list"],
+    "required": [true, true, true, true, true],
+    "diagram": ["parallel_compare", 2, 2, "left_right"]
+  },
+  "struct_cover": {
+    "argument_flow": "cover_title_subtitle",
+    "semantics": ["page.title", "page.subtitle"],
+    "types": ["title", "subtitle"],
+    "required": [true, false],
+    "diagram": ["none", 0, 0, "none"]
+  }
+}
+
