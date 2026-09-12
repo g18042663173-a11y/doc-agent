@@ -1,0 +1,9 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {"title": "长中文与多系列图表评测", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+  "slides": [
+    {"layout": "title_bullets", "title": "中文排版边界", "bullets": [{"text": "面向跨部门方案评审，正文必须在有限页面内保持完整语义、层级清晰和可扫描的决策信息。", "level": 1}, {"text": "模板继承、字体替代和安全重绘都必须留下可追溯的审计记录，不能静默压缩或截断。", "level": 1}]},
+    {"layout": "chart", "title": "长类目、多系列与窄区间趋势", "chart": {"kind": "line", "categories": ["需求澄清与资料脱敏", "模板结构分析与安全检查", "内容生成及版式映射", "Office 人工视觉终审"], "series": [{"name": "Python 引擎", "values": [91.2, 93.5, 94.1, 95.0]}, {"name": "HTML 实验引擎", "values": [90.8, 92.4, 93.7, 94.6]}], "legend_position": "top"}}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "空列表"
+  },
+  "blocks": [
+    {
+      "type": "bullet_list",
+      "items": []
+    }
+  ]
+}

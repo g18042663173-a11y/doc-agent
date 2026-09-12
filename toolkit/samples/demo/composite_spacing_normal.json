@@ -1,0 +1,26 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {"title": "组合页正常间距", "classification": "HUAWEI CONFIDENTIAL", "theme": "hw_v1"},
+  "slides": [
+    {
+      "layout": "composite",
+      "title": "正常内容保持原有栏内间距",
+      "regions": [
+        {
+          "slot": "left",
+          "components": [
+            {"layout": "table", "title": "参数", "table": {"header": ["项", "值"], "rows": [["范围", "正常"]]}},
+            {"layout": "title_bullets", "title": "结论", "bullets": [{"text": "未超页时不回收任何留白。", "level": 1}]}
+          ]
+        },
+        {
+          "slot": "right",
+          "components": [
+            {"layout": "title_bullets", "title": "对照", "bullets": [{"text": "右栏同样保持默认间距。", "level": 1}]}
+          ]
+        }
+      ]
+    }
+  ]
+}

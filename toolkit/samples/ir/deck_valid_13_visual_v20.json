@@ -1,0 +1,59 @@
+{
+  "ir_type": "deck",
+  "ir_version": "2.1",
+  "meta": {
+    "title": "DeckIR 2.0 视觉能力",
+    "classification": "公开",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "infographic",
+      "title": "需求经过识别、筛选和验证后形成闭环",
+      "infographic": {
+        "kind": "funnel",
+        "direction": "forward",
+        "stages": [
+          {"label": "需求识别", "icon": "target"},
+          {"label": "方案筛选", "icon": "process"},
+          {"label": "验证闭环", "icon": "quality"}
+        ]
+      }
+    },
+    {
+      "layout": "chart",
+      "title": "投入增加后产出保持正相关",
+      "chart": {
+        "kind": "scatter",
+        "categories": [],
+        "series": [
+          {"name": "样本", "x_values": [1, 2, 3, 4], "values": [2, 3.8, 5.9, 7.5]}
+        ],
+        "category_axis_title": "投入",
+        "value_axis_title": "产出",
+        "show_data_labels": false,
+        "legend_position": "none",
+        "source": "脱敏验证样例"
+      }
+    },
+    {
+      "layout": "chart",
+      "title": "收入增长且利润率同步改善",
+      "chart": {
+        "kind": "combo",
+        "categories": ["一月", "二月", "三月"],
+        "series": [
+          {"name": "收入", "values": [10, 12, 15], "chart_type": "bar", "axis": "primary", "unit": "万元"},
+          {"name": "利润率", "values": [0.2, 0.22, 0.25], "chart_type": "line", "axis": "secondary", "unit": "%"}
+        ],
+        "value_axis_title": "收入",
+        "secondary_value_axis_title": "利润率",
+        "number_format": "0.0",
+        "secondary_number_format": "0.0%",
+        "show_data_labels": false,
+        "source": "脱敏经营月报",
+        "methodology": "利润率=利润/收入"
+      }
+    }
+  ]
+}

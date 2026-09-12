@@ -1,0 +1,6 @@
+interface:
+  display_name: "华为文档工作流"
+  short_description: "将主题或本地 Office 文件生成可编辑华为风格 DOCX/PPTX"
+  default_prompt: "Use $huawei-doc-workflow to turn this brief or local Office file into a validated editable DOCX or Huawei-style PPTX."
+policy:
+  allow_implicit_invocation: false

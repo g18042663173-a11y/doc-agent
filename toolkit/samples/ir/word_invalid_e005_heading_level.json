@@ -1,0 +1,14 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "标题层级错误"
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 5,
+      "text": "超出范围"
+    }
+  ]
+}

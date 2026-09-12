@@ -1,0 +1,73 @@
+{
+  "block_types": [],
+  "format": "pptx",
+  "outline": [],
+  "sheets": [],
+  "slides": [
+    {
+      "body_count": 2,
+      "index": 1,
+      "notes": null,
+      "table_count": 0,
+      "title": "项目汇报"
+    },
+    {
+      "body_count": 5,
+      "index": 2,
+      "notes": null,
+      "table_count": 0,
+      "title": "目录"
+    },
+    {
+      "body_count": 3,
+      "index": 3,
+      "notes": null,
+      "table_count": 0,
+      "title": "项目背景"
+    },
+    {
+      "body_count": 2,
+      "index": 4,
+      "notes": null,
+      "table_count": 0,
+      "title": "方案概览"
+    },
+    {
+      "body_count": 1,
+      "index": 5,
+      "notes": null,
+      "table_count": 1,
+      "title": "实施进展"
+    },
+    {
+      "body_count": 2,
+      "index": 6,
+      "notes": "演讲备注:测试数量只表示回归范围,不替代人工视觉终审。",
+      "table_count": 0,
+      "title": "质量趋势"
+    },
+    {
+      "body_count": 3,
+      "index": 7,
+      "notes": "演讲备注:优先验证内网依赖与字体环境。",
+      "table_count": 0,
+      "title": "风险与计划"
+    },
+    {
+      "body_count": 0,
+      "index": 8,
+      "notes": null,
+      "table_count": 0,
+      "title": null
+    }
+  ],
+  "stats": {
+    "headings": 7,
+    "images": 0,
+    "paragraphs": 18,
+    "tables": 1
+  },
+  "warning_fragments": [
+    "pptx embedded/OLE object unsupported at unreferenced part ppt/embeddings/Microsoft_Excel_Sheet1.xlsx, bytes=5410; binary skipped"
+  ]
+}

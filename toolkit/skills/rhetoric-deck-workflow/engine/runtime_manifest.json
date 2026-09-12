@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "skill_name": "rhetoric-deck-workflow",
+  "skill_version": "2.0.0",
+  "source_product_version": "2.2.0",
+  "source_commit": "7c098b1eaea4bf48ba45ec87e14f881d141ce990",
+  "generated_at_utc": "2026-09-05T05:13:56.985164+00:00",
+  "files": [
+    {
+      "path": "engine/fit/text_fit.py",
+      "source": "backend/app/template/text_fit.py",
+      "bytes": 12571,
+      "sha256": "541e10e214674698c46d88c6c49a7b05393e2a82ace353e7a304f9064ff88f18",
+      "reuse_mode": "direct_copy"
+    },
+    {
+      "path": "engine/security/office_package.py",
+      "source": "backend/app/security/office_package.py",
+      "bytes": 17791,
+      "sha256": "9ce7c6ced5e565bb8d4f61870bbc4985644237dd83d001bffcc6f9d4c4cee4fe",
+      "reuse_mode": "direct_copy"
+    },
+    {
+      "path": "engine/shared/cli_errors.py",
+      "source": "backend/app/cli/errors.py",
+      "bytes": 1291,
+      "sha256": "cc87874c1570b4fc5777ec202097883c7c8ca0d08e7fba435ca2897fe3e7cb8c",
+      "reuse_mode": "direct_copy"
+    },
+    {
+      "path": "schemas/deck_ir.schema.json",
+      "source": "backend/schemas/deck_ir.schema.json",
+      "bytes": 54844,
+      "sha256": "c7fe94dc7ed782f5b5d1fb3ee59570b20ff3d7241eaed45b664b262669457c0b",
+      "reuse_mode": "direct_copy"
+    }
+  ]
+}

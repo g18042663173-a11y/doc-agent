@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "AssetUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "crop_bottom": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Crop Bottom",
+          "type": "number"
+        },
+        "crop_left": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Crop Left",
+          "type": "number"
+        },
+        "crop_right": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Crop Right",
+          "type": "number"
+        },
+        "crop_top": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Crop Top",
+          "type": "number"
+        },
+        "effective_dpi": {
+          "exclusiveMinimum": 0,
+          "title": "Effective Dpi",
+          "type": "number"
+        },
+        "fit": {
+          "enum": [
+            "contain",
+            "cover"
+          ],
+          "title": "Fit",
+          "type": "string"
+        },
+        "height_in": {
+          "exclusiveMinimum": 0,
+          "title": "Height In",
+          "type": "number"
+        },
+        "left_in": {
+          "minimum": 0,
+          "title": "Left In",
+          "type": "number"
+        },
+        "normalized_sha256": {
+          "title": "Normalized Sha256",
+          "type": "string"
+        },
+        "slide": {
+          "minimum": 1,
+          "title": "Slide",
+          "type": "integer"
+        },
+        "top_in": {
+          "minimum": 0,
+          "title": "Top In",
+          "type": "number"
+        },
+        "width_in": {
+          "exclusiveMinimum": 0,
+          "title": "Width In",
+          "type": "number"
+        }
+      },
+      "required": [
+        "slide",
+        "asset_id",
+        "normalized_sha256",
+        "fit",
+        "left_in",
+        "top_in",
+        "width_in",
+        "height_in",
+        "effective_dpi"
+      ],
+      "title": "AssetUsage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "audit_version": {
+      "const": "1.0",
+      "title": "Audit Version",
+      "type": "string"
+    },
+    "usages": {
+      "items": {
+        "$ref": "#/$defs/AssetUsage"
+      },
+      "title": "Usages",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "audit_version"
+  ],
+  "title": "AssetUsageAudit",
+  "type": "object"
+}

@@ -1,0 +1,36 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "非法表格 span"
+  },
+  "slides": [
+    {
+      "layout": "table",
+      "title": "非法表格",
+      "table": {
+        "header": [
+          "方案",
+          "可靠性",
+          "成本"
+        ],
+        "rows": [
+          [
+            "方案A",
+            "高",
+            "中"
+          ]
+        ],
+        "cell_spans": [
+          {
+            "area": "body",
+            "row": 0,
+            "col": 2,
+            "rowspan": 1,
+            "colspan": 2
+          }
+        ]
+      }
+    }
+  ]
+}

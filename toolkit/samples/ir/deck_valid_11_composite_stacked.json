@@ -1,0 +1,63 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.8",
+  "meta": {
+    "title": "组合页栏内堆叠试点",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "composite",
+      "title": "左栏证据链可由表格、关系图和结论顺序组成",
+      "regions": [
+        {
+          "slot": "left",
+          "components": [
+            {
+              "layout": "table",
+              "title": "阶段状态",
+              "table": {
+                "header": ["阶段", "状态"],
+                "rows": [["校验", "通过"]],
+                "conclusion_col": 1
+              }
+            },
+            {
+              "layout": "architecture_diagram",
+              "title": "质量链路",
+              "nodes": [
+                {"id": "input", "text": "输入", "type": "primary"},
+                {"id": "gate", "text": "校验", "type": "emphasis"},
+                {"id": "output", "text": "产物", "type": "data"}
+              ],
+              "edges": [
+                {"from": "input", "to": "gate"},
+                {"from": "gate", "to": "output"}
+              ],
+              "groups": []
+            },
+            {
+              "layout": "title_bullets",
+              "title": "结论",
+              "bullets": [{"text": "证据链完整后再进入人工终审", "level": 1}]
+            }
+          ]
+        },
+        {
+          "slot": "right",
+          "components": [
+            {
+              "layout": "cards",
+              "title": "交付依据",
+              "cards": [
+                {"title": "契约", "desc": "Schema 校验"},
+                {"title": "产物", "desc": "原生可编辑"}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

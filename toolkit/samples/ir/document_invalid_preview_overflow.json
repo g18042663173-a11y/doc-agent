@@ -1,0 +1,24 @@
+{
+  "ir_type": "document",
+  "ir_version": "1.1",
+  "source": {
+    "filename": "超宽台账.xlsx",
+    "format": "xlsx",
+    "size_kb": 1,
+    "parsed_at": "2026-07-10T00:00:00Z"
+  },
+  "stats": {},
+  "warnings": [],
+  "content": {
+    "sheets": [
+      {
+        "name": "超宽预览",
+        "nrows": 1,
+        "ncols": 16,
+        "preview_rows": [
+          ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"]
+        ]
+      }
+    ]
+  }
+}

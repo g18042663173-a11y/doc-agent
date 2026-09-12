@@ -1,0 +1,291 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "十四版式样例",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "cover",
+      "title": "十四版式样例",
+      "subtitle": "覆盖 DeckIR v1.9"
+    },
+    {
+      "layout": "agenda",
+      "items": [
+        "背景",
+        "章节",
+        "要点",
+        "表格"
+      ]
+    },
+    {
+      "layout": "section",
+      "index": 1,
+      "title": "核心内容"
+    },
+    {
+      "layout": "title_bullets",
+      "title": "关键进展",
+      "bullets": [
+        {
+          "text": "命令链路支持 Word 与 Deck",
+          "level": 1
+        },
+        {
+          "text": "合规检查输出双格式报告",
+          "level": 1
+        }
+      ]
+    },
+    {
+      "layout": "two_column",
+      "title": "两列对比",
+      "left": {
+        "heading": "输入",
+        "bullets": [
+          {
+            "text": "md / docx / xlsx / pptx",
+            "level": 1
+          }
+        ]
+      },
+      "right": {
+        "heading": "输出",
+        "bullets": [
+          {
+            "text": "DOCX / PPTX / report",
+            "level": 1
+          }
+        ]
+      }
+    },
+    {
+      "layout": "table",
+      "title": "任务状态",
+      "table": {
+        "header": [
+          "任务",
+          "状态"
+        ],
+        "rows": [
+          [
+            "CLI",
+            "完成"
+          ],
+          [
+            "Lint",
+            "覆盖"
+          ]
+        ]
+      }
+    },
+    {
+      "layout": "cards",
+      "title": "能力卡片",
+      "cards": [
+        {
+          "title": "解析",
+          "desc": "输入转 DocumentIR"
+        },
+        {
+          "title": "生成",
+          "desc": "Stub 产目标 IR"
+        },
+        {
+          "title": "检查",
+          "desc": "输出合规报告"
+        }
+      ]
+    },
+    {
+      "layout": "chart",
+      "title": "图表降级",
+      "chart": {
+        "kind": "bar",
+        "categories": [
+          "A",
+          "B"
+        ],
+        "series": [
+          {
+            "name": "完成度",
+            "values": [
+              80,
+              90
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": "architecture_diagram",
+      "title": "系统架构骨架",
+      "nodes": [
+        {
+          "id": "portal",
+          "text": "门户",
+          "type": "primary",
+          "group": "access"
+        },
+        {
+          "id": "api",
+          "text": "接口服务",
+          "type": "secondary",
+          "group": "service"
+        },
+        {
+          "id": "engine",
+          "text": "计算引擎",
+          "type": "emphasis",
+          "group": "service"
+        },
+        {
+          "id": "store",
+          "text": "数据存储",
+          "type": "data",
+          "group": "data"
+        }
+      ],
+      "edges": [
+        {
+          "from": "portal",
+          "to": "api",
+          "label": "请求",
+          "direction": "forward"
+        },
+        {
+          "from": "api",
+          "to": "engine",
+          "style": "dashed",
+          "direction": "both"
+        },
+        {
+          "from": "engine",
+          "to": "store",
+          "label": "读写",
+          "direction": "forward"
+        }
+      ],
+      "groups": [
+        {
+          "id": "access",
+          "label": "接入层",
+          "node_ids": [
+            "portal"
+          ]
+        },
+        {
+          "id": "service",
+          "label": "服务层",
+          "node_ids": [
+            "api",
+            "engine"
+          ]
+        },
+        {
+          "id": "data",
+          "label": "数据层",
+          "node_ids": [
+            "store"
+          ]
+        }
+      ]
+    },
+    {
+      "layout": "process_flow",
+      "title": "确定性处理流程",
+      "orientation": "horizontal",
+      "steps": [
+        {
+          "id": "parse",
+          "title": "解析",
+          "description": "输入转 DocumentIR"
+        },
+        {
+          "id": "generate",
+          "title": "生成",
+          "description": "规则生成 DeckIR"
+        },
+        {
+          "id": "verify",
+          "title": "验收",
+          "description": "渲染并执行 lint"
+        }
+      ]
+    },
+    {
+      "layout": "timeline",
+      "title": "交付路线",
+      "orientation": "horizontal",
+      "milestones": [
+        {
+          "label": "阶段一",
+          "title": "契约冻结",
+          "status": "completed"
+        },
+        {
+          "label": "阶段二",
+          "title": "能力验证",
+          "status": "current"
+        },
+        {
+          "label": "阶段三",
+          "title": "内网终审",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "layout": "image",
+      "title": "图片占位",
+      "placeholder": "内网替换真图",
+      "caption": "外网阶段不搬运图片二进制"
+    },
+    {
+      "layout": "composite",
+      "title": "方案状态与数据流可以在一页联读",
+      "regions": [
+        {
+          "slot": "left",
+          "component": {
+            "layout": "table",
+            "title": "方案状态",
+            "table": {
+              "header": ["方案", "状态"],
+              "rows": [["主方案", "推荐"], ["备选方案", "保留"]],
+              "conclusion_col": 1
+            }
+          }
+        },
+        {
+          "slot": "right",
+          "component": {
+            "layout": "architecture_diagram",
+            "title": "数据流",
+            "nodes": [
+              {"id": "source", "text": "输入", "type": "primary"},
+              {"id": "gate", "text": "校验", "type": "emphasis"},
+              {"id": "artifact", "text": "产物", "type": "data"}
+            ],
+            "edges": [
+              {"from": "source", "to": "gate"},
+              {"from": "gate", "to": "artifact"}
+            ],
+            "groups": []
+          }
+        }
+      ]
+    },
+    {
+      "layout": "conclusion",
+      "title": "结论",
+      "bullets": [
+        "十四版式均可渲染"
+      ],
+      "cta": "进入人工视觉终审"
+    }
+  ]
+}

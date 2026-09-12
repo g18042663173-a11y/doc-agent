@@ -1,0 +1,41 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "风险清单",
+    "classification": "内部公开"
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "风险与应对"
+    },
+    {
+      "type": "table",
+      "caption": "项目风险清单",
+      "header": [
+        "风险",
+        "等级",
+        "应对"
+      ],
+      "rows": [
+        [
+          "模型 JSON 不稳定",
+          "中",
+          "剥壳 + 校验 + 修复回路"
+        ],
+        [
+          "Windows 离线依赖缺失",
+          "中",
+          "提前构建 wheelhouse"
+        ]
+      ],
+      "col_widths": [
+        3,
+        1,
+        4
+      ]
+    }
+  ]
+}

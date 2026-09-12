@@ -1,0 +1,33 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "非法图表阈值线"
+  },
+  "slides": [
+    {
+      "layout": "chart",
+      "title": "非法阈值线",
+      "chart": {
+        "kind": "line",
+        "categories": [
+          "1月"
+        ],
+        "series": [
+          {
+            "name": "方案A",
+            "values": [
+              10
+            ]
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 8,
+            "label": "   "
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "classification": "HUAWEI CONFIDENTIAL"
+  },
+  "slides": [
+    {
+      "layout": "cover",
+      "title": "缺少 meta.title"
+    }
+  ]
+}

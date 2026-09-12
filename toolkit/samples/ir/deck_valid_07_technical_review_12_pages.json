@@ -1,0 +1,373 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "技术方案评审",
+    "subtitle": "可编辑版式演进试点",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "cover",
+      "title": "技术方案评审",
+      "subtitle": "可编辑版式演进试点"
+    },
+    {
+      "layout": "agenda",
+      "items": [
+        "现状与方案",
+        "验证与决策"
+      ]
+    },
+    {
+      "layout": "section",
+      "index": 1,
+      "title": "现状与方案",
+      "subtitle": "先确认约束，再选择实现路径"
+    },
+    {
+      "layout": "title_bullets",
+      "title": "现有确定性流水线可承接高频技术评审页面",
+      "bullets": [
+        {
+          "text": "DocumentIR 与 DeckIR 隔离模型输出和渲染实现",
+          "level": 1
+        },
+        {
+          "text": "表格、图表和架构图均输出为可编辑 PowerPoint 对象",
+          "level": 1
+        },
+        {
+          "text": "流程与时间线补齐线性步骤和阶段路线两类高频表达",
+          "level": 1
+        }
+      ]
+    },
+    {
+      "layout": "process_flow",
+      "title": "方案材料按四步形成可复核交付物",
+      "orientation": "horizontal",
+      "steps": [
+        {
+          "id": "collect",
+          "title": "材料收集",
+          "description": "汇总报告、台账与既有演示"
+        },
+        {
+          "id": "parse",
+          "title": "结构解析",
+          "description": "统一形成 DocumentIR"
+        },
+        {
+          "id": "generate",
+          "title": "版式生成",
+          "description": "按页面意图选择 DeckIR layout"
+        },
+        {
+          "id": "review",
+          "title": "双重终审",
+          "description": "机器合规检查加人工视觉复核"
+        }
+      ]
+    },
+    {
+      "layout": "timeline",
+      "title": "六个里程碑覆盖从契约冻结到内网终审",
+      "orientation": "horizontal",
+      "milestones": [
+        {
+          "label": "M1",
+          "title": "契约冻结",
+          "description": "Schema 与样例",
+          "status": "completed"
+        },
+        {
+          "label": "M2",
+          "title": "基础渲染",
+          "description": "十种基础版式",
+          "status": "completed"
+        },
+        {
+          "label": "M3",
+          "title": "表格增强",
+          "description": "决策矩阵",
+          "status": "completed"
+        },
+        {
+          "label": "M4",
+          "title": "图表增强",
+          "description": "阈值与结论栏",
+          "status": "completed"
+        },
+        {
+          "label": "M5",
+          "title": "流程试点",
+          "description": "流程与时间线",
+          "status": "current"
+        },
+        {
+          "label": "M6",
+          "title": "内网终审",
+          "description": "真实字体与 CI",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "layout": "section",
+      "index": 2,
+      "title": "验证与决策",
+      "subtitle": "用可测量证据收敛方案"
+    },
+    {
+      "layout": "table",
+      "title": "决策矩阵表明原生自绘路线更适合内网交付",
+      "table": {
+        "header": [
+          "方案",
+          "可编辑性",
+          "离线可用",
+          "维护成本",
+          "结论"
+        ],
+        "column_groups": [
+          {
+            "label": "核心评估维度",
+            "start_col": 1,
+            "span": 3
+          }
+        ],
+        "conclusion_col": 4,
+        "rows": [
+          [
+            "python-pptx 自绘",
+            "完整",
+            "支持",
+            "可控",
+            {
+              "text": "推荐",
+              "emphasis": "yellow"
+            }
+          ],
+          [
+            "HTML 截图",
+            "较弱",
+            "依赖浏览器",
+            "较高",
+            "不采用"
+          ],
+          [
+            "人工套模板",
+            "完整",
+            "支持",
+            "效率较低",
+            {
+              "text": "人工兜底",
+              "emphasis": "cyan"
+            }
+          ]
+        ],
+        "col_widths": [
+          1.5,
+          2.0,
+          2.0,
+          2.0,
+          2.5
+        ]
+      }
+    },
+    {
+      "layout": "chart",
+      "title": "自动检查覆盖率稳定高于交付门槛",
+      "chart": {
+        "kind": "line",
+        "unit": "%",
+        "categories": [
+          "契约",
+          "渲染",
+          "增强",
+          "试点"
+        ],
+        "series": [
+          {
+            "name": "整体覆盖率",
+            "values": [
+              84,
+              86,
+              88,
+              88
+            ],
+            "emphasis": true
+          }
+        ],
+        "show_data_labels": true,
+        "legend_position": "top",
+        "thresholds": [
+          {
+            "value": 70,
+            "label": "整体门槛"
+          }
+        ],
+        "side_conclusion": "整体覆盖率在四个阶段均高于70%门槛。",
+        "side_table": {
+          "header": [
+            "检查项",
+            "状态"
+          ],
+          "rows": [
+            [
+              "Schema 快照",
+              "一致"
+            ],
+            [
+              "pytest",
+              "通过"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "layout": "architecture_diagram",
+      "title": "结构化契约隔离输入、生成与交付层",
+      "nodes": [
+        {
+          "id": "input",
+          "text": "业务输入",
+          "type": "primary",
+          "group": "source"
+        },
+        {
+          "id": "document",
+          "text": "DocumentIR",
+          "type": "data",
+          "group": "contract"
+        },
+        {
+          "id": "generator",
+          "text": "Stub / NGA",
+          "type": "secondary",
+          "group": "generation"
+        },
+        {
+          "id": "deck",
+          "text": "DeckIR",
+          "type": "emphasis",
+          "group": "contract"
+        },
+        {
+          "id": "artifact",
+          "text": "PPTX + 报告",
+          "type": "primary",
+          "group": "delivery"
+        }
+      ],
+      "edges": [
+        {
+          "from": "input",
+          "to": "document",
+          "label": "解析",
+          "direction": "forward"
+        },
+        {
+          "from": "document",
+          "to": "generator",
+          "label": "上下文",
+          "direction": "forward"
+        },
+        {
+          "from": "generator",
+          "to": "deck",
+          "label": "生成",
+          "direction": "forward"
+        },
+        {
+          "from": "deck",
+          "to": "artifact",
+          "label": "校验后渲染",
+          "direction": "forward"
+        }
+      ],
+      "groups": [
+        {
+          "id": "source",
+          "label": "输入层",
+          "node_ids": [
+            "input"
+          ]
+        },
+        {
+          "id": "contract",
+          "label": "契约层",
+          "node_ids": [
+            "document",
+            "deck"
+          ]
+        },
+        {
+          "id": "generation",
+          "label": "生成层",
+          "node_ids": [
+            "generator"
+          ]
+        },
+        {
+          "id": "delivery",
+          "label": "交付层",
+          "node_ids": [
+            "artifact"
+          ]
+        }
+      ]
+    },
+    {
+      "layout": "two_column",
+      "title": "自动化把关与人工终审承担不同责任",
+      "left": {
+        "heading": "自动检查",
+        "bullets": [
+          {
+            "text": "契约字段与数量边界",
+            "level": 1
+          },
+          {
+            "text": "真实形状几何与主题 token",
+            "level": 1
+          },
+          {
+            "text": "最低可读字号和内容拥挤",
+            "level": 1
+          }
+        ]
+      },
+      "right": {
+        "heading": "人工终审",
+        "bullets": [
+          {
+            "text": "真实字体和 CI 下的视觉观感",
+            "level": 1
+          },
+          {
+            "text": "结论是否忠于源材料",
+            "level": 1
+          },
+          {
+            "text": "复杂架构图的人工微调",
+            "level": 1
+          }
+        ]
+      }
+    },
+    {
+      "layout": "conclusion",
+      "title": "流程与时间线可进入受控试用",
+      "bullets": [
+        "两种新版式均为原生可编辑对象",
+        "版式选择规则已同步到 Prompt 与 Stub",
+        "内网真实字体和 CI 视觉终审仍不可省略"
+      ],
+      "cta": "下一步：用真实技术评审材料做人工终审"
+    }
+  ]
+}

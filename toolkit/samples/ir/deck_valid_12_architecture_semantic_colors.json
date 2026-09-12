@@ -1,0 +1,27 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {
+    "title": "架构图语义配色试点",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "architecture_diagram",
+      "title": "节点语义由 type 明确指定，颜色不依赖文本猜测",
+      "nodes": [
+        {"id": "job", "text": "Job 调度", "type": "job"},
+        {"id": "module", "text": "处理模块", "type": "module"},
+        {"id": "data", "text": "数据存储", "type": "data"},
+        {"id": "external", "text": "外部服务", "type": "unregistered_type"}
+      ],
+      "edges": [
+        {"from": "job", "to": "module", "label": "分发"},
+        {"from": "module", "to": "data", "label": "写入"},
+        {"from": "external", "to": "module", "label": "调用", "style": "dashed"}
+      ],
+      "groups": []
+    }
+  ]
+}

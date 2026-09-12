@@ -1,0 +1,14 @@
+{
+  "errors": 2,
+  "warnings": 4,
+  "infos": 0,
+  "pass": false,
+  "codes": [
+    "HW-E01",
+    "HW-E02",
+    "HW-W01",
+    "HW-W02",
+    "HW-W06",
+    "HW-W07"
+  ]
+}

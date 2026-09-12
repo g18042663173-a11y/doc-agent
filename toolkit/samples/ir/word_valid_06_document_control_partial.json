@@ -1,0 +1,21 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.2",
+  "meta": {
+    "title": "帧头接口模块详细设计（评审中）",
+    "author": "张三",
+    "classification": "内部公开",
+    "document_control": {
+      "product_name": "智能星载基带传输平台",
+      "document_name": "帧头接口模块详细设计（评审中）",
+      "version": "V0.9",
+      "prepared": {"date": "2026-07-21"},
+      "reviewed": {},
+      "approved": {}
+    }
+  },
+  "blocks": [
+    {"type": "heading", "level": 1, "text": "评审说明"},
+    {"type": "paragraph", "text": "审核和批准信息尚未填写，控制表保留固定角色行。"}
+  ]
+}

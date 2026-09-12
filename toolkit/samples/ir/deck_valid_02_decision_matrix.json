@@ -1,0 +1,77 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "方案对比表样例",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "table",
+      "title": "技术方案决策矩阵",
+      "table": {
+        "header": [
+          "方案",
+          "可靠性",
+          "成本",
+          "交付",
+          "结论"
+        ],
+        "column_groups": [
+          {
+            "label": "评估维度",
+            "start_col": 1,
+            "span": 3
+          }
+        ],
+        "row_groups": [
+          {
+            "label": "主推方案",
+            "start_row": 0,
+            "span": 2
+          }
+        ],
+        "cell_spans": [
+          {
+            "area": "body",
+            "row": 0,
+            "col": 2,
+            "rowspan": 1,
+            "colspan": 2
+          }
+        ],
+        "conclusion_col": 4,
+        "rows": [
+          [
+            {
+              "text": "方案A"
+            },
+            "高",
+            {
+              "items": [
+                "周期短",
+                "依赖少"
+              ]
+            },
+            "",
+            {
+              "text": "推荐",
+              "emphasis": "yellow"
+            }
+          ],
+          [
+            "方案B",
+            "中",
+            "成本可控",
+            "交付较慢",
+            {
+              "text": "备选",
+              "emphasis": "cyan"
+            }
+          ]
+        ]
+      }
+    }
+  ]
+}

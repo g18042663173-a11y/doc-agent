@@ -1,0 +1,13 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "未知块"
+  },
+  "blocks": [
+    {
+      "type": "callout",
+      "text": "Schema 不允许这个块类型。"
+    }
+  ]
+}

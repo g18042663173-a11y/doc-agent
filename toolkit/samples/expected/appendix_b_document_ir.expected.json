@@ -1,0 +1,165 @@
+{
+  "销售台账.xlsx": {
+    "format": "xlsx",
+    "stats": {
+      "headings": 0,
+      "paragraphs": 0,
+      "tables": 3,
+      "images": 0
+    },
+    "warning_fragments": [],
+    "block_types": [],
+    "outline": [],
+    "sheets": [
+      {
+        "name": "销售台账",
+        "nrows": 5,
+        "ncols": 5,
+        "header_guess": [
+          "区域销售台账",
+          "区域销售台账",
+          "区域销售台账",
+          "区域销售台账",
+          "区域销售台账"
+        ],
+        "formula_count": 3,
+        "merged_count": 1
+      },
+      {
+        "name": "目标配置",
+        "nrows": 4,
+        "ncols": 2,
+        "header_guess": [
+          "区域",
+          "季度目标"
+        ],
+        "formula_count": 0,
+        "merged_count": 0
+      },
+      {
+        "name": "汇总",
+        "nrows": 4,
+        "ncols": 2,
+        "header_guess": [
+          "指标",
+          "数值"
+        ],
+        "formula_count": 3,
+        "merged_count": 0
+      }
+    ],
+    "slides": []
+  },
+  "需求说明.docx": {
+    "format": "docx",
+    "stats": {
+      "headings": 3,
+      "paragraphs": 4,
+      "tables": 1,
+      "images": 0
+    },
+    "warning_fragments": [
+      "unsupported text boxes"
+    ],
+    "block_types": [
+      "paragraph",
+      "paragraph",
+      "heading",
+      "paragraph",
+      "heading",
+      "bullet_list",
+      "heading",
+      "table",
+      "paragraph"
+    ],
+    "outline": [
+      {
+        "level": 1,
+        "text": "一、建设目标"
+      },
+      {
+        "level": 2,
+        "text": "1.1 功能范围"
+      },
+      {
+        "level": 1,
+        "text": "二、验收要求"
+      }
+    ],
+    "sheets": [],
+    "slides": []
+  },
+  "项目汇报.pptx": {
+    "format": "pptx",
+    "stats": {
+      "headings": 7,
+      "paragraphs": 16,
+      "tables": 1,
+      "images": 0
+    },
+    "warning_fragments": [
+      "pptx embedded/OLE object unsupported at unreferenced part ppt/embeddings/Microsoft_Excel_Sheet1.xlsx, bytes=5410; binary skipped"
+    ],
+    "block_types": [],
+    "outline": [],
+    "sheets": [],
+    "slides": [
+      {
+        "index": 1,
+        "title": "项目汇报",
+        "body_count": 2,
+        "table_count": 0,
+        "notes": null
+      },
+      {
+        "index": 2,
+        "title": "目录",
+        "body_count": 5,
+        "table_count": 0,
+        "notes": null
+      },
+      {
+        "index": 3,
+        "title": "项目背景",
+        "body_count": 3,
+        "table_count": 0,
+        "notes": null
+      },
+      {
+        "index": 4,
+        "title": "方案概览",
+        "body_count": 2,
+        "table_count": 0,
+        "notes": null
+      },
+      {
+        "index": 5,
+        "title": "实施进展",
+        "body_count": 0,
+        "table_count": 1,
+        "notes": null
+      },
+      {
+        "index": 6,
+        "title": "质量趋势",
+        "body_count": 1,
+        "table_count": 0,
+        "notes": "演讲备注:测试数量只表示回归范围,不替代人工视觉终审。"
+      },
+      {
+        "index": 7,
+        "title": "风险与计划",
+        "body_count": 3,
+        "table_count": 0,
+        "notes": "演讲备注:优先验证内网依赖与字体环境。"
+      },
+      {
+        "index": 8,
+        "title": null,
+        "body_count": 0,
+        "table_count": 0,
+        "notes": null
+      }
+    ]
+  }
+}

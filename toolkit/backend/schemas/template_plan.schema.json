@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "TemplateReplacement": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "title",
+            "subtitle",
+            "body",
+            "agenda_item",
+            "section_label",
+            "footer",
+            "brand",
+            "decorative",
+            "content_slot",
+            "unknown"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "shape_id": {
+          "minimum": 1,
+          "title": "Shape Id",
+          "type": "integer"
+        },
+        "source_path": {
+          "minLength": 1,
+          "title": "Source Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shape_id",
+        "role",
+        "source_path"
+      ],
+      "title": "TemplateReplacement",
+      "type": "object"
+    },
+    "TemplateScoreDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "capacity": {
+          "maximum": 25,
+          "minimum": 0,
+          "title": "Capacity",
+          "type": "integer"
+        },
+        "reuse_penalty": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Reuse Penalty",
+          "type": "integer"
+        },
+        "role": {
+          "maximum": 40,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        },
+        "safety": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Safety",
+          "type": "integer"
+        },
+        "slots": {
+          "maximum": 25,
+          "minimum": 0,
+          "title": "Slots",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "slots",
+        "capacity",
+        "safety",
+        "reuse_penalty"
+      ],
+      "title": "TemplateScoreDetails",
+      "type": "object"
+    },
+    "TemplateSlidePlan": {
+      "additionalProperties": false,
+      "properties": {
+        "deck_layout": {
+          "minLength": 1,
+          "title": "Deck Layout",
+          "type": "string"
+        },
+        "output_index": {
+          "minimum": 1,
+          "title": "Output Index",
+          "type": "integer"
+        },
+        "prototype_id": {
+          "anyOf": [
+            {
+              "pattern": "^slide-[0-9]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prototype Id"
+        },
+        "prototype_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prototype Index"
+        },
+        "replacements": {
+          "items": {
+            "$ref": "#/$defs/TemplateReplacement"
+          },
+          "title": "Replacements",
+          "type": "array"
+        },
+        "score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Score",
+          "type": "integer"
+        },
+        "score_details": {
+          "$ref": "#/$defs/TemplateScoreDetails"
+        },
+        "selection_reason": {
+          "minLength": 1,
+          "title": "Selection Reason",
+          "type": "string"
+        },
+        "strategy": {
+          "enum": [
+            "prototype_replace",
+            "master_redraw"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/TemplateWarning"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "output_index",
+        "deck_layout",
+        "strategy",
+        "score",
+        "score_details",
+        "selection_reason"
+      ],
+      "title": "TemplateSlidePlan",
+      "type": "object"
+    },
+    "TemplateWarning": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "W201",
+            "W202"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "loc": {
+          "minLength": 1,
+          "title": "Loc",
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "loc",
+        "message"
+      ],
+      "title": "TemplateWarning",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "deck_ir_version": {
+      "const": "2.2",
+      "title": "Deck Ir Version",
+      "type": "string"
+    },
+    "plan_version": {
+      "const": "1.1",
+      "title": "Plan Version",
+      "type": "string"
+    },
+    "profile_sha256": {
+      "title": "Profile Sha256",
+      "type": "string"
+    },
+    "slides": {
+      "items": {
+        "$ref": "#/$defs/TemplateSlidePlan"
+      },
+      "maxItems": 30,
+      "minItems": 1,
+      "title": "Slides",
+      "type": "array"
+    },
+    "template_sha256": {
+      "title": "Template Sha256",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "$ref": "#/$defs/TemplateWarning"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "plan_version",
+    "template_sha256",
+    "profile_sha256",
+    "deck_ir_version",
+    "slides"
+  ],
+  "title": "TemplatePlan",
+  "type": "object"
+}

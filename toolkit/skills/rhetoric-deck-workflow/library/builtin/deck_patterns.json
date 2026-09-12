@@ -1,0 +1,28 @@
+{
+  "defense_technical": {
+    "name": "技术答辩",
+    "tags": ["defense", "technical"],
+    "pages": ["phase_summary", "method_walkthrough", "implementation_detail", "test_matrix", "issue_retro"]
+  },
+  "defense_capability": {
+    "name": "能力举证",
+    "tags": ["defense", "capability"],
+    "pages": ["capability_evidence", "capability_evidence", "phase_summary"]
+  },
+  "review_solution": {
+    "name": "方案评审",
+    "tags": ["review", "solution"],
+    "pages": ["context_pain", "solution_selection", "implementation_detail", "issue_retro"]
+  },
+  "report_progress": {
+    "name": "进展汇报",
+    "tags": ["report", "progress"],
+    "pages": ["phase_summary", "status_progress", "status_progress", "issue_retro"]
+  },
+  "pitch_proposal": {
+    "name": "方案宣讲",
+    "tags": ["pitch", "proposal"],
+    "pages": ["context_pain", "solution_selection", "capability_evidence"]
+  }
+}
+

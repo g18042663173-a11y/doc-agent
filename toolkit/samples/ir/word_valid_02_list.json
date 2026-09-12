@@ -1,0 +1,37 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "实施方案",
+    "classification": "内部公开"
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "实施步骤"
+    },
+    {
+      "type": "numbered_list",
+      "items": [
+        {
+          "text": "冻结 IR 契约",
+          "level": 1
+        },
+        {
+          "text": "导出 JSON Schema 并加入快照测试",
+          "level": 2
+        },
+        {
+          "text": "实现确定性渲染链路",
+          "level": 1
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "style": "note",
+      "text": "所有步骤均需在 stub 通道下可离线复现。"
+    }
+  ]
+}

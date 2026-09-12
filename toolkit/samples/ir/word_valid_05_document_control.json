@@ -1,0 +1,26 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.2",
+  "meta": {
+    "title": "帧头接口模块详细设计",
+    "classification": "内部公开",
+    "document_control": {
+      "product_name": "智能星载基带传输平台",
+      "document_name": "帧头接口模块详细设计",
+      "version": "V1.0",
+      "prepared": {"name": "张三", "date": "2026-07-21"},
+      "reviewed": {"name": "李四", "date": "2026-07-22"},
+      "approved": {"name": "王五", "date": "2026-07-23"}
+    }
+  },
+  "blocks": [
+    {"type": "heading", "level": 1, "text": "模块概述"},
+    {"type": "paragraph", "text": "本模块负责帧头字段校验与帧级处理结果关联。"},
+    {"type": "heading", "level": 1, "text": "帧头结构定义"},
+    {
+      "type": "code_block",
+      "language": "c",
+      "code": "typedef struct {\n    uint16_t frame_id;\n    uint8_t payload[32];\n} FrameHeader;"
+    }
+  ]
+}

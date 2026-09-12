@@ -1,0 +1,21 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "合规违规注入样例",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "title_bullets",
+      "title": "注入前是合法产物",
+      "bullets": [
+        {
+          "text": "关键结论用于注入字体、颜色、字号和坐标违规",
+          "level": 1
+        }
+      ]
+    }
+  ]
+}

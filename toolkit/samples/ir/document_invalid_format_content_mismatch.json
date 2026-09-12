@@ -1,0 +1,21 @@
+{
+  "ir_type": "document",
+  "ir_version": "1.1",
+  "source": {
+    "filename": "错误摘要.md",
+    "format": "md",
+    "size_kb": 1,
+    "parsed_at": "2026-07-10T00:00:00Z"
+  },
+  "stats": {},
+  "warnings": [],
+  "content": {
+    "sheets": [
+      {
+        "name": "不应属于 Markdown",
+        "nrows": 0,
+        "ncols": 0
+      }
+    ]
+  }
+}

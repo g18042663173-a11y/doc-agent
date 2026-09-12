@@ -1,0 +1,28 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "非法架构图"
+  },
+  "slides": [
+    {
+      "layout": "architecture_diagram",
+      "title": "连接引用不存在节点",
+      "nodes": [
+        {
+          "id": "known",
+          "text": "已知节点",
+          "type": "primary"
+        }
+      ],
+      "edges": [
+        {
+          "from": "known",
+          "to": "missing",
+          "direction": "forward"
+        }
+      ],
+      "groups": []
+    }
+  ]
+}

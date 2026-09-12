@@ -1,0 +1,18 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {"title": "方案评估示例"},
+  "slides": [
+    {
+      "layout": "table",
+      "title": "方案 A 在关键指标上更适合优先验证",
+      "table": {
+        "header": ["维度", "方案 A", "结论"],
+        "rows": [["吞吐", "900 Mbps", {"text": "优先", "emphasis": "yellow"}], ["时延", "18 ms", ""]],
+        "column_groups": [{"label": "评估结果", "start_col": 1, "span": 2}],
+        "cell_spans": [{"area": "body", "row": 0, "col": 2, "rowspan": 2, "colspan": 1}],
+        "conclusion_col": 2
+      }
+    }
+  ]
+}

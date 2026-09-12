@@ -1,0 +1,14 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "超长段落",
+    "classification": "内部公开"
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "短文本用于样例测试;测试中会构造真正超过 2000 字的动态样例。"
+    }
+  ]
+}

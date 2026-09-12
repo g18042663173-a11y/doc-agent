@@ -1,0 +1,359 @@
+{
+  "$defs": {
+    "TemplateReplacementAuditShape": {
+      "additionalProperties": false,
+      "description": "A privacy-safe record of one template text-shape decision.",
+      "properties": {
+        "action": {
+          "enum": [
+            "replaced",
+            "cleared",
+            "preserved",
+            "master_redraw",
+            "image_replaced"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "asset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Id"
+        },
+        "asset_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Sha256"
+        },
+        "crop_bottom": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crop Bottom"
+        },
+        "crop_left": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crop Left"
+        },
+        "crop_right": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crop Right"
+        },
+        "crop_top": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crop Top"
+        },
+        "expected_text_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Text Sha256"
+        },
+        "focal_x": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Focal X"
+        },
+        "focal_y": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Focal Y"
+        },
+        "image_fit": {
+          "anyOf": [
+            {
+              "enum": [
+                "contain",
+                "cover"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Fit"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "rendered_text_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rendered Text Sha256"
+        },
+        "role": {
+          "enum": [
+            "title",
+            "subtitle",
+            "body",
+            "agenda_item",
+            "section_label",
+            "footer",
+            "brand",
+            "decorative",
+            "content_slot",
+            "unknown"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "shape_id": {
+          "minimum": 1,
+          "title": "Shape Id",
+          "type": "integer"
+        },
+        "source_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Path"
+        },
+        "text_fit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Fit"
+        }
+      },
+      "required": [
+        "shape_id",
+        "role",
+        "action"
+      ],
+      "title": "TemplateReplacementAuditShape",
+      "type": "object"
+    },
+    "TemplateReplacementAuditSlide": {
+      "additionalProperties": false,
+      "properties": {
+        "no_placeholder_residue": {
+          "title": "No Placeholder Residue",
+          "type": "boolean"
+        },
+        "output_index": {
+          "minimum": 1,
+          "title": "Output Index",
+          "type": "integer"
+        },
+        "planned_shapes_exist": {
+          "title": "Planned Shapes Exist",
+          "type": "boolean"
+        },
+        "prototype_id": {
+          "pattern": "^slide-[0-9]{3}$",
+          "title": "Prototype Id",
+          "type": "string"
+        },
+        "shapes": {
+          "items": {
+            "$ref": "#/$defs/TemplateReplacementAuditShape"
+          },
+          "title": "Shapes",
+          "type": "array"
+        },
+        "strategy": {
+          "enum": [
+            "prototype_replace",
+            "master_redraw"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "text_fit": {
+          "title": "Text Fit",
+          "type": "boolean"
+        },
+        "unused_text_cleared": {
+          "title": "Unused Text Cleared",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "output_index",
+        "prototype_id",
+        "strategy",
+        "planned_shapes_exist",
+        "unused_text_cleared",
+        "no_placeholder_residue",
+        "text_fit"
+      ],
+      "title": "TemplateReplacementAuditSlide",
+      "type": "object"
+    },
+    "TemplateWarning": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "W201",
+            "W202"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "loc": {
+          "minLength": 1,
+          "title": "Loc",
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "loc",
+        "message"
+      ],
+      "title": "TemplateWarning",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "audit_version": {
+      "const": "1.1",
+      "title": "Audit Version",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "title": "Plan Sha256",
+      "type": "string"
+    },
+    "slides": {
+      "items": {
+        "$ref": "#/$defs/TemplateReplacementAuditSlide"
+      },
+      "minItems": 1,
+      "title": "Slides",
+      "type": "array"
+    },
+    "template_sha256": {
+      "title": "Template Sha256",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "$ref": "#/$defs/TemplateWarning"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "audit_version",
+    "template_sha256",
+    "plan_sha256",
+    "slides"
+  ],
+  "title": "TemplateReplacementAudit",
+  "type": "object"
+}

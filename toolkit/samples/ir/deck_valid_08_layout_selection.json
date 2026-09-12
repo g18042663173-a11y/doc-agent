@@ -1,0 +1,39 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "交付计划",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "cover",
+      "title": "交付计划",
+      "subtitle": "线性流程与阶段演进"
+    },
+    {
+      "layout": "process_flow",
+      "title": "三项顺序活动形成完整验证闭环",
+      "steps": [
+        {"id": "prepare", "title": "准备样例"},
+        {"id": "verify", "title": "执行验证"},
+        {"id": "review", "title": "人工复核"}
+      ]
+    },
+    {
+      "layout": "timeline",
+      "title": "三个季度逐步完成方案验证与交付",
+      "milestones": [
+        {"label": "2026 Q1", "title": "冻结基线", "status": "completed"},
+        {"label": "2026 Q2", "title": "验证方案", "status": "current"},
+        {"label": "2026 Q3", "title": "完成交付", "status": "planned"}
+      ]
+    },
+    {
+      "layout": "conclusion",
+      "title": "验证闭环具备进入人工终审的条件",
+      "bullets": ["顺序活动已经明确", "交付时间节点可以复核"]
+    }
+  ]
+}

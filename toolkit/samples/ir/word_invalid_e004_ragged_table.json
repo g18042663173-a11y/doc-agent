@@ -1,0 +1,21 @@
+{
+  "ir_type": "word",
+  "ir_version": "1.0",
+  "meta": {
+    "title": "不规整表格"
+  },
+  "blocks": [
+    {
+      "type": "table",
+      "header": [
+        "风险",
+        "等级"
+      ],
+      "rows": [
+        [
+          "模型 JSON 不稳定"
+        ]
+      ]
+    }
+  ]
+}

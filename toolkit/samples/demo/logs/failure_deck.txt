@@ -1,0 +1,8 @@
+CASE: failure_deck
+COMMAND: <PYTHON> -m app.cli.render --type deck samples/ir/deck_invalid_d003_unknown_layout.json --output output/demo-recording/invalid.pptx
+RETURN CODE: 1
+STDOUT:
+<empty>
+STDERR:
+[Error] D003 at slides[0]: Input tag 'unknown' found using 'layout' does not match any of the expected tags: 'cover', 'agenda', 'section', 'title_bullets', 'two_column', 'table', 'cards', 'chart', 'architecture_diagram', 'image', 'conclusion'
+建议: 把 slides[].layout 改为 DeckIR v1.4 允许的版式。

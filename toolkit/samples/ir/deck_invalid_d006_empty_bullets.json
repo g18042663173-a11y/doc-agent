@@ -1,0 +1,14 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "空结论反例"
+  },
+  "slides": [
+    {
+      "layout": "title_bullets",
+      "title": "空要点反例",
+      "bullets": []
+    }
+  ]
+}

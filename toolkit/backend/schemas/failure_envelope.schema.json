@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "FailureItem": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 16,
+          "minLength": 3,
+          "pattern": "^[A-Z][A-Z0-9-]+$",
+          "title": "Code",
+          "type": "string"
+        },
+        "level": {
+          "default": "Error",
+          "enum": [
+            "Error",
+            "Warning",
+            "Info"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "loc": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Loc",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "suggestion": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Suggestion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "loc",
+        "message",
+        "suggestion"
+      ],
+      "title": "FailureItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "maxLength": 16,
+      "minLength": 3,
+      "pattern": "^[A-Z][A-Z0-9-]+$",
+      "title": "Code",
+      "type": "string"
+    },
+    "failure_envelope_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Failure Envelope Version",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/FailureItem"
+      },
+      "maxItems": 20,
+      "title": "Items",
+      "type": "array"
+    },
+    "loc": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Loc"
+    },
+    "message": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Message",
+      "type": "string"
+    },
+    "retryable": {
+      "title": "Retryable",
+      "type": "boolean"
+    },
+    "stage": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Stage",
+      "type": "string"
+    },
+    "suggestion": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Suggestion",
+      "type": "string"
+    },
+    "support_id": {
+      "pattern": "^SUP-[0-9A-F]{12}$",
+      "title": "Support Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "stage",
+    "retryable",
+    "message",
+    "suggestion",
+    "support_id"
+  ],
+  "title": "FailureEnvelope",
+  "type": "object"
+}

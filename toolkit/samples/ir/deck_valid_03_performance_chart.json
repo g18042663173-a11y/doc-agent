@@ -1,0 +1,68 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "性能图表样例",
+    "classification": "HUAWEI CONFIDENTIAL",
+    "theme": "hw_v1"
+  },
+  "slides": [
+    {
+      "layout": "chart",
+      "title": "性能趋势",
+      "chart": {
+        "kind": "bar",
+        "unit": "ms",
+        "categories": [
+          "1月",
+          "2月",
+          "3月"
+        ],
+        "series": [
+          {
+            "name": "方案A",
+            "values": [
+              62,
+              58,
+              55
+            ],
+            "emphasis": true
+          },
+          {
+            "name": "方案B",
+            "values": [
+              75,
+              69,
+              64
+            ]
+          }
+        ],
+        "show_data_labels": true,
+        "legend_position": "right",
+        "thresholds": [
+          {
+            "value": 60,
+            "label": "目标阈值"
+          }
+        ],
+        "side_conclusion": "方案A 2月起低于60ms目标阈值。",
+        "side_table": {
+          "header": [
+            "指标",
+            "结论"
+          ],
+          "rows": [
+            [
+              "时延",
+              "2月起达标"
+            ],
+            [
+              "稳定性",
+              "需关注"
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}

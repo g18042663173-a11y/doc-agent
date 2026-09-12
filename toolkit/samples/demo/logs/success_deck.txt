@@ -1,0 +1,11 @@
+CASE: success_deck
+COMMAND: <PYTHON> scripts/demo_e2e.py samples/input/项目汇报.pptx --target deck --generator stub --lint --output-dir output/demo-recording/deck
+RETURN CODE: 0
+STDOUT:
+document_ir: output/demo-recording/deck/document_ir.json
+prompt: output/demo-recording/deck/prompt.txt
+generated_ir: output/demo-recording/deck/deck_ir.json
+artifact: output/demo-recording/deck/deck.pptx
+report: output/demo-recording/deck/report.json
+STDERR:
+<empty>

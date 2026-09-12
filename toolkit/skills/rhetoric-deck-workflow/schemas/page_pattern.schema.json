@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rhetorical page patterns",
+  "type": "string",
+  "enum": [
+    "capability_evidence", "solution_selection", "method_walkthrough",
+    "implementation_detail", "test_matrix", "issue_retro",
+    "phase_summary", "context_pain", "status_progress", "struct_cover"
+  ]
+}

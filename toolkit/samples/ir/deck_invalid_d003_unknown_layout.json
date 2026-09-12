@@ -1,0 +1,13 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {
+    "title": "Deck 反例"
+  },
+  "slides": [
+    {
+      "layout": "unknown",
+      "title": "未知版式"
+    }
+  ]
+}

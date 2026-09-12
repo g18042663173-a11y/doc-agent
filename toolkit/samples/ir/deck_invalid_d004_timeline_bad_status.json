@@ -1,0 +1,15 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.7",
+  "meta": {"title": "非法时间线"},
+  "slides": [
+    {
+      "layout": "timeline",
+      "title": "里程碑状态非法",
+      "milestones": [
+        {"label": "一", "title": "开始", "status": "done"},
+        {"label": "二", "title": "结束", "status": "planned"}
+      ]
+    }
+  ]
+}

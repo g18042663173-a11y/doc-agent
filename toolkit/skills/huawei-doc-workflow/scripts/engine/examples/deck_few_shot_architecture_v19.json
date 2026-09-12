@@ -1,0 +1,18 @@
+{
+  "ir_type": "deck",
+  "ir_version": "1.9",
+  "meta": {"title": "架构示例"},
+  "slides": [
+    {
+      "layout": "architecture_diagram",
+      "title": "调度任务经模块处理后进入质量闸门",
+      "nodes": [
+        {"id": "job", "text": "调度任务", "type": "job"},
+        {"id": "module", "text": "处理模块", "type": "module"},
+        {"id": "gate", "text": "质量闸门", "type": "emphasis"}
+      ],
+      "edges": [{"from": "job", "to": "module"}, {"from": "module", "to": "gate"}],
+      "groups": []
+    }
+  ]
+}

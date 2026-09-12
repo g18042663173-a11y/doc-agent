@@ -1,0 +1,20 @@
+{
+  "ir_type": "document",
+  "ir_version": "1.1",
+  "source": {
+    "format": "md",
+    "size_kb": 1.0,
+    "parsed_at": "2026-07-08T00:00:00Z"
+  },
+  "stats": {
+    "headings": 0,
+    "paragraphs": 0,
+    "tables": 0,
+    "images": 0
+  },
+  "warnings": [],
+  "content": {
+    "blocks": [],
+    "outline": []
+  }
+}
