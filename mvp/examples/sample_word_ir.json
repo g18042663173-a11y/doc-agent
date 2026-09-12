@@ -1,0 +1,29 @@
+{
+  "title": "企业文档生成 Agent MVP",
+  "subtitle": "自动生成报告",
+  "blocks": [
+    {
+      "type": "heading",
+      "text": "摘要",
+      "level": 1
+    },
+    {
+      "type": "paragraph",
+      "text": "系统通过结构化 IR 和本地渲染器生成可编辑企业文档。"
+    },
+    {
+      "type": "heading",
+      "text": "核心能力",
+      "level": 1
+    },
+    {
+      "type": "bullet_list",
+      "items": ["多格式输入", "MockLLM 默认运行", "PPTX/DOCX 可编辑输出"]
+    },
+    {
+      "type": "table",
+      "table_headers": ["模块", "状态"],
+      "table_rows": [["Parser", "ready"], ["Renderer", "ready"]]
+    }
+  ]
+}

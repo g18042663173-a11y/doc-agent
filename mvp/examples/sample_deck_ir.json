@@ -1,0 +1,41 @@
+{
+  "deck_title": "企业文档生成 Agent MVP",
+  "audience": "内部汇报",
+  "tone": "专业、克制、清晰",
+  "slides": [
+    {
+      "layout": "cover",
+      "title": "企业文档生成 Agent MVP",
+      "subtitle": "内部汇报",
+      "bullets": []
+    },
+    {
+      "layout": "agenda",
+      "title": "目录",
+      "bullets": ["核心目标", "技术路线", "验收重点"]
+    },
+    {
+      "layout": "section",
+      "title": "核心方案",
+      "bullets": []
+    },
+    {
+      "layout": "title_bullets",
+      "title": "第一版能力",
+      "bullets": ["支持多格式输入", "生成结构化 IR", "输出可编辑文件"]
+    },
+    {
+      "layout": "two_column",
+      "title": "职责分工",
+      "left_title": "模型",
+      "left_bullets": ["理解内容", "规划结构"],
+      "right_title": "代码",
+      "right_bullets": ["控制样式", "稳定渲染"]
+    },
+    {
+      "layout": "conclusion",
+      "title": "结论",
+      "bullets": ["默认本地 mock", "样式外置可控", "后续可接 GLM"]
+    }
+  ]
+}

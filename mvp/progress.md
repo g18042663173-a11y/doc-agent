@@ -1,0 +1,183 @@
+# Progress Log
+
+## 2026-07-06
+
+- Read the pasted PPT Agent technical design document.
+- Confirmed no existing planning files were present.
+- Planning skill template files were missing at the documented path; created manual planning files instead.
+- Created persistent scope plan for the full objective and the first backend implementation slice.
+- User requested removal of obsolete collaboration tooling because it affected performance.
+- Ran the toolchain's official uninstall script successfully.
+- Removed the residual PATH block from `/Users/guoshuaiqi/.zshrc`.
+- Updated project planning files to stop using external review flows from that toolchain.
+- Removed residual local executable/cache files from the old toolchain.
+- Removed leftover skills from `/Users/guoshuaiqi/.agents/skills`.
+- Updated `product-manager` skill copies under `.agents` and `.claude` so they no longer instruct agents to use removed delegation commands.
+- Verified the removed command is not in PATH, no matching processes are running, and loadable skills/commands no longer contain removed collaboration-tool references.
+- Performed a deeper cleanup of confirmed old collaboration-tool remnants:
+  - removed old source checkout and playground directories;
+  - removed project-local runtime state directories from unrelated projects;
+  - removed related Gemini cache directories;
+  - scrubbed current project planning files so they no longer contain old command/tool names.
+- Final verification found no matching command, process, loadable skill/command reference, or project-local runtime state under the checked paths.
+- Ran `.venv/bin/python -m pytest`: 8 passed.
+- Read the new referenced design file at `/Users/guoshuaiqi/.codex/attachments/6099929e-4354-48bf-bb44-275de8cf8ad5/pasted-text-1.txt`.
+- Implemented backend domain modules:
+  - `doc_agent/users` with masked API output and encrypted-at-rest auth tokens;
+  - `doc_agent/templates` with system template metadata, import, and apply helpers;
+  - `doc_agent/colors` with built-in schemes, validation, recommendation, and style-profile mapping;
+  - `doc_agent/charts` with recommendation and chart IR generation;
+  - `doc_agent/smartart` with process, hierarchy, cycle, timeline, and related IR layouts.
+- Implemented FastAPI routers under `doc_agent/api` and included them from `app/api.py`.
+- Added async generation task API with progress JSON, task download, and WebSocket progress.
+- Extended `run_generate` to accept optional runtime `Settings` and `style_profile` while preserving existing callers.
+- Added `DATA_DIR` config, ignored `data/`, and added `httpx` to project dependencies.
+- Installed local test dependencies: `fastapi`, `python-multipart`, and `httpx`.
+- Ran `.venv/bin/python -m compileall doc_agent app`: passed.
+- Ran domain smoke test for new managers: passed.
+- Ran `.venv/bin/python -m pytest`: 16 passed, 1 Starlette TestClient deprecation warning.
+- Created `ppt-agent-frontend` React/Vite/TypeScript app with Ant Design, Zustand, Axios, React Router, and ECharts dependency.
+- Implemented frontend API service, WebSocket progress helper, user/document/template stores, main shell navigation, dashboard, generation flow, design system pages, config/user pages, data pages, preview, and export.
+- Ran `npm install`: completed, 0 vulnerabilities.
+- First `npm run build` failed because React/Node/Vite type declarations and Vite bundler module resolution were missing.
+- Installed `@types/react`, `@types/react-dom`, and `@types/node`; updated `tsconfig` to use `moduleResolution: Bundler`, `ES2022`, and Vite client types.
+- Ran `npm run build`: passed with a non-blocking chunk-size warning.
+- Re-ran `.venv/bin/python -m pytest`: 16 passed, 1 Starlette TestClient deprecation warning.
+- Started FastAPI at `http://127.0.0.1:8000` and Vite at `http://127.0.0.1:3000`.
+- Verified `GET /health`, `GET /api/templates/list`, async `POST /api/generate/start`, progress lookup, and task download with curl.
+- Browser verification initially showed frontend rendered but API data was unavailable because direct frontend-to-backend calls needed CORS.
+- Added FastAPI CORS middleware for `http://127.0.0.1:3000` and `http://localhost:3000`.
+- Restarted backend and verified in browser that dashboard loads backend template/color data.
+- Re-ran `.venv/bin/python -m pytest`: 16 passed, 1 Starlette TestClient deprecation warning.
+- Re-ran `npm run build`: passed with the same non-blocking chunk-size warning.
+- Updated README with frontend startup and verification commands.
+- Continued implementation from current plan and re-read the referenced design document.
+- Updated frontend generation to use `/api/generate/ws/{task_id}` WebSocket progress as the main progress path, with HTTP polling fallback.
+- Fixed generation form state handling so changing one control no longer clears template/color/user selections.
+- Added `ConfigImportExport` and `fileService` so the settings page supports exporting model profile config JSON and importing configs with unmasked tokens.
+- Added WebSocket completion assertion to `tests/test_api_routes.py`.
+- Ran `npm run build`: passed with the existing chunk-size warning.
+- Ran `.venv/bin/python -m pytest`: 16 passed, 1 Starlette TestClient deprecation warning.
+- Browser-verified generate/settings/SmartArt pages expose expected controls.
+- Attempted browser-context E2E upload via page APIs; the browser evaluate scope lacks `FormData` and `fetch`, and the browser control API has no supported file-picker method. Logged this as a tooling limitation and kept upload/download/WebSocket verification in HTTP/TestClient.
+- Replaced deprecated Ant Design `Space direction` props with `orientation`; clean browser tab shows settings page without error logs.
+- Re-ran `npm run build`: passed with the same non-blocking chunk-size warning.
+- Added backend system/config/observability support:
+  - `/api/system/health`, `/api/system/metrics`, `/api/config/export`, and `/api/config/import`;
+  - structured JSON request logging with request ids and `data/logs/app.log`;
+  - in-memory request metrics and task/storage snapshots.
+- Added frontend config import/export integration against the backend config API.
+- Added docs under `docs/`: API, architecture, deployment, user guide, and development workflow.
+- Extended API tests to cover system metrics, config import/export, masked secrets, request ids, and log file creation.
+- Ran `.venv/bin/python -m pytest`: 17 passed, 1 Starlette TestClient deprecation warning.
+- Ran `.venv/bin/python -m compileall doc_agent app`: passed.
+- Ran `npm run build`: passed with the existing non-blocking chunk-size warning.
+- Live-checked backend system endpoints with curl after restarting the FastAPI server.
+- Updated README with docs links, system/config endpoints, default port alignment, WebSocket URL, metrics notes, and JSON log location.
+- Updated `task_plan.md` and `findings.md` to mark tests/docs complete and record the remaining E2E/production validation gaps.
+- Tried the planning skill's documented `scripts/session-catchup.py`; that helper is missing from the installed skill directory, so context recovery continues through `task_plan.md`, `findings.md`, and `progress.md`.
+- Re-ran final verification after README/planning updates:
+  - `.venv/bin/python -m pytest`: 17 passed, 1 Starlette TestClient deprecation warning.
+  - `.venv/bin/python -m compileall doc_agent app`: passed.
+  - `npm run build`: passed with the existing non-blocking chunk-size warning.
+  - Live `GET /api/system/health` and `GET /api/system/metrics` on `127.0.0.1:8000`: returned OK responses.
+  - `data/logs/app.log`: confirmed JSON request log entries for local requests.
+- Continued from the active goal and re-read the original pasted design's frontend, implementation plan, testing, quality, deployment, and monitoring sections.
+- Added browser E2E coverage for the core generation workflow:
+  - installed `@playwright/test` in `ppt-agent-frontend`;
+  - added `ppt-agent-frontend/playwright.config.ts` with isolated backend/frontend servers on ports `8100` and `3100`;
+  - added `ppt-agent-frontend/e2e/generate.spec.ts` and `ppt-agent-frontend/e2e/fixtures/input.md`;
+  - added `npm run test:e2e`.
+- Added `CORS_ORIGINS` support in `app/api.py` so isolated E2E frontend origins can be allowed without hard-coding every dev port.
+- Made frontend downloads more robust by appending the temporary anchor to `document.body` before clicking and revoking the object URL asynchronously.
+- Added a lightweight frontend favicon and favicon link so the E2E no-console-error check does not fail on default static asset 404s.
+- E2E exposed that real Uvicorn did not support WebSocket upgrades without an installed protocol package. Added `websockets>=12.0` to `requirements.txt` and `pyproject.toml`, installed it in `.venv`, and reran E2E successfully.
+- Ran `npm run test:e2e`: 1 Playwright test passed, covering Markdown upload, PPTX generation, WebSocket completion, and download in Chrome.
+- Re-ran `.venv/bin/python -m pytest`: 17 passed, 1 Starlette TestClient deprecation warning.
+- Re-ran `.venv/bin/python -m compileall doc_agent app`: passed.
+- Re-ran `npm run build`: passed with the existing non-blocking chunk-size warning.
+- Updated README and docs to document Playwright E2E, WebSocket runtime dependency, and `CORS_ORIGINS`.
+- Removed generated E2E artifacts (`ppt-agent-frontend/playwright-report`, `ppt-agent-frontend/test-results`, `.e2e-data`) after verification; the paths remain ignored.
+- Continued from the active goal and re-read the original pasted design document, including implementation phases, testing strategy, quality requirements, performance targets, and success criteria.
+- Added responsive/page-load E2E coverage in `ppt-agent-frontend/e2e/pages.spec.ts`:
+  - covers dashboard, smart generation, NGA config, users, templates, colors, charts, SmartArt, and settings routes;
+  - runs on desktop `1440x900` and mobile `390x844` viewports;
+  - requires visible route anchors, under-3-second usability, no document-level horizontal overflow, and no console errors.
+- The new E2E initially failed on mobile because the full sidebar pushed content below the first viewport. Replaced the mobile sidebar with a sticky horizontal top navigation while preserving the fixed desktop sidebar.
+- The new E2E then exposed `/design/colors` mobile horizontal overflow. Added mobile constraints for table wrappers and inline forms so tables scroll inside their own container and forms stack within the viewport.
+- Re-ran `npm run test:e2e`: 3 passed, covering generation workflow plus desktop/mobile route smoke.
+- Re-ran `.venv/bin/python -m pytest`: 17 passed, 1 Starlette TestClient deprecation warning.
+- Re-ran `.venv/bin/python -m compileall doc_agent app`: passed.
+- Re-ran `npm run build`: passed with the existing non-blocking chunk-size warning.
+- Updated README and `docs/DEVELOPMENT.md` to document the expanded E2E coverage.
+- Updated planning files to remove responsive QA from the remaining gaps and record the mobile layout/overflow fixes.
+- Removed generated E2E artifacts after verification.
+- Continued from the active goal after context compaction; re-read the planning skill, `task_plan.md`, `findings.md`, `progress.md`, and the pasted design's testing/quality sections.
+- Added interaction-level Playwright E2E coverage for:
+  - user create/test/list/switch;
+  - settings config export/import;
+  - template import from a real PPTX;
+  - color recommendation and creation;
+  - chart IR and SmartArt IR generation.
+- Fixed user list refresh after saving a new NGA config by wiring a refresh token through the NGA and user-management pages.
+- Added stable test ids for key frontend actions used by the interaction E2E tests.
+- Fixed Ant Design 6 dynamic-theme console warnings by wrapping the app in AntD `App` and replacing static `message` calls with `App.useApp()` instances.
+- Fixed Playwright isolation by using per-run `.e2e-data/<runId>` directories and disabling web server reuse, preventing failed runs from leaking a switched current user into generation tests.
+- Adjusted color recommendation E2E to assert the rendered recommendation instead of assuming `business_blue` is always first when custom schemes exist.
+- Ran `npm run test:e2e`: 8 passed, covering generation, interaction flows, and desktop/mobile route smoke.
+- Ran `.venv/bin/python -m pytest`: 17 passed, 1 Starlette TestClient/httpx warning.
+- Ran `.venv/bin/python -m compileall doc_agent app`: passed.
+- Ran `npm run build`: passed with the existing non-blocking Vite chunk-size warning.
+- Confirmed formal coverage tools are not currently installed/configured; backend coverage and frontend unit coverage targets remain unmeasured.
+- Continued from context compaction and re-read planning files plus the original design's testing, quality, performance, and deployment requirements.
+- Installed/configured backend coverage with `pytest-cov` and added `tests/test_quality_gates.py`.
+- Added backend quality coverage for legacy API error/download paths, design API negative/update/delete paths, DOCX/PPTX parser routing, output validator/SmartArt edge layouts, 10-slide PPT generation under 30 seconds, and 3 concurrent generation tasks under 30 seconds.
+- Backend coverage command passed: `.venv/bin/python -m pytest --cov=doc_agent --cov=app.api --cov-report=term-missing --cov-fail-under=80` produced 23 passed and 85.50% total coverage after the personal workbench phase.
+- Installed/configured frontend Vitest/V8 coverage tooling and added focused unit/component tests for stores, services, common components, design system components, config manager, layout, pages, and smart generation.
+- Fixed a flaky layout unit test by exercising the AntD clear control directly instead of relying on jsdom dropdown option selection.
+- Frontend coverage command passed: `npm run test:coverage` produced 12 test files / 45 tests passed with Statements 90.32%, Branches 74.30%, Functions 83.90%, Lines 93.96% after the personal workbench phase.
+- Ran production preview smoke by building with `VITE_API_BASE_URL=http://127.0.0.1:8200/api`, serving `dist/` on `127.0.0.1:3200`, and using Playwright against a temporary backend on `127.0.0.1:8200`; upload, generation, WebSocket completion, and non-empty PPTX download passed.
+- Re-ran final verification:
+  - `.venv/bin/python -m pytest`: 22 passed, 1 Starlette TestClient/httpx warning.
+  - `.venv/bin/python -m pytest --cov=doc_agent --cov=app.api --cov-report=term-missing --cov-fail-under=80`: 23 passed, 85.50% coverage.
+  - `.venv/bin/python -m compileall doc_agent app`: passed.
+  - `npm run build`: passed with the known non-blocking Vite chunk-size warning.
+  - `npm run test:coverage`: 42 passed, frontend coverage thresholds passed.
+  - `npm run test:e2e`: 8 passed.
+- Updated README, `docs/DEVELOPMENT.md`, `docs/DEPLOYMENT.md`, and planning files with final coverage, performance/concurrency, and production smoke results.
+- Started migration/handoff phase after the user asked to make the project transferable to other computers.
+- Audited existing dependency and env files: backend has `requirements.txt`/`pyproject.toml`, frontend has `package-lock.json`, and both backend/frontend have `.env.example`.
+- Added migration scripts:
+  - `scripts/setup.sh` and `scripts/setup.ps1`;
+  - `scripts/start-backend.sh` and `scripts/start-backend.ps1`;
+  - `scripts/start-frontend.sh` and `scripts/start-frontend.ps1`;
+  - `scripts/preview-production.sh`;
+  - `scripts/export-portable.sh` and `scripts/export-portable.ps1`.
+- Added Docker runtime files: root `Dockerfile`, `docker/frontend.Dockerfile`, `docker/nginx.conf`, `docker-compose.yml`, and `.dockerignore`.
+- Added `MIGRATION.md` and updated README plus deployment docs with source-copy, Docker, offline dependency, production preview, and data migration instructions.
+- Updated `.gitignore` and `.env.example` for migration/runtime hygiene.
+- Verified shell scripts with `bash -n`.
+- Tested `scripts/export-portable.sh doc-agent-mvp-portable-test.zip` and confirmed the archive excludes `.venv`, `node_modules`, `.env`, `data`, `outputs`, `dist`, and report directories by default.
+- Smoke-tested:
+  - `PORT=8300 scripts/start-backend.sh` with `/health` returning 200;
+  - `PORT=3300 scripts/start-frontend.sh` with `/` returning 200;
+  - `BACKEND_PORT=8301 FRONTEND_PORT=3301 scripts/preview-production.sh` with backend `/health` and frontend `/` returning 200.
+- Docker CLI and PowerShell (`pwsh`) are not installed on this machine, so Docker runtime and PowerShell scripts were not executed locally. `docker-compose.yml` was validated through YAML parsing.
+- Re-ran `.venv/bin/python -m pytest`: 22 passed, 1 existing Starlette TestClient/httpx warning.
+- Started personal workbench implementation phase from the approved plan: single-user workflow polish, generation history, template style summaries, and clearer model-profile wording.
+- Implemented the personal workbench phase:
+  - added backend task history manager and `/api/generate/history` list/detail/delete endpoints;
+  - persisted generation metadata, friendly errors, and result index data under `data/tasks`;
+  - added PPTX template style analysis and renderer style override application;
+  - reworked the dashboard into a personal local workbench;
+  - added generation-page history with refresh, re-download, parameter reuse, and delete actions;
+  - renamed visible frontend user wording to model profile/configuration profile language;
+  - added personal backup/restore and template style-boundary messaging.
+- Updated backend tests, frontend component/API/page tests, Playwright E2E locators, README, API docs, user guide, architecture notes, development notes, and migration docs.
+- Verification passed:
+  - `.venv/bin/python -m pytest`: 23 passed, 1 Starlette TestClient/httpx warning.
+  - `.venv/bin/python -m pytest --cov=doc_agent --cov=app.api --cov-report=term-missing --cov-fail-under=80`: 23 passed, 85.50% total coverage.
+  - `.venv/bin/python -m compileall doc_agent app`: passed.
+  - `npm run build`: passed with the known Vite chunk-size warning.
+  - `npm run test:coverage`: 45 passed; Statements 90.32%, Branches 74.30%, Functions 83.90%, Lines 93.96%.
+  - `npm run test:e2e`: 8 passed.
